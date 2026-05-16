@@ -1,0 +1,47 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# IDE - VS Code
+.vscode/
+*.code-workspace
+
+# IDE - Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Spring Boot
+HELP.md
+*.log
+spring-shell.log
+
+# Firebase - NUNCA subir al repositorio
+serviceAccountKey.json
+
+# Configuración local
+application-local.properties
+
+# Env files
+.env
+.env.local
+
+#Demas:
+.docs/
