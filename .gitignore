@@ -44,6 +44,5 @@ application-local.properties
 .env.local
 
 #Demas:
-.docs/
-.claude
 docs/
+.claude
