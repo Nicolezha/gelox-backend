@@ -47,6 +47,9 @@ public class Usuario {
     @Column(name = "foto_url")
     private String fotoUrl;
 
+    @Column(name = "telefono", length = 20)
+    private String telefono;
+
     @NotNull
     @Builder.Default
     @Column(name = "activo", nullable = false)
