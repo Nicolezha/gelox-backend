@@ -128,7 +128,7 @@ class GestionUsuariosTest {
 
             assertThat(result).isNotNull();
             assertThat(result.getCorreo()).isEqualTo("nuevo@gelox-test.com");
-            assertThat(result.getActivo()).isTrue();
+            assertThat(result.isActivo()).isTrue();
             assertThat(result.getRol()).isEqualTo("ENCARGADO_VENTAS");
             verify(usuarioRepository).save(any(Usuario.class));
         }

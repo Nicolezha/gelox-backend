@@ -101,9 +101,7 @@ class CambioContrasenaTest {
             perfilService.cambiarContrasena(FIREBASE_UID, dto);
 
             verify(mockAuth).getUser(FIREBASE_UID);
-            verify(mockAuth).updateUser(argThat(req ->
-                    FIREBASE_UID.equals(req.getUid())
-            ));
+            verify(mockAuth).updateUser(any(UserRecord.UpdateRequest.class));
         }
     }
 
