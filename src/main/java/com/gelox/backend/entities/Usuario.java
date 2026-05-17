@@ -39,6 +39,10 @@ public class Usuario {
     @Column(name = "correo", nullable = false, unique = true, length = 150)
     private String correo;
 
+    @Size(max = 20)
+    @Column(name = "telefono", length = 20)
+    private String telefono;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "rol", nullable = false)
@@ -46,9 +50,6 @@ public class Usuario {
 
     @Column(name = "foto_url")
     private String fotoUrl;
-
-    @Column(name = "telefono", length = 20)
-    private String telefono;
 
     @NotNull
     @Builder.Default
