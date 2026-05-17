@@ -45,3 +45,4 @@ application-local.properties
 
 #Demas:
 .docs/
+.claude
