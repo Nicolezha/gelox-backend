@@ -1,0 +1,115 @@
+{
+  "info": {
+    "name": "GELOX RF05 - RF06 Perfil",
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "description": "Colección para los endpoints de actualización de perfil (RF-05) y cambio de contraseña (RF-06)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "Firebase ID Token obtenido desde el cliente"
+    }
+  ],
+  "item": [
+    {
+      "name": "RF-05 Actualizar Perfil",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/perfil/:id",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "perfil", ":id"],
+          "variable": [
+            {
+              "key": "id",
+              "value": "00000000-0000-0000-0000-000000000000",
+              "description": "UUID del usuario en la base de datos"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Gabriel Torres\",\n  \"correo\": \"gabriel@gelox.com\",\n  \"telefono\": \"3001234567\",\n  \"fotoUrl\": \"https://example.com/foto.jpg\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Actualiza nombre, correo, teléfono y fotoUrl del usuario identificado por su UUID interno.\n\nRespuesta exitosa (200): objeto Usuario actualizado.\nError 400: correo duplicado o datos inválidos.\nError 401: token ausente o inválido."
+      },
+      "response": [
+        {
+          "name": "200 OK - Perfil actualizado",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"id\": \"00000000-0000-0000-0000-000000000000\",\n  \"nombre\": \"Gabriel Torres\",\n  \"correo\": \"gabriel@gelox.com\",\n  \"telefono\": \"3001234567\",\n  \"fotoUrl\": \"https://example.com/foto.jpg\",\n  \"rol\": \"ENCARGADO_VENTAS\",\n  \"activo\": true\n}"
+        }
+      ]
+    },
+    {
+      "name": "RF-06 Cambiar Contraseña",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/perfil/:firebaseUid/contrasena",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "perfil", ":firebaseUid", "contrasena"],
+          "variable": [
+            {
+              "key": "firebaseUid",
+              "value": "firebase-uid-aqui",
+              "description": "UID de Firebase del usuario (no el UUID interno)"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"contrasenaActual\": \"miContrasena123\",\n  \"nuevaContrasena\": \"nuevaContrasena456\",\n  \"confirmacion\": \"nuevaContrasena456\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Cambia la contraseña del usuario en Firebase Auth.\n\nNota: El frontend debe haber verificado la contraseña actual con signInWithEmailAndPassword antes de llamar a este endpoint.\n\nRespuesta exitosa (200): mensaje de confirmación.\nError 400: confirmación no coincide o error de Firebase.\nError 401: token ausente o inválido."
+      },
+      "response": [
+        {
+          "name": "200 OK - Contraseña actualizada",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"mensaje\": \"Contraseña actualizada correctamente\"\n}"
+        }
+      ]
+    }
+  ]
+}

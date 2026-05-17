@@ -21,6 +21,7 @@ import java.util.UUID;
 public class PerfilService {
 
     private final UsuarioRepository usuarioRepository;
+    private final FirebaseAuth firebaseAuth;
 
     @Value("${supabase.url}")
     private String supabaseUrl;
@@ -28,8 +29,9 @@ public class PerfilService {
     @Value("${supabase.service-key}")
     private String supabaseServiceKey;
 
-    public PerfilService(UsuarioRepository usuarioRepository) {
+    public PerfilService(UsuarioRepository usuarioRepository, FirebaseAuth firebaseAuth) {
         this.usuarioRepository = usuarioRepository;
+        this.firebaseAuth = firebaseAuth;
     }
 
     @Transactional
@@ -65,12 +67,12 @@ public class PerfilService {
         }
 
         try {
-            FirebaseAuth.getInstance().getUser(firebaseUid);
+            firebaseAuth.getUser(firebaseUid);
 
             UserRecord.UpdateRequest updateRequest = new UserRecord.UpdateRequest(firebaseUid)
                     .setPassword(dto.getNuevaContrasena());
 
-            FirebaseAuth.getInstance().updateUser(updateRequest);
+            firebaseAuth.updateUser(updateRequest);
 
         } catch (com.google.firebase.auth.FirebaseAuthException e) {
             throw new IllegalArgumentException("Error al actualizar la contraseña: " + e.getMessage());
