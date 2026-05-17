@@ -6,9 +6,12 @@ import com.gelox.backend.services.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -21,5 +24,12 @@ public class AuthController {
     public ResponseEntity<UsuarioDTO> verificar(@AuthenticationPrincipal Usuario usuario) {
         UsuarioDTO dto = authService.autenticarUsuario(usuario.getFirebaseUid());
         return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/cerrar-sesion")
+    public ResponseEntity<Map<String, String>> cerrarSesion(@AuthenticationPrincipal Usuario usuario) {
+        authService.cerrarSesion(usuario.getFirebaseUid());
+        SecurityContextHolder.clearContext();
+        return ResponseEntity.ok(Map.of("mensaje", "Sesión cerrada correctamente"));
     }
 }
