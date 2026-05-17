@@ -67,12 +67,12 @@ public class PerfilService {
         }
 
         try {
-            firebaseAuth.getUser(firebaseUid);
+            FirebaseAuth.getInstance().getUser(firebaseUid);
 
             UserRecord.UpdateRequest updateRequest = new UserRecord.UpdateRequest(firebaseUid)
                     .setPassword(dto.getNuevaContrasena());
 
-            firebaseAuth.updateUser(updateRequest);
+            FirebaseAuth.getInstance().updateUser(updateRequest);
 
         } catch (com.google.firebase.auth.FirebaseAuthException e) {
             throw new IllegalArgumentException("Error al actualizar la contraseña: " + e.getMessage());
