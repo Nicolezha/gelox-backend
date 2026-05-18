@@ -33,6 +33,7 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
+                        .requestMatchers("/api/landing/**").permitAll()
                         .requestMatchers("/api/reportes/**").hasRole("ADMINISTRADOR")
                         .anyRequest().authenticated())
                 .addFilterBefore(firebaseAuthFilter, UsernamePasswordAuthenticationFilter.class);
