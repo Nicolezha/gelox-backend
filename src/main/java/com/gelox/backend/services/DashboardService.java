@@ -4,6 +4,7 @@ import com.gelox.backend.dto.InversionVsIngresosDTO;
 import com.gelox.backend.dto.KpiDTO;
 import com.gelox.backend.dto.PeriodoFiltroDTO;
 import com.gelox.backend.dto.VentasPorCanalDTO;
+import com.gelox.backend.dto.Top5ComerciantesDTO;
 import com.gelox.backend.repositories.DashboardRepository;
 import com.gelox.backend.repositories.ReporteRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -81,6 +83,21 @@ public class DashboardService {
             ));
         }
         return resultado;
+    }
+
+    public Top5ComerciantesDTO obtenerTop5Comerciantes(LocalDate fechaInicio, LocalDate fechaFin) {
+        List<Object[]> rows = dashboardRepository.getTop5Comerciantes(fechaInicio, fechaFin);
+        List<Top5ComerciantesDTO.ComercianteIngresoDTO> lista = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            Object[] row = rows.get(i);
+            lista.add(new Top5ComerciantesDTO.ComercianteIngresoDTO(
+                    UUID.fromString((String) row[0]),
+                    (String) row[1],
+                    toBigDecimal(row[2]),
+                    i + 1
+            ));
+        }
+        return new Top5ComerciantesDTO(lista);
     }
 
     private BigDecimal toBigDecimal(Object value) {

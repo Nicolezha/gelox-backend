@@ -1,10 +1,16 @@
 package com.gelox.backend.controllers;
 
+import com.gelox.backend.dto.EventoSistemaDTO;
 import com.gelox.backend.dto.InversionVsIngresosDTO;
 import com.gelox.backend.dto.KpiDTO;
 import com.gelox.backend.dto.VentasPorCanalDTO;
+import com.gelox.backend.dto.Top5ComerciantesDTO;
 import com.gelox.backend.services.DashboardService;
+import com.gelox.backend.services.EventoSistemaService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +27,7 @@ import java.util.List;
 public class DashboardController {
 
     private final DashboardService dashboardService;
+    private final EventoSistemaService eventoSistemaService;
 
     @GetMapping("/kpis")
     public ResponseEntity<KpiDTO> getKpis(
@@ -47,5 +54,26 @@ public class DashboardController {
         LocalDate inicio = fechaInicio != null ? fechaInicio : fin.minusDays(30);
 
         return ResponseEntity.ok(dashboardService.obtenerVentasPorCanal(inicio, fin));
+    }
+        
+    @GetMapping("/top5-comerciantes")
+    public ResponseEntity<Top5ComerciantesDTO> top5Comerciantes(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin) {
+
+        LocalDate inicio = (fechaInicio != null) ? fechaInicio : LocalDate.now().withDayOfMonth(1);
+        LocalDate fin    = (fechaFin != null)    ? fechaFin    : LocalDate.now();
+        return ResponseEntity.ok(dashboardService.obtenerTop5Comerciantes(inicio, fin));
+    }
+
+    @GetMapping("/eventos")
+    public ResponseEntity<Page<EventoSistemaDTO>> eventos(
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(eventoSistemaService.obtenerEventos(pageable));
     }
 }

@@ -4,6 +4,7 @@ import com.gelox.backend.dto.CrearUsuarioDTO;
 import com.gelox.backend.dto.EditarUsuarioDTO;
 import com.gelox.backend.dto.UsuarioResponseDTO;
 import com.gelox.backend.entities.RolUsuario;
+import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.security.RequiereRol;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
+    private final EventoSistemaService eventoSistemaService;
 
     @RequiereRol("ADMINISTRADOR")
     public UsuarioResponseDTO crearUsuario(CrearUsuarioDTO dto) throws Exception {
@@ -49,7 +51,13 @@ public class UsuarioService {
         usuario.setRol(RolUsuario.valueOf(dto.getRol()));
         usuario.setActivo(true);
 
-        return toDTO(usuarioRepository.save(usuario));
+        Usuario saved = usuarioRepository.save(usuario);
+        eventoSistemaService.registrarEvento(
+                TipoEvento.NUEVO_REGISTRO,
+                "Nuevo usuario registrado: " + saved.getNombre(),
+                saved.getId()
+        );
+        return toDTO(saved);
     }
 
     @RequiereRol("ADMINISTRADOR")

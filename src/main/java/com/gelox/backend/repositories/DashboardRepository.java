@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Repository
 public class DashboardRepository {
@@ -100,6 +101,23 @@ public class DashboardRepository {
                 .setParameter("fechaFin", fechaFin)
                 .getSingleResult();
         return toBigDecimal(result);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getTop5Comerciantes(LocalDate fechaInicio, LocalDate fechaFin) {
+        return em.createNativeQuery("""
+                SELECT c.id::text, c.nombre, COALESCE(SUM(pc.total_ganancia), 0) AS total_ingreso
+                FROM planilla_comerciante pc
+                JOIN comerciante c ON c.id = pc.comerciante_id
+                WHERE pc.fecha BETWEEN :inicio AND :fin
+                  AND pc.cerrada = true
+                GROUP BY c.id, c.nombre
+                ORDER BY total_ingreso DESC
+                """)
+                .setParameter("inicio", fechaInicio)
+                .setParameter("fin", fechaFin)
+                .setMaxResults(5)
+                .getResultList();
     }
 
     private BigDecimal toBigDecimal(Object value) {
