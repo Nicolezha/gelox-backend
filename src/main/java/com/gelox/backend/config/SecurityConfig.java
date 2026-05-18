@@ -2,6 +2,7 @@ package com.gelox.backend.config;
 
 import com.gelox.backend.auth.FirebaseAuthFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -25,10 +26,20 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/recuperar-contrasena").permitAll()
+                        .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
+                        .requestMatchers("/api/reportes/**").hasRole("ADMINISTRADOR")
                         .anyRequest().authenticated())
                 .addFilterBefore(firebaseAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    // Evita que Spring Boot registre FirebaseAuthFilter dos veces (una via @Component
+    // y otra via addFilterBefore). Solo debe correr dentro de la cadena de seguridad.
+    @Bean
+    FilterRegistrationBean<FirebaseAuthFilter> firebaseAuthFilterRegistration() {
+        FilterRegistrationBean<FirebaseAuthFilter> reg = new FilterRegistrationBean<>(firebaseAuthFilter);
+        reg.setEnabled(false);
+        return reg;
     }
 }

@@ -1,6 +1,6 @@
 package com.gelox.backend.security;
 
-import com.google.firebase.auth.FirebaseToken;
+import com.gelox.backend.entities.Usuario;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.springframework.http.HttpStatus;
@@ -24,11 +24,11 @@ public class RolVerificacionAspect {
         }
 
         Object principal = authentication.getPrincipal();
-        if (!(principal instanceof FirebaseToken token)) {
+        if (!(principal instanceof Usuario usuario)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Token inválido");
         }
 
-        String rolUsuario = (String) token.getClaims().get("rol");
+        String rolUsuario = usuario.getRol().name();
         boolean tieneRol = Arrays.asList(requiereRol.value()).contains(rolUsuario);
 
         if (!tieneRol) {
