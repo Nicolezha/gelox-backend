@@ -1,0 +1,17 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - SPRING_DATASOURCE_URL=${DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - FIREBASE_SERVICE_ACCOUNT_PATH=file:/app/firebase/serviceAccountKey.json
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+    volumes:
+      - ./src/main/resources/serviceAccountKey.json:/app/firebase/serviceAccountKey.json:ro
+    restart: unless-stopped
