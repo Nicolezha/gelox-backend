@@ -75,6 +75,33 @@ public class DashboardRepository {
                 .getSingleResult()).longValue();
     }
 
+    public BigDecimal getTotalVentasPorCanal(String canal, LocalDate fechaInicio, LocalDate fechaFin) {
+        Object result = em.createNativeQuery("""
+                SELECT COALESCE(SUM(v.total), 0)
+                FROM venta v
+                WHERE v.canal = :canal
+                  AND v.fecha::date BETWEEN :fechaInicio AND :fechaFin
+                """)
+                .setParameter("canal", canal)
+                .setParameter("fechaInicio", fechaInicio)
+                .setParameter("fechaFin", fechaFin)
+                .getSingleResult();
+        return toBigDecimal(result);
+    }
+
+    public BigDecimal getTotalPlanillasCerradas(LocalDate fechaInicio, LocalDate fechaFin) {
+        Object result = em.createNativeQuery("""
+                SELECT COALESCE(SUM(p.total_ganancia), 0)
+                FROM planilla p
+                WHERE p.cerrada = true
+                  AND p.fecha BETWEEN :fechaInicio AND :fechaFin
+                """)
+                .setParameter("fechaInicio", fechaInicio)
+                .setParameter("fechaFin", fechaFin)
+                .getSingleResult();
+        return toBigDecimal(result);
+    }
+
     private BigDecimal toBigDecimal(Object value) {
         if (value == null) return BigDecimal.ZERO;
         if (value instanceof BigDecimal bd) return bd;

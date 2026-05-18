@@ -3,6 +3,7 @@ package com.gelox.backend.services;
 import com.gelox.backend.dto.InversionVsIngresosDTO;
 import com.gelox.backend.dto.KpiDTO;
 import com.gelox.backend.dto.PeriodoFiltroDTO;
+import com.gelox.backend.dto.VentasPorCanalDTO;
 import com.gelox.backend.repositories.DashboardRepository;
 import com.gelox.backend.repositories.ReporteRepository;
 import lombok.RequiredArgsConstructor;
@@ -86,6 +87,27 @@ public class DashboardService {
         if (value == null) return BigDecimal.ZERO;
         if (value instanceof BigDecimal bd) return bd;
         return new BigDecimal(value.toString());
+    }
+
+    public VentasPorCanalDTO obtenerVentasPorCanal(LocalDate fechaInicio, LocalDate fechaFin) {
+        BigDecimal ventanilla   = dashboardRepository.getTotalVentasPorCanal("VENTANILLA", fechaInicio, fechaFin);
+        BigDecimal rural        = dashboardRepository.getTotalVentasPorCanal("RURAL", fechaInicio, fechaFin);
+        BigDecimal comerciantes = dashboardRepository.getTotalPlanillasCerradas(fechaInicio, fechaFin);
+
+        BigDecimal total = ventanilla.add(rural).add(comerciantes);
+
+        if (total.compareTo(BigDecimal.ZERO) == 0) {
+            return new VentasPorCanalDTO(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+
+        return new VentasPorCanalDTO(
+                ventanilla.divide(total, 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP),
+                rural.divide(total, 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP),
+                comerciantes.divide(total, 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)
+        );
     }
 
     private BigDecimal calcularVariacion(BigDecimal anterior, BigDecimal actual) {
