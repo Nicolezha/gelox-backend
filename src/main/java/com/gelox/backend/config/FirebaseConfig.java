@@ -13,7 +13,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Configuration
@@ -28,9 +31,16 @@ public class FirebaseConfig {
     @PostConstruct
     public void initializeFirebase() throws IOException {
         if (FirebaseApp.getApps().isEmpty()) {
-            Resource resource = resourceLoader.getResource(serviceAccountPath);
+            InputStream credentialsStream;
+            String jsonEnv = System.getenv("FIREBASE_SERVICE_ACCOUNT_JSON");
+            if (jsonEnv != null && !jsonEnv.isBlank()) {
+                credentialsStream = new ByteArrayInputStream(jsonEnv.getBytes(StandardCharsets.UTF_8));
+            } else {
+                Resource resource = resourceLoader.getResource(serviceAccountPath);
+                credentialsStream = resource.getInputStream();
+            }
             FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(resource.getInputStream()))
+                    .setCredentials(GoogleCredentials.fromStream(credentialsStream))
                     .build();
             FirebaseApp.initializeApp(options);
             log.info("Firebase Admin SDK inicializado correctamente");
