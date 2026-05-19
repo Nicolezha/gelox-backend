@@ -6,7 +6,6 @@ import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 
 @Repository
@@ -34,7 +33,7 @@ public class ReporteRepository {
                 SELECT COALESCE(SUM(v.total), 0)
                 FROM venta v
                 WHERE v.fecha::date BETWEEN :inicio AND :fin
-                  AND v.canal = :canal
+                  AND v.canal::text = :canal
                 """)
                 .setParameter("inicio", periodo.fechaInicio())
                 .setParameter("fin", periodo.fechaFin())
@@ -46,7 +45,7 @@ public class ReporteRepository {
     public BigDecimal getIngresosComerciantesEnPeriodo(PeriodoFiltroDTO periodo) {
         Object result = em.createNativeQuery("""
                 SELECT COALESCE(SUM(p.total_ganancia), 0)
-                FROM planilla p
+                FROM planilla_comerciante p
                 WHERE p.fecha BETWEEN :inicio AND :fin
                   AND p.cerrada = true
                 """)
@@ -106,7 +105,7 @@ public class ReporteRepository {
                 SELECT
                     (p.fecha - CAST(:inicio AS date)) / 7 + 1 AS semana,
                     COALESCE(SUM(p.total_ganancia), 0) AS ingresos
-                FROM planilla p
+                FROM planilla_comerciante p
                 WHERE p.fecha BETWEEN :inicio AND :fin
                   AND p.cerrada = true
                 GROUP BY semana
@@ -145,10 +144,10 @@ public class ReporteRepository {
      */
     public BigDecimal getCostosComerciantesEnPeriodo(PeriodoFiltroDTO periodo) {
         Object result = em.createNativeQuery("""
-                SELECT COALESCE(SUM(ip.cantidad_despachada * pr.precio_costo), 0)
+                SELECT COALESCE(SUM(ip.unidades_despachadas * pr.precio_costo), 0)
                 FROM item_planilla ip
-                JOIN planilla pl   ON pl.id = ip.planilla_id
-                JOIN producto pr   ON pr.id = ip.producto_id
+                JOIN planilla_comerciante pl ON pl.id = ip.planilla_id
+                JOIN producto pr             ON pr.id = ip.producto_id
                 WHERE pl.fecha BETWEEN :inicio AND :fin
                   AND pl.cerrada = true
                 """)

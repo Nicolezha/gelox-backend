@@ -73,6 +73,10 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
             log.warn("Token Firebase inválido: {}", e.getMessage());
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token inválido o expirado");
             return;
+        } catch (Exception e) {
+            log.error("Error inesperado en FirebaseAuthFilter: {}", e.getMessage(), e);
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error interno de autenticación");
+            return;
         }
 
         filterChain.doFilter(request, response);
