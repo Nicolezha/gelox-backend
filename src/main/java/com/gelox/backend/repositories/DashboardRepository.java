@@ -28,7 +28,7 @@ public class DashboardRepository {
     public BigDecimal getIngresosPlanilasDia(LocalDate fecha) {
         Object result = em.createNativeQuery("""
                 SELECT COALESCE(SUM(p.total_ganancia), 0)
-                FROM planilla p
+                FROM planilla_comerciante p
                 WHERE p.fecha = :fecha
                   AND p.cerrada = true
                 """)
@@ -52,10 +52,10 @@ public class DashboardRepository {
 
     public BigDecimal getCostosPlanilasDia(LocalDate fecha) {
         Object result = em.createNativeQuery("""
-                SELECT COALESCE(SUM(ip.cantidad_despachada * pr.precio_costo), 0)
+                SELECT COALESCE(SUM(ip.unidades_despachadas * pr.precio_costo), 0)
                 FROM item_planilla ip
-                JOIN planilla pl  ON pl.id  = ip.planilla_id
-                JOIN producto pr  ON pr.id  = ip.producto_id
+                JOIN planilla_comerciante pl  ON pl.id  = ip.planilla_id
+                JOIN producto pr              ON pr.id  = ip.producto_id
                 WHERE pl.fecha = :fecha
                   AND pl.cerrada = true
                 """)
@@ -80,7 +80,7 @@ public class DashboardRepository {
         Object result = em.createNativeQuery("""
                 SELECT COALESCE(SUM(v.total), 0)
                 FROM venta v
-                WHERE v.canal = :canal
+                WHERE v.canal::text = :canal
                   AND v.fecha::date BETWEEN :fechaInicio AND :fechaFin
                 """)
                 .setParameter("canal", canal)
@@ -93,7 +93,7 @@ public class DashboardRepository {
     public BigDecimal getTotalPlanillasCerradas(LocalDate fechaInicio, LocalDate fechaFin) {
         Object result = em.createNativeQuery("""
                 SELECT COALESCE(SUM(p.total_ganancia), 0)
-                FROM planilla p
+                FROM planilla_comerciante p
                 WHERE p.cerrada = true
                   AND p.fecha BETWEEN :fechaInicio AND :fechaFin
                 """)
