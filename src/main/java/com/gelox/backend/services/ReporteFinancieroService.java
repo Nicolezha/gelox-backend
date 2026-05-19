@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -95,6 +96,31 @@ public class ReporteFinancieroService {
         ));
 
         return new ReporteRentabilidadDTO(canales);
+    }
+
+    public ReporteFinancieroCompletoDTO generarReporteCompleto(TipoPeriodo tipo,
+                                                               LocalDate fechaInicio,
+                                                               LocalDate fechaFin) {
+        PeriodoFiltroDTO periodo = resolverPeriodo(tipo, fechaInicio, fechaFin);
+        return new ReporteFinancieroCompletoDTO(
+                tipo,
+                periodo.fechaInicio(),
+                periodo.fechaFin(),
+                generarReporte(periodo),
+                getGraficaInversionVsIngresos(periodo),
+                getRentabilidadPorCanal(periodo)
+        );
+    }
+
+    public PeriodoFiltroDTO resolverPeriodo(TipoPeriodo tipo, LocalDate fechaInicio, LocalDate fechaFin) {
+        LocalDate hoy = LocalDate.now();
+        return switch (tipo) {
+            case DIA    -> new PeriodoFiltroDTO(hoy, hoy);
+            case SEMANA -> new PeriodoFiltroDTO(hoy.with(DayOfWeek.MONDAY), hoy);
+            case MES    -> new PeriodoFiltroDTO(hoy.withDayOfMonth(1), hoy);
+            case ANIO   -> new PeriodoFiltroDTO(hoy.withDayOfYear(1), hoy);
+            case RANGO  -> new PeriodoFiltroDTO(fechaInicio, fechaFin);
+        };
     }
 
     private BigDecimal calcularMargen(BigDecimal ingresos, BigDecimal costos) {
