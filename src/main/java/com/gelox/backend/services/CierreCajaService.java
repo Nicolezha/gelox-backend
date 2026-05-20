@@ -3,6 +3,7 @@ package com.gelox.backend.services;
 import com.gelox.backend.dto.CierreCajaDTO;
 import com.gelox.backend.dto.CierreCajaResponseDTO;
 import com.gelox.backend.entities.CierreCaja;
+import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.CierreCajaRepository;
 import com.gelox.backend.repositories.DashboardRepository;
@@ -20,6 +21,7 @@ public class CierreCajaService {
 
     private final CierreCajaRepository cierreCajaRepository;
     private final DashboardRepository dashboardRepository;
+    private final EventoSistemaService eventoSistemaService;
 
     public CierreCajaResponseDTO registrarDineroFisico(LocalDate fecha, CierreCajaDTO dto, Usuario usuario) {
         if (cierreCajaRepository.existsByFecha(fecha)) {
@@ -59,6 +61,12 @@ public class CierreCajaService {
                 .build();
 
         CierreCaja guardado = cierreCajaRepository.save(cierre);
+        eventoSistemaService.registrarEvento(
+                TipoEvento.CIERRE_CAJA,
+                "Cierre de caja registrado para la fecha " + fecha
+                        + ". Total físico: " + fisTotal + ". Diferencia: " + difTotal,
+                usuario.getId()
+        );
         return toResponse(guardado);
     }
 

@@ -2,6 +2,7 @@ package com.gelox.backend.services;
 
 import com.gelox.backend.dto.ActualizarPerfilDTO;
 import com.gelox.backend.dto.CambioContrasenaDTO;
+import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.exceptions.ContrasenaNoCoincideException;
 import com.gelox.backend.exceptions.CorreoDuplicadoException;
@@ -22,6 +23,7 @@ public class PerfilService {
 
     private final UsuarioRepository usuarioRepository;
     private final FirebaseAuth firebaseAuth;
+    private final EventoSistemaService eventoSistemaService;
 
     @Value("${supabase.url}")
     private String supabaseUrl;
@@ -29,9 +31,11 @@ public class PerfilService {
     @Value("${supabase.service-key}")
     private String supabaseServiceKey;
 
-    public PerfilService(UsuarioRepository usuarioRepository, FirebaseAuth firebaseAuth) {
+    public PerfilService(UsuarioRepository usuarioRepository, FirebaseAuth firebaseAuth,
+                         EventoSistemaService eventoSistemaService) {
         this.usuarioRepository = usuarioRepository;
         this.firebaseAuth = firebaseAuth;
+        this.eventoSistemaService = eventoSistemaService;
     }
 
     @Transactional
@@ -55,7 +59,13 @@ public class PerfilService {
             usuario.setFotoUrl(dto.getFotoUrl());
         }
 
-        return usuarioRepository.save(usuario);
+        Usuario actualizado = usuarioRepository.save(usuario);
+        eventoSistemaService.registrarEvento(
+                TipoEvento.ACTUALIZACION_PERFIL,
+                "Perfil actualizado: " + actualizado.getNombre() + " (" + actualizado.getCorreo() + ")",
+                actualizado.getId()
+        );
+        return actualizado;
     }
 
     // Firebase Admin SDK no permite verificar la contraseña actual directamente.
@@ -73,6 +83,15 @@ public class PerfilService {
                     .setPassword(dto.getNuevaContrasena());
 
             FirebaseAuth.getInstance().updateUser(updateRequest);
+
+            usuarioRepository.findByFirebaseUid(firebaseUid).ifPresent(usuario ->
+                    eventoSistemaService.registrarEvento(
+                            TipoEvento.CAMBIO_CONTRASENA,
+                            "Cambio de contraseña realizado por: " + usuario.getNombre()
+                                    + " (" + usuario.getCorreo() + ")",
+                            usuario.getId()
+                    )
+            );
 
         } catch (com.google.firebase.auth.FirebaseAuthException e) {
             throw new IllegalArgumentException("Error al actualizar la contraseña: " + e.getMessage());
