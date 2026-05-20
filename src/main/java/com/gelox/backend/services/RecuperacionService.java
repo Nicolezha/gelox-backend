@@ -16,6 +16,7 @@ public class RecuperacionService {
 
     private final UsuarioRepository usuarioRepository;
     private final FirebaseAuth firebaseAuth;
+    private final EmailService emailService;
 
     public void solicitarRecuperacion(String correo) {
         if (!usuarioRepository.existsByCorreo(correo)) {
@@ -23,11 +24,16 @@ public class RecuperacionService {
         }
 
         try {
-            firebaseAuth.generatePasswordResetLink(correo);
+            String enlace = firebaseAuth.generatePasswordResetLink(correo);
+            emailService.enviarCorreoRecuperacion(correo, enlace);
         } catch (FirebaseAuthException e) {
             log.error("Error al generar enlace de recuperación para {}: {}", correo, e.getMessage());
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo generar el enlace de recuperación");
+        } catch (RuntimeException e) {
+            log.error("Error al enviar correo de recuperación a {}: {}", correo, e.getMessage());
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo enviar el correo de recuperación");
         }
     }
 }
