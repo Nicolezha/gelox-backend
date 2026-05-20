@@ -44,6 +44,23 @@ public class AuthService {
         );
     }
 
+    public UsuarioDTO obtenerPerfil(String firebaseUid) {
+        Usuario usuario = usuarioRepository.findByFirebaseUid(firebaseUid)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "Usuario no registrado en el sistema"));
+
+        if (!usuario.getActivo()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "La cuenta está desactivada");
+        }
+
+        return new UsuarioDTO(
+                usuario.getId(),
+                usuario.getNombre(),
+                usuario.getRol(),
+                usuario.getFotoUrl()
+        );
+    }
+
     public void cerrarSesion(String firebaseUid) {
         try {
             firebaseAuth.revokeRefreshTokens(firebaseUid);

@@ -2,7 +2,7 @@ package com.gelox.backend.dto;
 
 import com.gelox.backend.entities.TipoEvento;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record EventoSistemaDTO(
@@ -10,5 +10,5 @@ public record EventoSistemaDTO(
         TipoEvento tipo,
         String descripcion,
         UUID usuarioId,
-        LocalDateTime fecha
+        OffsetDateTime fecha
 ) {}
