@@ -36,11 +36,70 @@ public class ReporteFinancieroService {
         );
     }
 
-    public List<PuntoGraficaDTO> getGraficaInversionVsIngresos(PeriodoFiltroDTO periodo) {
+    private static final String[] DIAS_SEMANA = {"Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"};
+    private static final String[] NOMBRES_MES = {
+        "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+        "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+    };
+
+    /**
+     * Punto de entrada principal. Delega al builder correcto según el tipo de período.
+     */
+    public List<PuntoGraficaDTO> getGraficaInversionVsIngresos(PeriodoFiltroDTO periodo, TipoPeriodo tipo) {
+        return switch (tipo) {
+            case DIA    -> buildGraficaDia(periodo);
+            case SEMANA -> buildGraficaPorDia(periodo);
+            case MES    -> buildGraficaPorSemana(periodo);
+            case ANIO   -> buildGraficaPorMes(periodo);
+            case RANGO  -> buildGraficaPorSemana(periodo);
+        };
+    }
+
+    /** DIA — un único punto "Hoy" con el total del día */
+    private List<PuntoGraficaDTO> buildGraficaDia(PeriodoFiltroDTO periodo) {
+        BigDecimal inversion = reporteRepository.getTotalInversion(periodo);
+        BigDecimal ingresos  = reporteRepository.getIngresosPorCanal("VENTANILLA", periodo)
+                .add(reporteRepository.getIngresosPorCanal("RURAL", periodo))
+                .add(reporteRepository.getIngresosComerciantesEnPeriodo(periodo));
+        String etiqueta = periodo.fechaInicio().equals(LocalDate.now()) ? "Hoy" : periodo.fechaInicio().toString();
+        return List.of(new PuntoGraficaDTO(etiqueta, inversion, ingresos));
+    }
+
+    /** SEMANA — un punto por día (Lun–Dom), máximo 7 puntos */
+    private List<PuntoGraficaDTO> buildGraficaPorDia(PeriodoFiltroDTO periodo) {
+        long totalDias = ChronoUnit.DAYS.between(periodo.fechaInicio(), periodo.fechaFin()) + 1;
+
+        Map<Integer, BigDecimal> inversionMap = new HashMap<>();
+        Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
+
+        for (Object[] row : reporteRepository.getInversionPorDiaOffset(periodo)) {
+            inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
+        }
+        for (Object[] row : reporteRepository.getIngresosVentasPorDiaOffset(periodo)) {
+            int offset = ((Number) row[0]).intValue();
+            ingresosMap.merge(offset, toBigDecimal(row[1]), BigDecimal::add);
+        }
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorDiaOffset(periodo)) {
+            int offset = ((Number) row[0]).intValue();
+            ingresosMap.merge(offset, toBigDecimal(row[1]), BigDecimal::add);
+        }
+
+        List<PuntoGraficaDTO> puntos = new ArrayList<>();
+        for (int offset = 0; offset < totalDias; offset++) {
+            puntos.add(new PuntoGraficaDTO(
+                    DIAS_SEMANA[offset % 7],
+                    inversionMap.getOrDefault(offset, BigDecimal.ZERO),
+                    ingresosMap.getOrDefault(offset, BigDecimal.ZERO)
+            ));
+        }
+        return puntos;
+    }
+
+    /** MES / RANGO — un punto por semana (Sem 1, Sem 2, …) */
+    private List<PuntoGraficaDTO> buildGraficaPorSemana(PeriodoFiltroDTO periodo) {
         long totalDias = ChronoUnit.DAYS.between(periodo.fechaInicio(), periodo.fechaFin()) + 1;
         int totalSemanas = (int) Math.ceil(totalDias / 7.0);
 
-        // Mapas semana → valor (semana empieza en 1)
         Map<Integer, BigDecimal> inversionMap = new HashMap<>();
         Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
 
@@ -58,11 +117,41 @@ public class ReporteFinancieroService {
 
         List<PuntoGraficaDTO> puntos = new ArrayList<>();
         for (int sem = 1; sem <= totalSemanas; sem++) {
-            LocalDate inicioSem = periodo.fechaInicio().plusDays((long) (sem - 1) * 7);
             puntos.add(new PuntoGraficaDTO(
-                    "Sem " + sem + " (" + inicioSem + ")",
+                    "Sem " + sem,
                     inversionMap.getOrDefault(sem, BigDecimal.ZERO),
                     ingresosMap.getOrDefault(sem, BigDecimal.ZERO)
+            ));
+        }
+        return puntos;
+    }
+
+    /** ANIO — un punto por mes (Ene–Dic), solo los meses dentro del rango */
+    private List<PuntoGraficaDTO> buildGraficaPorMes(PeriodoFiltroDTO periodo) {
+        int mesInicio = periodo.fechaInicio().getMonthValue();
+        int mesFin    = periodo.fechaFin().getMonthValue();
+
+        Map<Integer, BigDecimal> inversionMap = new HashMap<>();
+        Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
+
+        for (Object[] row : reporteRepository.getInversionPorMes(periodo)) {
+            inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
+        }
+        for (Object[] row : reporteRepository.getIngresosVentasPorMes(periodo)) {
+            int mes = ((Number) row[0]).intValue();
+            ingresosMap.merge(mes, toBigDecimal(row[1]), BigDecimal::add);
+        }
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorMes(periodo)) {
+            int mes = ((Number) row[0]).intValue();
+            ingresosMap.merge(mes, toBigDecimal(row[1]), BigDecimal::add);
+        }
+
+        List<PuntoGraficaDTO> puntos = new ArrayList<>();
+        for (int mes = mesInicio; mes <= mesFin; mes++) {
+            puntos.add(new PuntoGraficaDTO(
+                    NOMBRES_MES[mes - 1],
+                    inversionMap.getOrDefault(mes, BigDecimal.ZERO),
+                    ingresosMap.getOrDefault(mes, BigDecimal.ZERO)
             ));
         }
         return puntos;
@@ -107,7 +196,7 @@ public class ReporteFinancieroService {
                 periodo.fechaInicio(),
                 periodo.fechaFin(),
                 generarReporte(periodo),
-                getGraficaInversionVsIngresos(periodo),
+                getGraficaInversionVsIngresos(periodo, tipo),
                 getRentabilidadPorCanal(periodo)
         );
     }

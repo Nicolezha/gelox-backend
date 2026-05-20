@@ -55,6 +55,132 @@ public class ReporteRepository {
         return toBigDecimal(result);
     }
 
+    // ── Agrupación por día (offset desde fechaInicio) — para filtro SEMANA ──────────────────────
+
+    /**
+     * Retorna filas [dia_offset (int), inversion] donde 0=primer día del período (lunes).
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getInversionPorDiaOffset(PeriodoFiltroDTO periodo) {
+        return em.createNativeQuery("""
+                SELECT
+                    (pp.fecha::date - CAST(:inicio AS date)) AS dia_offset,
+                    COALESCE(SUM(ipp.precio_unitario * ipp.cantidad_recibida), 0) AS inversion
+                FROM item_pedido_proveedor ipp
+                JOIN pedido_proveedor pp ON pp.id = ipp.pedido_id
+                WHERE pp.fecha::date BETWEEN :inicio AND :fin
+                  AND pp.estado = 'RECIBIDO'
+                GROUP BY dia_offset
+                ORDER BY dia_offset
+                """)
+                .setParameter("inicio", periodo.fechaInicio())
+                .setParameter("fin", periodo.fechaFin())
+                .getResultList();
+    }
+
+    /**
+     * Retorna filas [dia_offset (int), ingresos] de ventas agrupadas por día.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getIngresosVentasPorDiaOffset(PeriodoFiltroDTO periodo) {
+        return em.createNativeQuery("""
+                SELECT
+                    (v.fecha::date - CAST(:inicio AS date)) AS dia_offset,
+                    COALESCE(SUM(v.total), 0) AS ingresos
+                FROM venta v
+                WHERE v.fecha::date BETWEEN :inicio AND :fin
+                GROUP BY dia_offset
+                ORDER BY dia_offset
+                """)
+                .setParameter("inicio", periodo.fechaInicio())
+                .setParameter("fin", periodo.fechaFin())
+                .getResultList();
+    }
+
+    /**
+     * Retorna filas [dia_offset (int), ingresos] de planillas agrupadas por día.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getIngresosPllanillasPorDiaOffset(PeriodoFiltroDTO periodo) {
+        return em.createNativeQuery("""
+                SELECT
+                    (p.fecha - CAST(:inicio AS date)) AS dia_offset,
+                    COALESCE(SUM(p.total_ganancia), 0) AS ingresos
+                FROM planilla_comerciante p
+                WHERE p.fecha BETWEEN :inicio AND :fin
+                  AND p.cerrada = true
+                GROUP BY dia_offset
+                ORDER BY dia_offset
+                """)
+                .setParameter("inicio", periodo.fechaInicio())
+                .setParameter("fin", periodo.fechaFin())
+                .getResultList();
+    }
+
+    // ── Agrupación por mes (número 1-12) — para filtro ANIO ─────────────────────────────────
+
+    /**
+     * Retorna filas [mes (1-12), inversion] agrupadas por mes.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getInversionPorMes(PeriodoFiltroDTO periodo) {
+        return em.createNativeQuery("""
+                SELECT
+                    EXTRACT(MONTH FROM pp.fecha::date)::int AS mes,
+                    COALESCE(SUM(ipp.precio_unitario * ipp.cantidad_recibida), 0) AS inversion
+                FROM item_pedido_proveedor ipp
+                JOIN pedido_proveedor pp ON pp.id = ipp.pedido_id
+                WHERE pp.fecha::date BETWEEN :inicio AND :fin
+                  AND pp.estado = 'RECIBIDO'
+                GROUP BY mes
+                ORDER BY mes
+                """)
+                .setParameter("inicio", periodo.fechaInicio())
+                .setParameter("fin", periodo.fechaFin())
+                .getResultList();
+    }
+
+    /**
+     * Retorna filas [mes (1-12), ingresos] de ventas agrupadas por mes.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getIngresosVentasPorMes(PeriodoFiltroDTO periodo) {
+        return em.createNativeQuery("""
+                SELECT
+                    EXTRACT(MONTH FROM v.fecha::date)::int AS mes,
+                    COALESCE(SUM(v.total), 0) AS ingresos
+                FROM venta v
+                WHERE v.fecha::date BETWEEN :inicio AND :fin
+                GROUP BY mes
+                ORDER BY mes
+                """)
+                .setParameter("inicio", periodo.fechaInicio())
+                .setParameter("fin", periodo.fechaFin())
+                .getResultList();
+    }
+
+    /**
+     * Retorna filas [mes (1-12), ingresos] de planillas agrupadas por mes.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getIngresosPllanillasPorMes(PeriodoFiltroDTO periodo) {
+        return em.createNativeQuery("""
+                SELECT
+                    EXTRACT(MONTH FROM p.fecha)::int AS mes,
+                    COALESCE(SUM(p.total_ganancia), 0) AS ingresos
+                FROM planilla_comerciante p
+                WHERE p.fecha BETWEEN :inicio AND :fin
+                  AND p.cerrada = true
+                GROUP BY mes
+                ORDER BY mes
+                """)
+                .setParameter("inicio", periodo.fechaInicio())
+                .setParameter("fin", periodo.fechaFin())
+                .getResultList();
+    }
+
+    // ── Agrupación por semana (existente) — para filtro MES / RANGO ─────────────────────────
+
     /**
      * Retorna filas [semana_numero (int), inversion (numeric)] por semana dentro del período.
      * semana_numero = floor(dias_desde_inicio / 7) + 1

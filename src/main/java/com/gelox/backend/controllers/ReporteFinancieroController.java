@@ -31,17 +31,19 @@ public class ReporteFinancieroController {
         return ResponseEntity.ok(service.generarReporte(new PeriodoFiltroDTO(fechaInicio, fechaFin)));
     }
 
-    /** RF13 — Gráfica inversión vs ingresos por semana */
+    /** RF13 — Gráfica inversión vs ingresos con agrupación dinámica según tipo_periodo */
     @GetMapping("/grafica-inversion-ingresos")
     public ResponseEntity<List<PuntoGraficaDTO>> getGrafica(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+            @RequestParam(defaultValue = "SEMANA") TipoPeriodo tipo_periodo) {
 
         if (fechaInicio.isAfter(fechaFin))
             return ResponseEntity.badRequest().build();
 
         return ResponseEntity.ok(
-                service.getGraficaInversionVsIngresos(new PeriodoFiltroDTO(fechaInicio, fechaFin)));
+                service.getGraficaInversionVsIngresos(
+                        new PeriodoFiltroDTO(fechaInicio, fechaFin), tipo_periodo));
     }
 
     /** RF14 — Tabla rentabilidad por canal */
