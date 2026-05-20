@@ -6,5 +6,6 @@ public record CatalogoProductoPublicoDTO(
         String nombre,
         String imagenUrl,
         BigDecimal precioVenta,
+        String descripcion,
         String categoria
 ) {}
