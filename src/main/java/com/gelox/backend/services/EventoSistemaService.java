@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Service
@@ -35,6 +36,12 @@ public class EventoSistemaService {
     }
 
     private EventoSistemaDTO toDTO(EventoSistema e) {
-        return new EventoSistemaDTO(e.getId(), e.getTipo(), e.getDescripcion(), e.getUsuarioId(), e.getFecha());
+        return new EventoSistemaDTO(
+                e.getId(),
+                e.getTipo(),
+                e.getDescripcion(),
+                e.getUsuarioId(),
+                e.getFecha().atOffset(ZoneOffset.UTC)
+        );
     }
 }
