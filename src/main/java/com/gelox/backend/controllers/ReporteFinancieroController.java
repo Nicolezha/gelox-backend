@@ -26,7 +26,8 @@ public class ReporteFinancieroController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin) {
 
         if (fechaInicio.isAfter(fechaFin))
-            return ResponseEntity.badRequest().build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La fecha de inicio no puede ser posterior a la fecha fin");
 
         return ResponseEntity.ok(service.generarReporte(new PeriodoFiltroDTO(fechaInicio, fechaFin)));
     }
@@ -39,7 +40,8 @@ public class ReporteFinancieroController {
             @RequestParam(defaultValue = "SEMANA") TipoPeriodo tipo_periodo) {
 
         if (fechaInicio.isAfter(fechaFin))
-            return ResponseEntity.badRequest().build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La fecha de inicio no puede ser posterior a la fecha fin");
 
         return ResponseEntity.ok(
                 service.getGraficaInversionVsIngresos(
@@ -53,7 +55,8 @@ public class ReporteFinancieroController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin) {
 
         if (fechaInicio.isAfter(fechaFin))
-            return ResponseEntity.badRequest().build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La fecha de inicio no puede ser posterior a la fecha fin");
 
         return ResponseEntity.ok(
                 service.getRentabilidadPorCanal(new PeriodoFiltroDTO(fechaInicio, fechaFin)));

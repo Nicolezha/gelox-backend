@@ -12,4 +12,6 @@ public interface ProductoRepository extends JpaRepository<Producto, UUID> {
     List<Producto> findByActivoTrue();
 
     List<Producto> findByActivoTrueAndCategoria(CategoriaProducto categoria);
+
+    boolean existsByCodigoTecnico(String codigoTecnico);
 }
