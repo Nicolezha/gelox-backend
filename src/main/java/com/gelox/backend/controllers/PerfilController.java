@@ -5,6 +5,7 @@ import com.gelox.backend.dto.CambioContrasenaDTO;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.services.PerfilService;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,6 +37,21 @@ public class PerfilController {
     }
 
     /**
+     * PUT /api/perfil/{userId} (multipart/form-data)
+     * Sube foto de perfil a Supabase Storage y actualiza foto_url en BD.
+     * Llamado por el frontend desde updateFotoPerfil().
+     * Requiere autenticación.
+     */
+    @PutMapping(value = "/{userId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> subirFotoPut(
+            @PathVariable UUID userId,
+            @RequestParam("foto") MultipartFile foto) {
+        String fotoUrl = perfilService.subirFotoPerfil(userId, foto);
+        perfilService.actualizarFotoUrl(userId, fotoUrl);
+        return ResponseEntity.ok(Map.of("foto_url", fotoUrl));
+    }
+
+    /**
      * POST /api/perfil/{userId}/foto
      * Sube foto de perfil a Supabase Storage y actualiza foto_url en BD.
      * Requiere autenticación.
@@ -46,7 +62,7 @@ public class PerfilController {
             @RequestParam("foto") MultipartFile foto) {
         String fotoUrl = perfilService.subirFotoPerfil(userId, foto);
         perfilService.actualizarFotoUrl(userId, fotoUrl);
-        return ResponseEntity.ok(Map.of("fotoUrl", fotoUrl));
+        return ResponseEntity.ok(Map.of("foto_url", fotoUrl));
     }
 
     /**

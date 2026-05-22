@@ -40,7 +40,9 @@ public class AuthService {
                 usuario.getId(),
                 usuario.getNombre(),
                 usuario.getRol(),
-                usuario.getFotoUrl()
+                usuario.getFotoUrl(),
+                usuario.getCorreo(),
+                usuario.getTelefono()
         );
     }
 
@@ -57,7 +59,9 @@ public class AuthService {
                 usuario.getId(),
                 usuario.getNombre(),
                 usuario.getRol(),
-                usuario.getFotoUrl()
+                usuario.getFotoUrl(),
+                usuario.getCorreo(),
+                usuario.getTelefono()
         );
     }
 
