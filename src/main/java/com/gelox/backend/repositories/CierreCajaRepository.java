@@ -23,9 +23,9 @@ public interface CierreCajaRepository extends JpaRepository<CierreCaja, UUID> {
             SELECT c FROM CierreCaja c
             WHERE c.fecha BETWEEN :desde AND :hasta
             AND (:estado IS NULL
-                 OR (:estado = 'perfecto'  AND c.diferenciaTotal = 0)
-                 OR (:estado = 'mayor'     AND c.diferenciaTotal > 0)
-                 OR (:estado = 'menor'     AND c.diferenciaTotal < 0))
+                 OR (:estado = 'perfecto' AND c.diferenciaTotal = 0)
+                 OR (:estado = 'mayor'   AND c.diferenciaTotal > 0)
+                 OR (:estado = 'menor'   AND c.diferenciaTotal < 0))
             ORDER BY c.fecha DESC
             """)
     Page<CierreCaja> findByFiltros(
