@@ -34,19 +34,14 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "La cuenta está desactivada");
         }
 
-        boolean esNuevoInicio = usuario.getUltimoAcceso() == null ||
-                usuario.getUltimoAcceso().isBefore(LocalDateTime.now().minusMinutes(30));
-
         usuario.setUltimoAcceso(LocalDateTime.now());
         usuarioRepository.save(usuario);
 
-        if (esNuevoInicio) {
-            eventoSistemaService.registrarEvento(
-                    TipoEvento.INICIO_SESION,
-                    "Inicio de sesión: " + usuario.getNombre() + " (" + usuario.getCorreo() + ")",
-                    usuario.getId()
-            );
-        }
+        eventoSistemaService.registrarEvento(
+                TipoEvento.INICIO_SESION,
+                "Inicio de sesión: " + usuario.getNombre() + " (" + usuario.getCorreo() + ")",
+                usuario.getId()
+        );
 
         return new UsuarioDTO(
                 usuario.getId(),
