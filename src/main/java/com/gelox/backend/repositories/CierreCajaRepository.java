@@ -4,10 +4,9 @@ import com.gelox.backend.entities.CierreCaja;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,18 +18,19 @@ public interface CierreCajaRepository extends JpaRepository<CierreCaja, UUID> {
 
     boolean existsByFecha(LocalDate fecha);
 
-    @Query("""
-            SELECT c FROM CierreCaja c
-            WHERE c.fecha BETWEEN :desde AND :hasta
-            AND (:estado IS NULL
-                 OR (:estado = 'perfecto' AND c.diferenciaTotal = 0)
-                 OR (:estado = 'mayor'   AND c.diferenciaTotal > 0)
-                 OR (:estado = 'menor'   AND c.diferenciaTotal < 0))
-            ORDER BY c.fecha DESC
-            """)
-    Page<CierreCaja> findByFiltros(
-            @Param("desde") LocalDate desde,
-            @Param("hasta") LocalDate hasta,
-            @Param("estado") String estado,
-            Pageable pageable);
+    // Sin filtro de estado — todos los cierres en el rango
+    Page<CierreCaja> findByFechaBetweenOrderByFechaDesc(
+            LocalDate desde, LocalDate hasta, Pageable pageable);
+
+    // estado = "perfecto" → diferenciaTotal == 0
+    Page<CierreCaja> findByFechaBetweenAndDiferenciaTotalOrderByFechaDesc(
+            LocalDate desde, LocalDate hasta, BigDecimal diferenciaTotal, Pageable pageable);
+
+    // estado = "mayor" → diferenciaTotal > 0
+    Page<CierreCaja> findByFechaBetweenAndDiferenciaTotalGreaterThanOrderByFechaDesc(
+            LocalDate desde, LocalDate hasta, BigDecimal diferenciaTotal, Pageable pageable);
+
+    // estado = "menor" → diferenciaTotal < 0
+    Page<CierreCaja> findByFechaBetweenAndDiferenciaTotalLessThanOrderByFechaDesc(
+            LocalDate desde, LocalDate hasta, BigDecimal diferenciaTotal, Pageable pageable);
 }

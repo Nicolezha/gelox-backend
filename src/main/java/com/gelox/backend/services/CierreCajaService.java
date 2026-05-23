@@ -98,11 +98,19 @@ public class CierreCajaService {
 
     @Transactional(readOnly = true)
     public CierreCajaPageResponseDTO listar(LocalDate desde, LocalDate hasta, String estado, int page, int limit) {
-        // Normalizar estado: string vacío se trata como "sin filtro"
-        String estadoFiltro = StringUtils.hasText(estado) ? estado : null;
-
+        String estadoFiltro = StringUtils.hasText(estado) ? estado.trim() : null;
         Pageable pageable = PageRequest.of(page - 1, limit); // el front envía page desde 1
-        Page<CierreCaja> pageResult = cierreCajaRepository.findByFiltros(desde, hasta, estadoFiltro, pageable);
+
+        Page<CierreCaja> pageResult = switch (estadoFiltro == null ? "" : estadoFiltro) {
+            case "perfecto" -> cierreCajaRepository
+                    .findByFechaBetweenAndDiferenciaTotalOrderByFechaDesc(desde, hasta, BigDecimal.ZERO, pageable);
+            case "mayor" -> cierreCajaRepository
+                    .findByFechaBetweenAndDiferenciaTotalGreaterThanOrderByFechaDesc(desde, hasta, BigDecimal.ZERO, pageable);
+            case "menor" -> cierreCajaRepository
+                    .findByFechaBetweenAndDiferenciaTotalLessThanOrderByFechaDesc(desde, hasta, BigDecimal.ZERO, pageable);
+            default -> cierreCajaRepository
+                    .findByFechaBetweenOrderByFechaDesc(desde, hasta, pageable);
+        };
 
         List<CierreCajaListItemDTO> items = pageResult.getContent().stream()
                 .map(c -> new CierreCajaListItemDTO(
