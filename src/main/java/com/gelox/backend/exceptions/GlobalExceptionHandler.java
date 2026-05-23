@@ -44,4 +44,11 @@ public class GlobalExceptionHandler {
                 .forEach(e -> errores.put(e.getField(), e.getDefaultMessage()));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errores);
     }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleGeneral(Exception ex) {
+        String mensaje = ex.getMessage() != null ? ex.getMessage() : "Error interno del servidor";
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", mensaje));
+    }
 }
