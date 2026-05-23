@@ -56,6 +56,9 @@ public class Usuario {
     @Column(name = "activo", nullable = false)
     private Boolean activo = true;
 
+    @Column(name = "ultimo_acceso")
+    private LocalDateTime ultimoAcceso;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

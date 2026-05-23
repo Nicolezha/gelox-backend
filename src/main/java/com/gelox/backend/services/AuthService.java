@@ -10,7 +10,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
 
 @Slf4j
 @Service
@@ -21,6 +24,7 @@ public class AuthService {
     private final FirebaseAuth firebaseAuth;
     private final EventoSistemaService eventoSistemaService;
 
+    @Transactional
     public UsuarioDTO autenticarUsuario(String firebaseUid) {
         Usuario usuario = usuarioRepository.findByFirebaseUid(firebaseUid)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -29,6 +33,9 @@ public class AuthService {
         if (!usuario.getActivo()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "La cuenta está desactivada");
         }
+
+        usuario.setUltimoAcceso(LocalDateTime.now());
+        usuarioRepository.save(usuario);
 
         eventoSistemaService.registrarEvento(
                 TipoEvento.INICIO_SESION,

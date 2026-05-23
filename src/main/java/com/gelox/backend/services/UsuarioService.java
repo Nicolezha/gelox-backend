@@ -135,6 +135,7 @@ public class UsuarioService {
         dto.setCorreo(u.getCorreo());
         dto.setRol(u.getRol().name());
         dto.setActivo(u.getActivo());
+        dto.setUltimoAcceso(u.getUltimoAcceso());
         return dto;
     }
 
