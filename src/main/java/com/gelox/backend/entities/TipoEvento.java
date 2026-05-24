@@ -15,5 +15,11 @@ public enum TipoEvento {
     CREAR_PRODUCTO,
     EDITAR_PRODUCTO,
     DESACTIVAR_PRODUCTO,
-    ACTIVAR_PRODUCTO
+    ACTIVAR_PRODUCTO,
+    // RF21 — Pedido al proveedor
+    PEDIDO_PROVEEDOR,
+    // RF23 — Registro de entrada de mercancía
+    ENTRADA_MERCANCIA,
+    // RF25 — Registro de pérdida
+    PERDIDA_PRODUCTO
 }
