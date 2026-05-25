@@ -36,9 +36,12 @@ public class InventarioController {
      */
     @GetMapping("/productos")
     public ResponseEntity<List<InventarioProductoDTO>> listarInventario(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String estado,
             @AuthenticationPrincipal Usuario usuario) {
 
-        return ResponseEntity.ok(inventarioService.listarInventario(usuario.getRol().name()));
+        return ResponseEntity.ok(
+                inventarioService.listarInventario(usuario.getRol().name(), q, estado));
     }
 
     // ──────────────────────────────────────────────────────────────────────

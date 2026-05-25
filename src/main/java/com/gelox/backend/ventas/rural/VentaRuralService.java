@@ -3,11 +3,12 @@ package com.gelox.backend.ventas.rural;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gelox.backend.entities.*;
+import com.gelox.backend.exceptions.StockInsuficienteException;
 import com.gelox.backend.repositories.ItemVentaRepository;
-import com.gelox.backend.repositories.MovimientoInventarioRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.repositories.VentaRepository;
 import com.gelox.backend.security.RequiereRol;
+import com.gelox.backend.services.InventarioService;
 import com.gelox.backend.ventas.rural.dto.ConfirmarPedidoRuralRequest;
 import com.gelox.backend.ventas.rural.dto.ItemPedidoRuralRequest;
 import com.gelox.backend.ventas.rural.dto.PedidoRuralResponse;
@@ -42,13 +43,13 @@ public class VentaRuralService {
     // TODO: mover a producto.unidades_por_caja cuando se agregue ese campo a BD.
     private static final int UNIDADES_POR_CAJA = 24;
 
-    private final VentaRepository               ventaRepository;
-    private final VentaRuralRepository          pedidoRuralRepository;
-    private final ClienteRuralRepository        clienteRuralRepository;
-    private final ItemVentaRepository           itemVentaRepository;
-    private final ProductoRepository            productoRepository;
-    private final MovimientoInventarioRepository movimientoRepository;
-    private final ObjectMapper                  objectMapper;
+    private final VentaRepository        ventaRepository;
+    private final VentaRuralRepository   pedidoRuralRepository;
+    private final ClienteRuralRepository clienteRuralRepository;
+    private final ItemVentaRepository    itemVentaRepository;
+    private final ProductoRepository     productoRepository;
+    private final InventarioService      inventarioService;   // RF26
+    private final ObjectMapper           objectMapper;
 
     // ─────────────────────────── RF32 — GET ──────────────────────────
 
@@ -113,8 +114,7 @@ public class VentaRuralService {
             }
             Producto p = productosMap.get(item.productoId());
             if (p.getStockActual() < totalUnidades) {
-                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                        "Stock insuficiente para " + p.getNombre());
+                throw new StockInsuficienteException("Stock insuficiente para " + p.getNombre());
             }
         }
 
@@ -194,19 +194,14 @@ public class VentaRuralService {
                     .subtotal(ci.subtotal())
                     .build());
 
-            int stockAntes   = p.getStockActual();
-            int stockDespues = stockAntes - ci.totalUnidades();
-            p.setStockActual(stockDespues);
-            productoRepository.save(p);
-
-            movimientoRepository.save(MovimientoInventario.builder()
-                    .producto(p)
-                    .usuario(usuario)
-                    .tipo(TipoMovimiento.SALIDA_VENTA)
-                    .cantidad(ci.totalUnidades())
-                    .stockResultante(stockDespues)
-                    .descripcion("Pedido rural - " + nombreDestinatario)
-                    .build());
+            // RF26 — descuento centralizado: actualiza stock + crea movimiento_inventario
+            inventarioService.descontarStock(
+                    p.getId(),
+                    ci.totalUnidades(),
+                    TipoMovimiento.SALIDA_VENTA,
+                    "Pedido rural - " + nombreDestinatario,
+                    usuario
+            );
 
             itemsResponse.add(new PedidoRuralResponse.ItemPedidoRuralResponse(
                     p.getId(),

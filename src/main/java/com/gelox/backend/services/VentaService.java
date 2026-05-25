@@ -2,8 +2,8 @@ package com.gelox.backend.services;
 
 import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.*;
+import com.gelox.backend.exceptions.StockInsuficienteException;
 import com.gelox.backend.repositories.ItemVentaRepository;
-import com.gelox.backend.repositories.MovimientoInventarioRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.repositories.VentaRepository;
 import com.gelox.backend.security.RequiereRol;
@@ -26,11 +26,11 @@ import java.util.stream.Collectors;
 @Transactional
 public class VentaService {
 
-    private final VentaRepository               ventaRepository;
-    private final ItemVentaRepository           itemVentaRepository;
-    private final ProductoRepository            productoRepository;
-    private final MovimientoInventarioRepository movimientoRepository;
-    private final EventoSistemaService          eventoSistemaService;
+    private final VentaRepository        ventaRepository;
+    private final ItemVentaRepository    itemVentaRepository;
+    private final ProductoRepository     productoRepository;
+    private final EventoSistemaService   eventoSistemaService;
+    private final InventarioService      inventarioService;   // RF26
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public VentaResponseDTO iniciarVenta(IniciarVentaRequest req, Usuario usuario) {
@@ -74,22 +74,19 @@ public class VentaService {
                 .map(ItemCalculoRequest::productoId)
                 .toList();
 
-        // Una sola query: SELECT ... WHERE id IN (...)
         Map<UUID, Producto> productosMap = productoRepository.findAllById(ids)
                 .stream()
                 .collect(Collectors.toMap(Producto::getId, p -> p));
 
-        // Validar que todos los IDs existen
         ids.stream()
                 .filter(id -> !productosMap.containsKey(id))
                 .findFirst()
                 .ifPresent(id -> { throw new IllegalArgumentException("Producto no encontrado: " + id); });
 
-        // Calcular subtotales en memoria
         List<ItemCalculoResultado> itemsResultado = req.items().stream()
                 .map(item -> {
-                    BigDecimal precio    = productosMap.get(item.productoId()).getPrecioVenta();
-                    BigDecimal subtotal  = precio.multiply(BigDecimal.valueOf(item.cantidad()))
+                    BigDecimal precio   = productosMap.get(item.productoId()).getPrecioVenta();
+                    BigDecimal subtotal = precio.multiply(BigDecimal.valueOf(item.cantidad()))
                             .setScale(2, RoundingMode.HALF_UP);
                     return new ItemCalculoResultado(item.productoId(), item.cantidad(), precio, subtotal);
                 })
@@ -125,7 +122,7 @@ public class VentaService {
         for (ItemVentaRequest item : req.items()) {
             Producto p = productosMap.get(item.productoId());
             if (p.getStockActual() < item.cantidad()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                throw new StockInsuficienteException(
                         String.format("Stock insuficiente para '%s'. Disponible: %d, solicitado: %d.",
                                 p.getNombre(), p.getStockActual(), item.cantidad()));
             }
@@ -138,7 +135,7 @@ public class VentaService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        // 5. Persistir la venta (estado COMPLETADA — ingresos del día quedan acumulados implícitamente)
+        // 5. Persistir la venta
         Venta venta = ventaRepository.save(Venta.builder()
                 .canal(req.canal())
                 .estado(EstadoVenta.COMPLETADA)
@@ -146,13 +143,13 @@ public class VentaService {
                 .usuario(usuario)
                 .build());
 
-        // 6. Persistir ítems, descontar stock y registrar movimientos
+        // 6. Persistir ítems y descontar stock vía InventarioService (RF26)
         List<ItemVentaResponseDTO> itemsResponse = new ArrayList<>();
 
         for (ItemVentaRequest item : req.items()) {
-            Producto p = productosMap.get(item.productoId());
-            BigDecimal precio    = p.getPrecioVenta();
-            BigDecimal subtotal  = precio.multiply(BigDecimal.valueOf(item.cantidad()))
+            Producto p        = productosMap.get(item.productoId());
+            BigDecimal precio = p.getPrecioVenta();
+            BigDecimal subtotal = precio.multiply(BigDecimal.valueOf(item.cantidad()))
                     .setScale(2, RoundingMode.HALF_UP);
 
             itemVentaRepository.save(ItemVenta.builder()
@@ -163,22 +160,18 @@ public class VentaService {
                     .subtotal(subtotal)
                     .build());
 
-            int stockAntes   = p.getStockActual();
-            int stockDespues = stockAntes - item.cantidad();
-            p.setStockActual(stockDespues);
-            productoRepository.save(p);
+            // Capturar stock antes para detectar transición a bajo stock (RF11)
+            int stockAntes = p.getStockActual();
 
-            movimientoRepository.save(MovimientoInventario.builder()
-                    .producto(p)
-                    .usuario(usuario)
-                    .tipo(TipoMovimiento.SALIDA_VENTA)
-                    .cantidad(item.cantidad())
-                    .stockResultante(stockDespues)
-                    .descripcion(String.format("Venta %s — %d uds.", venta.getId().toString().substring(0, 8).toUpperCase(), item.cantidad()))
-                    .build());
+            // RF26 — descuento centralizado: actualiza stock + crea movimiento_inventario
+            String descripcion = String.format("Venta %s — %d uds.",
+                    venta.getId().toString().substring(0, 8).toUpperCase(), item.cantidad());
+            inventarioService.descontarStock(
+                    p.getId(), item.cantidad(), TipoMovimiento.SALIDA_VENTA, descripcion, usuario);
 
-            // Alerta de bajo stock si el producto transiciona en esta venta
-            if (stockAntes > p.getStockMinimo() && stockDespues <= p.getStockMinimo()) {
+            // RF11 — alerta si el producto transiciona a bajo stock en esta venta
+            // (después de descontarStock, p.stockActual ya está actualizado en la sesión JPA)
+            if (stockAntes > p.getStockMinimo() && p.getStockActual() <= p.getStockMinimo()) {
                 eventoSistemaService.registrarEvento(
                         TipoEvento.ALERTA_STOCK,
                         String.format("La referencia %s (%s) alcanzó el stock mínimo configurado (%d uds.).",
@@ -186,7 +179,8 @@ public class VentaService {
                         usuario.getId());
             }
 
-            itemsResponse.add(new ItemVentaResponseDTO(p.getId(), p.getNombre(), item.cantidad(), precio, subtotal));
+            itemsResponse.add(new ItemVentaResponseDTO(
+                    p.getId(), p.getNombre(), item.cantidad(), precio, subtotal));
         }
 
         eventoSistemaService.registrarEvento(
