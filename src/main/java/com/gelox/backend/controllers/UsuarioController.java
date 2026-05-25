@@ -80,4 +80,19 @@ public class UsuarioController {
                     .body("Error al deshabilitar usuario: " + e.getMessage());
         }
     }
+
+    @PatchMapping("/{id}/habilitar")
+    public ResponseEntity<?> habilitar(@PathVariable UUID id) {
+        try {
+            usuarioService.habilitarUsuario(id);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error al habilitar usuario: " + e.getMessage());
+        }
+    }
 }

@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -51,7 +52,7 @@ public class ReporteFinancieroService {
             case SEMANA -> buildGraficaPorDia(periodo);
             case MES    -> buildGraficaPorSemana(periodo);
             case ANIO   -> buildGraficaPorMes(periodo);
-            case RANGO  -> buildGraficaPorSemana(periodo);
+            case RANGO  -> buildGraficaRango(periodo);
         };
     }
 
@@ -153,6 +154,97 @@ public class ReporteFinancieroService {
                     inversionMap.getOrDefault(mes, BigDecimal.ZERO),
                     ingresosMap.getOrDefault(mes, BigDecimal.ZERO)
             ));
+        }
+        return puntos;
+    }
+
+    // ── Builders para RANGO inteligente ──────────────────────────────────────────────────────────
+
+    /**
+     * Enrutador: decide la granularidad según cuántos días tiene el rango.
+     *   < 8 días  → barra por día  (etiqueta: dd/MM)
+     *   8–28 días → barra por semana (etiqueta: Sem N)
+     *   > 28 días → barra por mes  (etiqueta: Mmm AA)
+     */
+    private List<PuntoGraficaDTO> buildGraficaRango(PeriodoFiltroDTO periodo) {
+        long dias = ChronoUnit.DAYS.between(periodo.fechaInicio(), periodo.fechaFin()) + 1;
+        if (dias < 8) {
+            return buildGraficaPorDiaConFecha(periodo);
+        } else if (dias <= 28) {
+            return buildGraficaPorSemana(periodo);
+        } else {
+            return buildGraficaRangoPorMes(periodo);
+        }
+    }
+
+    /**
+     * Barras diarias con etiqueta de fecha real (dd/MM).
+     * Reutiliza los queries de offset por día ya existentes.
+     */
+    private List<PuntoGraficaDTO> buildGraficaPorDiaConFecha(PeriodoFiltroDTO periodo) {
+        long totalDias = ChronoUnit.DAYS.between(periodo.fechaInicio(), periodo.fechaFin()) + 1;
+
+        Map<Integer, BigDecimal> inversionMap = new HashMap<>();
+        Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
+
+        for (Object[] row : reporteRepository.getInversionPorDiaOffset(periodo)) {
+            inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
+        }
+        for (Object[] row : reporteRepository.getIngresosVentasPorDiaOffset(periodo)) {
+            int offset = ((Number) row[0]).intValue();
+            ingresosMap.merge(offset, toBigDecimal(row[1]), BigDecimal::add);
+        }
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorDiaOffset(periodo)) {
+            int offset = ((Number) row[0]).intValue();
+            ingresosMap.merge(offset, toBigDecimal(row[1]), BigDecimal::add);
+        }
+
+        List<PuntoGraficaDTO> puntos = new ArrayList<>();
+        for (int offset = 0; offset < totalDias; offset++) {
+            LocalDate fecha = periodo.fechaInicio().plusDays(offset);
+            String etiqueta = String.format("%02d/%02d", fecha.getDayOfMonth(), fecha.getMonthValue());
+            puntos.add(new PuntoGraficaDTO(
+                    etiqueta,
+                    inversionMap.getOrDefault(offset, BigDecimal.ZERO),
+                    ingresosMap.getOrDefault(offset, BigDecimal.ZERO)
+            ));
+        }
+        return puntos;
+    }
+
+    /**
+     * Barras mensuales con etiqueta "Mmm AA" (ej. "Ene 25").
+     * Usa claves YYYYMM para soportar rangos que cruzan años.
+     */
+    private List<PuntoGraficaDTO> buildGraficaRangoPorMes(PeriodoFiltroDTO periodo) {
+        Map<Integer, BigDecimal> inversionMap = new HashMap<>();
+        Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
+
+        for (Object[] row : reporteRepository.getInversionPorAnioMes(periodo)) {
+            inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
+        }
+        for (Object[] row : reporteRepository.getIngresosVentasPorAnioMes(periodo)) {
+            int key = ((Number) row[0]).intValue();
+            ingresosMap.merge(key, toBigDecimal(row[1]), BigDecimal::add);
+        }
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorAnioMes(periodo)) {
+            int key = ((Number) row[0]).intValue();
+            ingresosMap.merge(key, toBigDecimal(row[1]), BigDecimal::add);
+        }
+
+        List<PuntoGraficaDTO> puntos = new ArrayList<>();
+        YearMonth cursor = YearMonth.from(periodo.fechaInicio());
+        YearMonth fin    = YearMonth.from(periodo.fechaFin());
+        while (!cursor.isAfter(fin)) {
+            int key = cursor.getYear() * 100 + cursor.getMonthValue();
+            String etiqueta = NOMBRES_MES[cursor.getMonthValue() - 1]
+                    + " " + String.valueOf(cursor.getYear()).substring(2);
+            puntos.add(new PuntoGraficaDTO(
+                    etiqueta,
+                    inversionMap.getOrDefault(key, BigDecimal.ZERO),
+                    ingresosMap.getOrDefault(key, BigDecimal.ZERO)
+            ));
+            cursor = cursor.plusMonths(1);
         }
         return puntos;
     }

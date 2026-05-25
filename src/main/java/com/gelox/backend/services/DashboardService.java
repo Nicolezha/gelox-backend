@@ -57,7 +57,7 @@ public class DashboardService {
 
     public List<InversionVsIngresosDTO> obtenerInversionVsIngresos() {
         LocalDate hoy    = LocalDate.now();
-        LocalDate inicio = hoy.minusWeeks(8);
+        LocalDate inicio = hoy.withDayOfMonth(1);          // primer día del mes actual
         PeriodoFiltroDTO periodo = new PeriodoFiltroDTO(inicio, hoy);
 
         Map<Integer, BigDecimal> inversionMap = new HashMap<>();
@@ -74,10 +74,10 @@ public class DashboardService {
         }
 
         List<InversionVsIngresosDTO> resultado = new ArrayList<>();
-        for (int sem = 1; sem <= 8; sem++) {
-            LocalDate inicioSem = inicio.plusDays((long) (sem - 1) * 7);
+        int semanas = (hoy.getDayOfMonth() - 1) / 7 + 1;  // semanas transcurridas en el mes
+        for (int sem = 1; sem <= semanas; sem++) {
             resultado.add(new InversionVsIngresosDTO(
-                    "Sem " + sem + " (" + inicioSem + ")",
+                    "Sem " + sem,                           // etiqueta limpia, sin fecha
                     inversionMap.getOrDefault(sem, BigDecimal.ZERO),
                     ingresosMap.getOrDefault(sem, BigDecimal.ZERO)
             ));

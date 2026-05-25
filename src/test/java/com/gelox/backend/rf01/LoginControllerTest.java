@@ -66,7 +66,7 @@ class LoginControllerTest {
     @DisplayName("CP01 - login exitoso ENCARGADO_INVENTARIO: POST /api/auth/verificar → 200 con rol correcto")
     void cp01_loginExitoso_encargadoInventario() throws Exception {
         UsuarioDTO dto = new UsuarioDTO(encargado.getId(), encargado.getNombre(),
-                RolUsuario.ENCARGADO_INVENTARIO, null);
+                RolUsuario.ENCARGADO_INVENTARIO, null, encargado.getCorreo(), encargado.getTelefono());
         when(authService.autenticarUsuario(encargado.getFirebaseUid())).thenReturn(dto);
 
         mockMvc.perform(post("/api/auth/verificar")
@@ -84,7 +84,7 @@ class LoginControllerTest {
     @DisplayName("CP02 - login ADMINISTRADOR: POST /api/auth/verificar → 200 con rol ADMINISTRADOR")
     void cp02_loginRolGerente_administrador() throws Exception {
         UsuarioDTO dto = new UsuarioDTO(admin.getId(), admin.getNombre(),
-                RolUsuario.ADMINISTRADOR, null);
+                RolUsuario.ADMINISTRADOR, null, admin.getCorreo(), admin.getTelefono());
         when(authService.autenticarUsuario(admin.getFirebaseUid())).thenReturn(dto);
 
         mockMvc.perform(post("/api/auth/verificar")

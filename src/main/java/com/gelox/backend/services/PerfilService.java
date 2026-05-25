@@ -2,7 +2,9 @@ package com.gelox.backend.services;
 
 import com.gelox.backend.dto.ActualizarPerfilDTO;
 import com.gelox.backend.dto.CambioContrasenaDTO;
+import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.exceptions.ContrasenaActualIncorrectaException;
 import com.gelox.backend.exceptions.ContrasenaNoCoincideException;
 import com.gelox.backend.exceptions.CorreoDuplicadoException;
 import com.gelox.backend.repositories.UsuarioRepository;
@@ -12,9 +14,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -22,6 +26,7 @@ public class PerfilService {
 
     private final UsuarioRepository usuarioRepository;
     private final FirebaseAuth firebaseAuth;
+    private final EventoSistemaService eventoSistemaService;
 
     @Value("${supabase.url}")
     private String supabaseUrl;
@@ -29,9 +34,14 @@ public class PerfilService {
     @Value("${supabase.service-key}")
     private String supabaseServiceKey;
 
-    public PerfilService(UsuarioRepository usuarioRepository, FirebaseAuth firebaseAuth) {
+    @Value("${firebase.web-api-key}")
+    private String firebaseWebApiKey;
+
+    public PerfilService(UsuarioRepository usuarioRepository, FirebaseAuth firebaseAuth,
+                         EventoSistemaService eventoSistemaService) {
         this.usuarioRepository = usuarioRepository;
         this.firebaseAuth = firebaseAuth;
+        this.eventoSistemaService = eventoSistemaService;
     }
 
     @Transactional
@@ -55,27 +65,61 @@ public class PerfilService {
             usuario.setFotoUrl(dto.getFotoUrl());
         }
 
-        return usuarioRepository.save(usuario);
+        Usuario actualizado = usuarioRepository.save(usuario);
+        eventoSistemaService.registrarEvento(
+                TipoEvento.ACTUALIZACION_PERFIL,
+                "Perfil actualizado: " + actualizado.getNombre() + " (" + actualizado.getCorreo() + ")",
+                actualizado.getId()
+        );
+        return actualizado;
     }
 
-    // Firebase Admin SDK no permite verificar la contraseña actual directamente.
-    // El frontend debe verificarla con signInWithEmailAndPassword antes de llamar
-    // a este endpoint, o enviar un idToken reciente como prueba de autenticación.
     public void cambiarContrasena(String firebaseUid, CambioContrasenaDTO dto) {
         if (!dto.getNuevaContrasena().equals(dto.getConfirmacion())) {
             throw new ContrasenaNoCoincideException("La nueva contraseña y su confirmación no coinciden");
         }
 
-        try {
-            FirebaseAuth.getInstance().getUser(firebaseUid);
+        String email = usuarioRepository.findByFirebaseUid(firebaseUid)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"))
+                .getCorreo();
 
+        verificarContrasenaActual(email, dto.getContrasenaActual());
+
+        try {
             UserRecord.UpdateRequest updateRequest = new UserRecord.UpdateRequest(firebaseUid)
                     .setPassword(dto.getNuevaContrasena());
+            firebaseAuth.updateUser(updateRequest);
 
-            FirebaseAuth.getInstance().updateUser(updateRequest);
+            usuarioRepository.findByFirebaseUid(firebaseUid).ifPresent(usuario ->
+                    eventoSistemaService.registrarEvento(
+                            TipoEvento.CAMBIO_CONTRASENA,
+                            "Cambio de contraseña realizado por: " + usuario.getNombre()
+                                    + " (" + usuario.getCorreo() + ")",
+                            usuario.getId()
+                    )
+            );
 
         } catch (com.google.firebase.auth.FirebaseAuthException e) {
             throw new IllegalArgumentException("Error al actualizar la contraseña: " + e.getMessage());
+        }
+    }
+
+    private void verificarContrasenaActual(String email, String contrasena) {
+        String url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + firebaseWebApiKey;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, Object> body = Map.of(
+                "email", email,
+                "password", contrasena,
+                "returnSecureToken", false
+        );
+
+        try {
+            new RestTemplate().postForEntity(url, new HttpEntity<>(body, headers), String.class);
+        } catch (HttpClientErrorException e) {
+            throw new ContrasenaActualIncorrectaException("La contraseña actual es incorrecta");
         }
     }
 

@@ -25,13 +25,16 @@ public class RecuperacionService {
 
         try {
             String enlace = firebaseAuth.generatePasswordResetLink(correo);
+            log.info("Enlace Firebase generado para {}. Enviando correo...", correo);
             emailService.enviarCorreoRecuperacion(correo, enlace);
+            log.info("Correo de recuperación enviado exitosamente a {}", correo);
         } catch (FirebaseAuthException e) {
-            log.error("Error al generar enlace de recuperación para {}: {}", correo, e.getMessage());
+            log.error("Error Firebase al generar enlace para {}: [{}] {}", correo, e.getErrorCode(), e.getMessage());
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo generar el enlace de recuperación");
         } catch (RuntimeException e) {
-            log.error("Error al enviar correo de recuperación a {}: {}", correo, e.getMessage());
+            log.error("Error SMTP al enviar correo a {}: {} - Causa: {}", correo, e.getMessage(),
+                    e.getCause() != null ? e.getCause().getMessage() : "sin causa");
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo enviar el correo de recuperación");
         }

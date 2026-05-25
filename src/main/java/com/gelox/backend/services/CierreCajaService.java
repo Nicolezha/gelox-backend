@@ -1,18 +1,28 @@
 package com.gelox.backend.services;
 
 import com.gelox.backend.dto.CierreCajaDTO;
+import com.gelox.backend.dto.CierreCajaListItemDTO;
+import com.gelox.backend.dto.CierreCajaPageResponseDTO;
 import com.gelox.backend.dto.CierreCajaResponseDTO;
 import com.gelox.backend.entities.CierreCaja;
+import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.CierreCajaRepository;
 import com.gelox.backend.repositories.DashboardRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -20,7 +30,9 @@ public class CierreCajaService {
 
     private final CierreCajaRepository cierreCajaRepository;
     private final DashboardRepository dashboardRepository;
+    private final EventoSistemaService eventoSistemaService;
 
+    @Transactional
     public CierreCajaResponseDTO registrarDineroFisico(LocalDate fecha, CierreCajaDTO dto, Usuario usuario) {
         if (cierreCajaRepository.existsByFecha(fecha)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -59,9 +71,16 @@ public class CierreCajaService {
                 .build();
 
         CierreCaja guardado = cierreCajaRepository.save(cierre);
+        eventoSistemaService.registrarEvento(
+                TipoEvento.CIERRE_CAJA,
+                "Cierre de caja registrado para la fecha " + fecha
+                        + ". Total físico: " + fisTotal + ". Diferencia: " + difTotal,
+                usuario.getId()
+        );
         return toResponse(guardado);
     }
 
+    @Transactional(readOnly = true)
     public CierreCajaResponseDTO obtenerPorFecha(LocalDate fecha) {
         CierreCaja cierre = cierreCajaRepository.findByFecha(fecha)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -69,8 +88,54 @@ public class CierreCajaService {
         return toResponse(cierre);
     }
 
+    @Transactional(readOnly = true)
+    public CierreCajaResponseDTO obtenerPorId(UUID id) {
+        CierreCaja cierre = cierreCajaRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "No hay cierre de caja con id: " + id));
+        return toResponse(cierre);
+    }
+
+    @Transactional(readOnly = true)
+    public CierreCajaPageResponseDTO listar(LocalDate desde, LocalDate hasta, String estado, int page, int limit) {
+        String estadoFiltro = StringUtils.hasText(estado) ? estado.trim() : null;
+        Pageable pageable = PageRequest.of(page - 1, limit); // el front envía page desde 1
+
+        Page<CierreCaja> pageResult = switch (estadoFiltro == null ? "" : estadoFiltro) {
+            case "perfecto" -> cierreCajaRepository
+                    .findByFechaBetweenAndDiferenciaTotalOrderByFechaDesc(desde, hasta, BigDecimal.ZERO, pageable);
+            case "mayor" -> cierreCajaRepository
+                    .findByFechaBetweenAndDiferenciaTotalGreaterThanOrderByFechaDesc(desde, hasta, BigDecimal.ZERO, pageable);
+            case "menor" -> cierreCajaRepository
+                    .findByFechaBetweenAndDiferenciaTotalLessThanOrderByFechaDesc(desde, hasta, BigDecimal.ZERO, pageable);
+            default -> cierreCajaRepository
+                    .findByFechaBetweenOrderByFechaDesc(desde, hasta, pageable);
+        };
+
+        List<CierreCajaListItemDTO> items = pageResult.getContent().stream()
+                .map(c -> new CierreCajaListItemDTO(
+                        c.getId(),
+                        c.getFecha(),
+                        c.getMontoCalculadoTotal(),
+                        c.getMontoFisicoTotal(),
+                        c.getDiferenciaTotal()))
+                .toList();
+
+        return new CierreCajaPageResponseDTO(
+                items,
+                pageResult.getTotalElements(),
+                page,
+                pageResult.getTotalPages());
+    }
+
     private CierreCajaResponseDTO toResponse(CierreCaja c) {
         boolean tieneDiferencias = c.getDiferenciaTotal().compareTo(BigDecimal.ZERO) != 0;
+
+        String responsable = null;
+        if (c.getUsuario() != null) {
+            responsable = c.getUsuario().getNombre() + " - " + c.getUsuario().getRol();
+        }
+
         return new CierreCajaResponseDTO(
                 c.getId(),
                 c.getFecha(),
@@ -86,7 +151,9 @@ public class CierreCajaService {
                 c.getDiferenciaRural(),
                 c.getDiferenciaComerciantes(),
                 c.getDiferenciaTotal(),
-                tieneDiferencias
+                tieneDiferencias,
+                c.getCreatedAt(),
+                responsable
         );
     }
 }

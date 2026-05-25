@@ -30,6 +30,7 @@ public class LandingService {
         List<Producto> productos = productoRepository.findByActivoTrue();
         return productos.stream()
                 .map(this::toDTO)
+                .filter(dto -> dto.categoria() != null)
                 .collect(Collectors.groupingBy(CatalogoProductoPublicoDTO::categoria));
     }
 

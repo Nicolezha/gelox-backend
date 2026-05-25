@@ -242,6 +242,72 @@ public class ReporteRepository {
                 .getResultList();
     }
 
+    // ── Agrupación por año+mes (clave YYYYMM) — para filtro RANGO > 28 días ────────────────────
+
+    /**
+     * Retorna filas [anio_mes (int YYYYMM), inversion] agrupadas por año y mes.
+     * Soporta rangos que cruzan años, a diferencia de getInversionPorMes.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getInversionPorAnioMes(PeriodoFiltroDTO periodo) {
+        return em.createNativeQuery("""
+                SELECT
+                    EXTRACT(YEAR FROM pp.fecha::date)::int * 100
+                        + EXTRACT(MONTH FROM pp.fecha::date)::int AS anio_mes,
+                    COALESCE(SUM(ipp.precio_unitario * ipp.cantidad_recibida), 0) AS inversion
+                FROM item_pedido_proveedor ipp
+                JOIN pedido_proveedor pp ON pp.id = ipp.pedido_id
+                WHERE pp.fecha::date BETWEEN :inicio AND :fin
+                  AND pp.estado = 'RECIBIDO'
+                GROUP BY anio_mes
+                ORDER BY anio_mes
+                """)
+                .setParameter("inicio", periodo.fechaInicio())
+                .setParameter("fin", periodo.fechaFin())
+                .getResultList();
+    }
+
+    /**
+     * Retorna filas [anio_mes (int YYYYMM), ingresos] de ventas agrupadas por año y mes.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getIngresosVentasPorAnioMes(PeriodoFiltroDTO periodo) {
+        return em.createNativeQuery("""
+                SELECT
+                    EXTRACT(YEAR FROM v.fecha::date)::int * 100
+                        + EXTRACT(MONTH FROM v.fecha::date)::int AS anio_mes,
+                    COALESCE(SUM(v.total), 0) AS ingresos
+                FROM venta v
+                WHERE v.fecha::date BETWEEN :inicio AND :fin
+                GROUP BY anio_mes
+                ORDER BY anio_mes
+                """)
+                .setParameter("inicio", periodo.fechaInicio())
+                .setParameter("fin", periodo.fechaFin())
+                .getResultList();
+    }
+
+    /**
+     * Retorna filas [anio_mes (int YYYYMM), ingresos] de planillas agrupadas por año y mes.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Object[]> getIngresosPllanillasPorAnioMes(PeriodoFiltroDTO periodo) {
+        return em.createNativeQuery("""
+                SELECT
+                    EXTRACT(YEAR FROM p.fecha)::int * 100
+                        + EXTRACT(MONTH FROM p.fecha)::int AS anio_mes,
+                    COALESCE(SUM(p.total_ganancia), 0) AS ingresos
+                FROM planilla_comerciante p
+                WHERE p.fecha BETWEEN :inicio AND :fin
+                  AND p.cerrada = true
+                GROUP BY anio_mes
+                ORDER BY anio_mes
+                """)
+                .setParameter("inicio", periodo.fechaInicio())
+                .setParameter("fin", periodo.fechaFin())
+                .getResultList();
+    }
+
     /**
      * Retorna filas [canal, ingresos, costos] para los canales VENTANILLA y RURAL.
      */

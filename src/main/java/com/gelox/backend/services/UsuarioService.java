@@ -81,7 +81,13 @@ public class UsuarioService {
         usuario.setCorreo(dto.getCorreo());
         usuario.setRol(RolUsuario.valueOf(dto.getRol()));
 
-        return toDTO(usuarioRepository.save(usuario));
+        Usuario actualizado = usuarioRepository.save(usuario);
+        eventoSistemaService.registrarEvento(
+                TipoEvento.EDICION_USUARIO,
+                "Usuario editado: " + actualizado.getNombre() + " (" + actualizado.getCorreo() + ")",
+                actualizado.getId()
+        );
+        return toDTO(actualizado);
     }
 
     @RequiereRol("ADMINISTRADOR")
@@ -95,6 +101,11 @@ public class UsuarioService {
 
         usuario.setActivo(false);
         usuarioRepository.save(usuario);
+        eventoSistemaService.registrarEvento(
+                TipoEvento.DESHABILITAR_USUARIO,
+                "Usuario deshabilitado: " + usuario.getNombre() + " (" + usuario.getCorreo() + ")",
+                usuario.getId()
+        );
     }
 
     @RequiereRol("ADMINISTRADOR")
@@ -124,6 +135,25 @@ public class UsuarioService {
         dto.setCorreo(u.getCorreo());
         dto.setRol(u.getRol().name());
         dto.setActivo(u.getActivo());
+        dto.setUltimoAcceso(u.getUltimoAcceso());
         return dto;
+    }
+
+    @RequiereRol("ADMINISTRADOR")
+    public void habilitarUsuario(UUID id) throws Exception {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con id: " + id));
+
+        FirebaseAuth.getInstance().updateUser(
+                new UserRecord.UpdateRequest(usuario.getFirebaseUid()).setDisabled(false)
+        );
+
+        usuario.setActivo(true);
+        usuarioRepository.save(usuario);
+        eventoSistemaService.registrarEvento(
+                TipoEvento.HABILITAR_USUARIO,
+                "Usuario habilitado: " + usuario.getNombre() + " (" + usuario.getCorreo() + ")",
+                usuario.getId()
+        );
     }
 }

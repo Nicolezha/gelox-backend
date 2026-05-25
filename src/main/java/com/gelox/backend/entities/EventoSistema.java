@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
@@ -33,6 +34,6 @@ public class EventoSistema {
 
     @PrePersist
     public void prePersist() {
-        if (fecha == null) fecha = LocalDateTime.now();
+        if (fecha == null) fecha = LocalDateTime.now(ZoneOffset.UTC);
     }
 }
