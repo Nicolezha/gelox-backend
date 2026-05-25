@@ -65,6 +65,8 @@ public class ProductoService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Producto no encontrado con id: " + id));
 
+        int stockMinimoAntes = producto.getStockMinimo();
+
         producto.setNombre(dto.getNombre());
         producto.setPrecioVenta(dto.getPrecioVenta());
         producto.setPrecioCosto(dto.getPrecioCosto());
@@ -75,6 +77,18 @@ public class ProductoService {
         if (dto.getActivo() != null) producto.setActivo(dto.getActivo());
 
         Producto actualizado = productoRepository.save(producto);
+
+        // Alerta si subir el stock mínimo hace que el producto transite a BAJO_STOCK
+        if (dto.getStockMinimo() != null
+                && actualizado.getStockActual() > stockMinimoAntes
+                && actualizado.getStockActual() <= actualizado.getStockMinimo()) {
+            eventoSistemaService.registrarEvento(
+                    TipoEvento.ALERTA_STOCK,
+                    String.format("La referencia %s (%s) alcanzó el stock mínimo configurado (%d uds.).",
+                            actualizado.getNombre(), actualizado.getCodigoTecnico(), actualizado.getStockMinimo()),
+                    usuarioId
+            );
+        }
 
         eventoSistemaService.registrarEvento(
                 TipoEvento.EDITAR_PRODUCTO,
