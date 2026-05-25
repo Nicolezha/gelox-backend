@@ -1,8 +1,6 @@
 package com.gelox.backend.controllers;
 
-import com.gelox.backend.dto.CatalogoVentaDTO;
-import com.gelox.backend.dto.IniciarVentaRequest;
-import com.gelox.backend.dto.VentaResponseDTO;
+import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.services.VentaService;
 import jakarta.validation.Valid;
@@ -24,6 +22,22 @@ public class VentaController {
     @GetMapping("/catalogo")
     public ResponseEntity<List<CatalogoVentaDTO>> getCatalogo() {
         return ResponseEntity.ok(ventaService.getCatalogo());
+    }
+
+    @PostMapping("/confirmar")
+    public ResponseEntity<ConfirmarVentaResponse> confirmar(
+            @Valid @RequestBody ConfirmarVentaRequest req,
+            @AuthenticationPrincipal Usuario usuario) {
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ventaService.confirmarVenta(req, usuario));
+    }
+
+    @PostMapping("/calcular")
+    public ResponseEntity<CalcularVentaResponse> calcular(
+            @Valid @RequestBody CalcularVentaRequest req) {
+
+        return ResponseEntity.ok(ventaService.calcularVenta(req));
     }
 
     @PostMapping("/iniciar")

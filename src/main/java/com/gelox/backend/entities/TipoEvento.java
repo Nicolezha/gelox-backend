@@ -23,5 +23,7 @@ public enum TipoEvento {
     // RF25 — Registro de pérdida
     PERDIDA_PRODUCTO,
     // RF28 — Inicio de venta
-    INICIAR_VENTA
+    INICIAR_VENTA,
+    // RF31 — Confirmación de venta
+    CONFIRMAR_VENTA
 }
