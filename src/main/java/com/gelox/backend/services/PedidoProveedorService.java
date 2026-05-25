@@ -258,12 +258,12 @@ public class PedidoProveedorService {
                 .descripcion("Pérdida — motivo: " + req.motivo())
                 .build());
 
-        // Alerta de bajo stock si aplica
-        if (stockDespues <= producto.getStockMinimo()) {
+        // Alerta solo cuando el producto TRANSICIONA a bajo stock (no si ya estaba en ese estado)
+        if (stockAntes > producto.getStockMinimo() && stockDespues <= producto.getStockMinimo()) {
             eventoService.registrarEvento(
                     TipoEvento.ALERTA_STOCK,
-                    String.format("Alerta: %s bajo stock mínimo tras pérdida (quedan %d uds.).",
-                            producto.getNombre(), stockDespues),
+                    String.format("La referencia %s (%s) alcanzó el stock mínimo configurado (%d uds.).",
+                            producto.getNombre(), producto.getCodigoTecnico(), producto.getStockMinimo()),
                     usuarioActual.getId());
         }
 

@@ -42,6 +42,20 @@ public class InventarioController {
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // RF24 — GET /api/inventario/alertas
+    // Referencias con stockActual <= stockMinimo
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Roles: ADMINISTRADOR, ENCARGADO_INVENTARIO.
+     * Retorna lista vacía cuando no hay productos en BAJO_STOCK.
+     */
+    @GetMapping("/alertas")
+    public ResponseEntity<List<AlertaStockDTO>> listarAlertas() {
+        return ResponseEntity.ok(inventarioService.listarAlertas());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // RF21 — POST /api/inventario/pedidos
     // Crear pedido al proveedor + descargar Excel Nutresa
     // ──────────────────────────────────────────────────────────────────────

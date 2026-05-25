@@ -21,5 +21,9 @@ public enum TipoEvento {
     // RF23 — Registro de entrada de mercancía
     ENTRADA_MERCANCIA,
     // RF25 — Registro de pérdida
-    PERDIDA_PRODUCTO
+    PERDIDA_PRODUCTO,
+    // RF28 — Inicio de venta
+    INICIAR_VENTA,
+    // RF31 — Confirmación de venta
+    CONFIRMAR_VENTA
 }
