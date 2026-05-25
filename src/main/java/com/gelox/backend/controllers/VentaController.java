@@ -1,5 +1,6 @@
 package com.gelox.backend.controllers;
 
+import com.gelox.backend.dto.CatalogoVentaDTO;
 import com.gelox.backend.dto.IniciarVentaRequest;
 import com.gelox.backend.dto.VentaResponseDTO;
 import com.gelox.backend.entities.Usuario;
@@ -11,12 +12,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/ventas")
 @RequiredArgsConstructor
 public class VentaController {
 
     private final VentaService ventaService;
+
+    @GetMapping("/catalogo")
+    public ResponseEntity<List<CatalogoVentaDTO>> getCatalogo() {
+        return ResponseEntity.ok(ventaService.getCatalogo());
+    }
 
     @PostMapping("/iniciar")
     public ResponseEntity<VentaResponseDTO> iniciar(
