@@ -3,6 +3,7 @@ package com.gelox.backend.services;
 import com.gelox.backend.config.NegocioProperties;
 import com.gelox.backend.dto.CatalogoProductoPublicoDTO;
 import com.gelox.backend.dto.InfoNegocioDTO;
+import com.gelox.backend.entities.CategoriaProducto;
 import com.gelox.backend.entities.Producto;
 import com.gelox.backend.repositories.ProductoRepository;
 import org.springframework.stereotype.Service;
@@ -46,12 +47,28 @@ public class LandingService {
         );
     }
 
+    public List<CatalogoProductoPublicoDTO> obtenerPaletas() {
+        return productoRepository.findByActivoTrueAndCategoria(CategoriaProducto.PALETAS)
+                .stream().map(this::toDTO).toList();
+    }
+
+    public List<CatalogoProductoPublicoDTO> obtenerConos() {
+        return productoRepository.findByActivoTrueAndCategoria(CategoriaProducto.CONOS)
+                .stream().map(this::toDTO).toList();
+    }
+
+    public List<CatalogoProductoPublicoDTO> obtenerFamiliares() {
+        return productoRepository.findByActivoTrueAndCategoria(CategoriaProducto.FAMILIARES)
+                .stream().map(this::toDTO).toList();
+    }
+
     private CatalogoProductoPublicoDTO toDTO(Producto p) {
         return new CatalogoProductoPublicoDTO(
                 p.getNombre(),
                 p.getImagenUrl(),
                 p.getPrecioVenta(),
-                "General"
+                p.getDescripcion(),
+                p.getCategoria() != null ? p.getCategoria().name() : null
         );
     }
 }

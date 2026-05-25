@@ -26,6 +26,21 @@ public class LandingController {
         return ResponseEntity.ok(landingService.obtenerCatalogo());
     }
 
+    @GetMapping("/productos/paletas")
+    public ResponseEntity<List<CatalogoProductoPublicoDTO>> paletas() {
+        return ResponseEntity.ok(landingService.obtenerPaletas());
+    }
+
+    @GetMapping("/productos/conos")
+    public ResponseEntity<List<CatalogoProductoPublicoDTO>> conos() {
+        return ResponseEntity.ok(landingService.obtenerConos());
+    }
+
+    @GetMapping("/productos/familiares")
+    public ResponseEntity<List<CatalogoProductoPublicoDTO>> familiares() {
+        return ResponseEntity.ok(landingService.obtenerFamiliares());
+    }
+
     @GetMapping("/whatsapp")
     public ResponseEntity<Map<String, String>> whatsapp() {
         return ResponseEntity.ok(Map.of("url", landingService.obtenerUrlWhatsApp()));

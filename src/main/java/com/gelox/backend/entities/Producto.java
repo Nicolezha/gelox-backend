@@ -22,6 +22,12 @@ public class Producto {
     @Column(name = "imagen_url")
     private String imagenUrl;
 
+    @Column(columnDefinition = "TEXT")
+    private String descripcion;
+
+    @Enumerated(EnumType.STRING)
+    private CategoriaProducto categoria;
+
     @Column(nullable = false)
     private Boolean activo;
 
@@ -36,6 +42,12 @@ public class Producto {
 
     public String getImagenUrl() { return imagenUrl; }
     public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }
+
+    public String getDescripcion() { return descripcion; }
+    public void setDescripcion(String descripcion) { this.descripcion = descripcion; }
+
+    public CategoriaProducto getCategoria() { return categoria; }
+    public void setCategoria(CategoriaProducto categoria) { this.categoria = categoria; }
 
     public Boolean getActivo() { return activo; }
     public void setActivo(Boolean activo) { this.activo = activo; }
