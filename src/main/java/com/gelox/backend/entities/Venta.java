@@ -40,6 +40,11 @@ public class Venta {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
+    /** RF33 — FK nullable hacia cliente_rural. Presente solo en ventas de canal RURAL. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cliente_rural_id")
+    private ClienteRural clienteRural;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
