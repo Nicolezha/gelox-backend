@@ -128,7 +128,19 @@ public class DashboardService {
     }
 
     private BigDecimal calcularVariacion(BigDecimal anterior, BigDecimal actual) {
-        if (anterior == null || anterior.compareTo(BigDecimal.ZERO) == 0) return null;
+        // Caso base: ayer sin datos (null) → sin comparación
+        if (anterior == null) return null;
+
+        boolean ayerFueCero = anterior.compareTo(BigDecimal.ZERO) == 0;
+        boolean hoyEsCero   = actual  == null || actual.compareTo(BigDecimal.ZERO) == 0;
+
+        if (ayerFueCero) {
+            // Ayer = $0, hoy > $0 → actividad nueva desde cero (+100 %)
+            // Ayer = $0, hoy = $0 → sin dato de comparación (null)
+            return hoyEsCero ? null : new BigDecimal("100.00");
+        }
+
+        // Caso normal: (actual - anterior) / anterior × 100
         return actual.subtract(anterior)
                 .divide(anterior, 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100))
