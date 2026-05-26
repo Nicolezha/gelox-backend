@@ -1,0 +1,15 @@
+package com.gelox.backend.dto;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+public record ItemDespachoRequest(
+        @NotNull UUID productoId,
+        @Positive int cajas,
+        @PositiveOrZero int unidades,
+        @NotNull @Positive BigDecimal precioUnitario
+) {}
