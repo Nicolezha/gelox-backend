@@ -5,7 +5,8 @@ import java.util.UUID;
 
 public record ItemCalculoResultado(
         UUID       productoId,
-        Integer    cantidad,
+        Integer    cajas,
+        Integer    unidades,
         BigDecimal precioUnitario,
         BigDecimal subtotal
 ) {}
