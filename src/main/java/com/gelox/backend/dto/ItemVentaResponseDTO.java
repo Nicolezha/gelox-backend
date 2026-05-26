@@ -6,7 +6,8 @@ import java.util.UUID;
 public record ItemVentaResponseDTO(
         UUID       productoId,
         String     nombre,
-        Integer    cantidad,
+        Integer    cajas,
+        Integer    unidades,
         BigDecimal precioUnitario,
         BigDecimal subtotal
 ) {}

@@ -83,12 +83,15 @@ public class VentaService {
                 .findFirst()
                 .ifPresent(id -> { throw new IllegalArgumentException("Producto no encontrado: " + id); });
 
+        final int UNIDADES_POR_CAJA = 24;
+
         List<ItemCalculoResultado> itemsResultado = req.items().stream()
                 .map(item -> {
-                    BigDecimal precio   = productosMap.get(item.productoId()).getPrecioVenta();
-                    BigDecimal subtotal = precio.multiply(BigDecimal.valueOf(item.cantidad()))
+                    BigDecimal precio        = productosMap.get(item.productoId()).getPrecioVenta();
+                    int totalUnidades        = item.cajas() * UNIDADES_POR_CAJA + item.unidades();
+                    BigDecimal subtotal      = precio.multiply(BigDecimal.valueOf(totalUnidades))
                             .setScale(2, RoundingMode.HALF_UP);
-                    return new ItemCalculoResultado(item.productoId(), item.cantidad(), precio, subtotal);
+                    return new ItemCalculoResultado(item.productoId(), item.cajas(), item.unidades(), precio, subtotal);
                 })
                 .toList();
 
@@ -102,6 +105,7 @@ public class VentaService {
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public ConfirmarVentaResponse confirmarVenta(ConfirmarVentaRequest req, Usuario usuario) {
+        final int UNIDADES_POR_CAJA = 24;
         List<UUID> ids = req.items().stream().map(ItemVentaRequest::productoId).toList();
 
         // 1. Leer todos los productos con bloqueo pesimista — una sola query
@@ -121,17 +125,18 @@ public class VentaService {
         // 3. Validar stock suficiente para todos antes de modificar cualquiera
         for (ItemVentaRequest item : req.items()) {
             Producto p = productosMap.get(item.productoId());
-            if (p.getStockActual() < item.cantidad()) {
+            int totalUnidades = item.cajas() * UNIDADES_POR_CAJA + item.unidades();
+            if (p.getStockActual() < totalUnidades) {
                 throw new StockInsuficienteException(
                         String.format("Stock insuficiente para '%s'. Disponible: %d, solicitado: %d.",
-                                p.getNombre(), p.getStockActual(), item.cantidad()));
+                                p.getNombre(), p.getStockActual(), totalUnidades));
             }
         }
 
         // 4. Calcular total
         BigDecimal total = req.items().stream()
                 .map(item -> productosMap.get(item.productoId()).getPrecioVenta()
-                        .multiply(BigDecimal.valueOf(item.cantidad())))
+                        .multiply(BigDecimal.valueOf(item.cajas() * UNIDADES_POR_CAJA + item.unidades())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
@@ -148,15 +153,17 @@ public class VentaService {
         List<ItemVentaResponseDTO> itemsResponse = new ArrayList<>();
 
         for (ItemVentaRequest item : req.items()) {
-            Producto p        = productosMap.get(item.productoId());
-            BigDecimal precio = p.getPrecioVenta();
-            BigDecimal subtotal = precio.multiply(BigDecimal.valueOf(item.cantidad()))
+            Producto p           = productosMap.get(item.productoId());
+            BigDecimal precio    = p.getPrecioVenta();
+            int totalUnidades    = item.cajas() * UNIDADES_POR_CAJA + item.unidades();
+            BigDecimal subtotal  = precio.multiply(BigDecimal.valueOf(totalUnidades))
                     .setScale(2, RoundingMode.HALF_UP);
 
             itemVentaRepository.save(ItemVenta.builder()
                     .venta(venta)
                     .producto(p)
-                    .cantidadUnidades(item.cantidad())
+                    .cantidadCajas(item.cajas())
+                    .cantidadUnidades(item.unidades())
                     .precioUnitario(precio)
                     .subtotal(subtotal)
                     .build());
@@ -166,9 +173,9 @@ public class VentaService {
 
             // RF26 — descuento centralizado: actualiza stock + crea movimiento_inventario
             String descripcion = String.format("Venta %s — %d uds.",
-                    venta.getId().toString().substring(0, 8).toUpperCase(), item.cantidad());
+                    venta.getId().toString().substring(0, 8).toUpperCase(), totalUnidades);
             inventarioService.descontarStock(
-                    p.getId(), item.cantidad(), TipoMovimiento.SALIDA_VENTA, descripcion, usuario);
+                    p.getId(), totalUnidades, TipoMovimiento.SALIDA_VENTA, descripcion, usuario);
 
             // RF11 — alerta si el producto transiciona a bajo stock en esta venta
             // (después de descontarStock, p.stockActual ya está actualizado en la sesión JPA)
@@ -181,7 +188,7 @@ public class VentaService {
             }
 
             itemsResponse.add(new ItemVentaResponseDTO(
-                    p.getId(), p.getNombre(), item.cantidad(), precio, subtotal));
+                    p.getId(), p.getNombre(), item.cajas(), item.unidades(), precio, subtotal));
         }
 
         eventoSistemaService.registrarEvento(
