@@ -25,5 +25,7 @@ public enum TipoEvento {
     // RF28 — Inicio de venta
     INICIAR_VENTA,
     // RF31 — Confirmación de venta
-    CONFIRMAR_VENTA
+    CONFIRMAR_VENTA,
+    // RF36 — Despacho planilla comerciante
+    DESPACHO_PLANILLA
 }

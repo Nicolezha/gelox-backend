@@ -64,6 +64,24 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(PlanillaNoEncontradaException.class)
+    public ResponseEntity<Map<String, String>> handlePlanillaNoEncontrada(PlanillaNoEncontradaException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(PlanillaYaLiquidadaException.class)
+    public ResponseEntity<Map<String, String>> handlePlanillaYaLiquidada(PlanillaYaLiquidadaException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(DevolucionInvalidaException.class)
+    public ResponseEntity<Map<String, String>> handleDevolucionInvalida(DevolucionInvalidaException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGeneral(Exception ex) {
         String mensaje = ex.getMessage() != null ? ex.getMessage() : "Error interno del servidor";

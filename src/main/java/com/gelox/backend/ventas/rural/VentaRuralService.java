@@ -171,7 +171,6 @@ public class VentaRuralService {
         // ── 6. Insertar Venta ─────────────────────────────────────────────
         Venta venta = Venta.builder()
                 .canal(CanalVenta.RURAL)
-                .estado(EstadoVenta.COMPLETADA)
                 .total(totalVenta)
                 .usuario(usuario)
                 .clienteRural(clienteRural)
