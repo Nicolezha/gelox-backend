@@ -141,6 +141,7 @@ public class VentaService {
                 .estado(EstadoVenta.COMPLETADA)
                 .total(total)
                 .usuario(usuario)
+                .metodoPago(req.metodoPago())
                 .build());
 
         // 6. Persistir ítems y descontar stock vía InventarioService (RF26)
@@ -197,7 +198,8 @@ public class VentaService {
                 venta.getFecha(),
                 venta.getEstado().name(),
                 itemsResponse,
-                total);
+                total,
+                venta.getMetodoPago() != null ? venta.getMetodoPago().name() : null);
     }
 
     private VentaResponseDTO toDTO(Venta v) {

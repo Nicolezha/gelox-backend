@@ -45,6 +45,11 @@ public class Venta {
     @JoinColumn(name = "cliente_rural_id")
     private ClienteRural clienteRural;
 
+    /** Método de pago registrado en ventas de canal VENTANILLA. Null para ventas rurales. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metodo_pago", length = 20)
+    private MetodoPago metodoPago;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

@@ -11,5 +11,6 @@ public record ConfirmarVentaResponse(
         LocalDateTime           fecha,
         String                  estado,
         List<ItemVentaResponseDTO> items,
-        BigDecimal              total
+        BigDecimal              total,
+        String                  metodoPago   // null para ventas rurales
 ) {}
