@@ -1,5 +1,6 @@
 package com.gelox.backend.services;
 
+import com.gelox.backend.catalogo.dto.PagedResponse;
 import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.*;
 import com.gelox.backend.repositories.*;
@@ -16,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.NoSuchElementException;
 
 @Service
 @RequiredArgsConstructor
@@ -433,6 +435,84 @@ public class PedidoProveedorService {
         } catch (IOException e) {
             throw new RuntimeException("Error generando archivo Excel: " + e.getMessage(), e);
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // GET /api/inventario/pedidos — Historial paginado (RF21)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Lista pedidos con filtros opcionales y paginación manual.
+     *
+     * @param page    Página solicitada (base 1 desde el frontend)
+     * @param limit   Registros por página
+     * @param q       Búsqueda libre: inicio del UUID o texto en notas
+     * @param estado  "PENDIENTE" | "RECIBIDO" | null = todos
+     * @param periodo "7d" | "30d" | "mes" | null = sin límite de fecha
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<PedidoResumenDTO> listarPedidos(
+            int page, int limit, String q, String estado, String periodo) {
+
+        // 1. Resolver rango de fechas a partir del período
+        LocalDate fechaFin    = null;
+        LocalDate fechaInicio = null;
+        if (periodo != null && !periodo.isBlank()) {
+            fechaFin = LocalDate.now();
+            fechaInicio = switch (periodo) {
+                case "7d"  -> fechaFin.minusDays(7);
+                case "30d" -> fechaFin.minusDays(30);
+                case "mes" -> fechaFin.withDayOfMonth(1);
+                default    -> null;
+            };
+        }
+
+        // 2. Consulta con filtros de estado y fecha (null = sin filtro)
+        String estadoParam = (estado != null && !estado.isBlank()) ? estado.toUpperCase() : null;
+        List<PedidoResumenDTO> todos = pedidoRepo
+                .findResumenWithFilters(estadoParam, fechaInicio, fechaFin)
+                .stream()
+                .map(PedidoResumenDTO::fromRow)
+                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+
+        // 3. Filtrar por q en Java (ID por prefijo o texto en notas)
+        if (q != null && !q.isBlank()) {
+            String qLower = q.toLowerCase();
+            todos = todos.stream()
+                    .filter(dto ->
+                            dto.id().toString().toLowerCase().startsWith(qLower)
+                            || (dto.notas() != null
+                                    && dto.notas().toLowerCase().contains(qLower)))
+                    .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+        }
+
+        // 4. Paginar (page es base-1 desde el frontend → convertir a índice 0)
+        int pageIndex     = Math.max(0, page - 1);
+        long totalElements = todos.size();
+        int totalPages    = limit > 0 ? (int) Math.ceil((double) totalElements / limit) : 1;
+        int fromIndex     = pageIndex * limit;
+        int toIndex       = (int) Math.min(fromIndex + limit, totalElements);
+
+        List<PedidoResumenDTO> content = (fromIndex >= totalElements || fromIndex < 0)
+                ? List.of()
+                : todos.subList(fromIndex, toIndex);
+
+        return new PagedResponse<>(content, pageIndex, limit, totalElements, totalPages);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // GET /api/inventario/pedidos/{id} — Detalle con ítems (RF22)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Retorna el pedido completo con todos sus ítems (JOIN FETCH en una sola consulta).
+     */
+    @Transactional(readOnly = true)
+    public PedidoDetalleDTO obtenerDetallePedido(UUID id) {
+        PedidoProveedor pedido = pedidoRepo.findByIdWithItems(id)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Pedido no encontrado con id: " + id));
+        return PedidoDetalleDTO.from(pedido);
     }
 
     // ── Helpers Excel ──────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 package com.gelox.backend.controllers;
 
+import com.gelox.backend.catalogo.dto.PagedResponse;
 import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.services.InventarioService;
@@ -17,6 +18,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/inventario")
@@ -95,6 +97,53 @@ public class InventarioController {
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(excel);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // RF21 — GET /api/inventario/pedidos
+    // Historial paginado de pedidos al proveedor
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Lista los pedidos al proveedor con filtros y paginación.
+     *
+     * <p>Query params:</p>
+     * <ul>
+     *   <li>{@code page}    — página base-1 (default 1)</li>
+     *   <li>{@code limit}   — registros por página (default 10)</li>
+     *   <li>{@code q}       — búsqueda por UUID o texto en notas (opcional)</li>
+     *   <li>{@code estado}  — PENDIENTE | RECIBIDO (opcional)</li>
+     *   <li>{@code periodo} — 7d | 30d | mes (opcional)</li>
+     * </ul>
+     *
+     * Roles: ENCARGADO_INVENTARIO, ADMINISTRADOR.
+     */
+    @GetMapping("/pedidos")
+    public ResponseEntity<PagedResponse<PedidoResumenDTO>> listarPedidos(
+            @RequestParam(defaultValue = "1")  int    page,
+            @RequestParam(defaultValue = "10") int    limit,
+            @RequestParam(required = false)    String q,
+            @RequestParam(required = false)    String estado,
+            @RequestParam(required = false)    String periodo) {
+
+        return ResponseEntity.ok(
+                pedidoService.listarPedidos(page, limit, q, estado, periodo));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // RF22 — GET /api/inventario/pedidos/{id}
+    // Detalle de un pedido con sus ítems (pedido vs recibido)
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Retorna un pedido completo con todos sus ítems.
+     * Usado en DetallePedido.jsx para mostrar la comparación solicitado / recibido.
+     *
+     * Roles: ENCARGADO_INVENTARIO, ADMINISTRADOR.
+     */
+    @GetMapping("/pedidos/{id}")
+    public ResponseEntity<PedidoDetalleDTO> obtenerDetallePedido(@PathVariable UUID id) {
+        return ResponseEntity.ok(pedidoService.obtenerDetallePedido(id));
     }
 
     // ──────────────────────────────────────────────────────────────────────
