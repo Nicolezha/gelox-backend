@@ -138,10 +138,9 @@ public class VentaService {
         // 5. Persistir la venta
         Venta venta = ventaRepository.save(Venta.builder()
                 .canal(req.canal())
-                .estado(EstadoVenta.COMPLETADA)
                 .total(total)
                 .usuario(usuario)
-                .metodoPago(req.metodoPago())
+                .metodoDePago(req.metodoPago())
                 .build());
 
         // 6. Persistir ítems y descontar stock vía InventarioService (RF26)
@@ -196,17 +195,17 @@ public class VentaService {
                 venta.getId(),
                 venta.getCanal().name(),
                 venta.getFecha(),
-                venta.getEstado().name(),
+                "CONFIRMADA",
                 itemsResponse,
                 total,
-                venta.getMetodoPago() != null ? venta.getMetodoPago().name() : null);
+                venta.getMetodoDePago() != null ? venta.getMetodoDePago().name() : null);
     }
 
     private VentaResponseDTO toDTO(Venta v) {
         return new VentaResponseDTO(
                 v.getId(),
                 v.getCanal().name(),
-                v.getEstado().name(),
+                "EN_PROCESO",
                 v.getFecha(),
                 v.getTotal()
         );
