@@ -17,6 +17,9 @@ public interface ComercianteRepository extends JpaRepository<Comerciante, UUID> 
     /** Filtra por estado activo/inactivo. */
     List<Comerciante> findByActivoOrderByNombreAsc(boolean activo);
 
+    /** Búsqueda por nombre (insensible a mayúsculas, coincidencia parcial). */
+    List<Comerciante> findByNombreContainingIgnoreCaseOrderByNombreAsc(String nombre);
+
     /**
      * Resumen de planillas cerradas de un comerciante en un rango de fechas (RF35).
      * Retorna: [planillaId, fecha, totalDespachado, totalDevuelto, unidadesVendidas, ganancia]

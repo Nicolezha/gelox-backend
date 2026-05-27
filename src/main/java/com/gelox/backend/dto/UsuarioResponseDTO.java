@@ -12,4 +12,5 @@ public class UsuarioResponseDTO {
     private String rol;
     private boolean activo;
     private LocalDateTime ultimoAcceso;
+    private String fotoUrl;
 }

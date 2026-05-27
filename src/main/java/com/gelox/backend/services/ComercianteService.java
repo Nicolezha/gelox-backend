@@ -31,13 +31,14 @@ public class ComercianteService {
 
     /**
      * Lista todos los comerciantes ordenados por nombre (A → Z).
+     * Si se pasa {@code q}, filtra por coincidencia parcial insensible a mayúsculas.
      */
     @Transactional(readOnly = true)
-    public List<ComercianteResponseDTO> listar() {
-        return comercianteRepo.findAllByOrderByNombreAsc()
-                .stream()
-                .map(ComercianteResponseDTO::from)
-                .toList();
+    public List<ComercianteResponseDTO> listar(String q) {
+        List<Comerciante> lista = (q != null && !q.isBlank())
+                ? comercianteRepo.findByNombreContainingIgnoreCaseOrderByNombreAsc(q.trim())
+                : comercianteRepo.findAllByOrderByNombreAsc();
+        return lista.stream().map(ComercianteResponseDTO::from).toList();
     }
 
     /**
@@ -83,7 +84,8 @@ public class ComercianteService {
         comerciante.setContactoEmergenciaNombre(req.contactoEmergenciaNombre());
         comerciante.setContactoEmergenciaParentesco(req.contactoEmergenciaParentesco());
         comerciante.setTallaUniforme(req.tallaUniforme());
-        comerciante.setFotoUrl(req.fotoUrl());
+        // Solo actualiza la foto si viene una nueva URL; preserva la existente si es null
+        if (req.fotoUrl() != null) comerciante.setFotoUrl(req.fotoUrl());
 
         Comerciante actualizado = comercianteRepo.save(comerciante);
 

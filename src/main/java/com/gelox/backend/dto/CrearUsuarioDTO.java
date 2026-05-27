@@ -20,4 +20,7 @@ public class CrearUsuarioDTO {
 
     @NotNull(message = "El rol es obligatorio")
     private String rol;
+
+    /** URL pública de la foto de perfil (opcional). */
+    private String fotoUrl;
 }
