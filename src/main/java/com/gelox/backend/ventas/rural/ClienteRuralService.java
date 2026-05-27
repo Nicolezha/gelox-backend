@@ -1,10 +1,13 @@
 package com.gelox.backend.ventas.rural;
 
+import com.gelox.backend.catalogo.dto.PagedResponse;
 import com.gelox.backend.entities.ClienteRural;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.ventas.rural.dto.ClienteRuralDTO;
 import com.gelox.backend.ventas.rural.dto.CrearClienteRuralRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,41 @@ public class ClienteRuralService {
         }
 
         return clientes.stream().map(this::toDTO).toList();
+    }
+
+    // ─────────────────────── GET paginado (/api/clientes) ────────────
+
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
+    @Transactional(readOnly = true)
+    public PagedResponse<ClienteRuralDTO> listarClientesPaginado(int page, int size) {
+        int safeSize = Math.min(size, 100);
+        Page<ClienteRural> resultPage = clienteRuralRepository
+                .findAllByOrderByNombreAsc(PageRequest.of(page, safeSize));
+
+        return new PagedResponse<>(
+                resultPage.getContent().stream().map(this::toDTO).toList(),
+                resultPage.getNumber(),
+                resultPage.getSize(),
+                resultPage.getTotalElements(),
+                resultPage.getTotalPages()
+        );
+    }
+
+    // ─────────────── GET buscar por teléfono (/api/clientes/buscar) ──
+
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
+    @Transactional(readOnly = true)
+    public List<ClienteRuralDTO> buscarPorTelefono(String telefono) {
+        if (telefono == null || telefono.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "El parámetro 'telefono' no puede estar vacío");
+        }
+        return clienteRuralRepository
+                .buscarPorTelefono(telefono.trim())
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
     // ─────────────────────────── RF33 — POST ─────────────────────────
