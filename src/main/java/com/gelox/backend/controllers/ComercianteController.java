@@ -27,6 +27,7 @@ import java.util.UUID;
  * PUT    /api/comerciantes/{id}               — editar datos (JSON o multipart)    (RF34)
  * PATCH  /api/comerciantes/{id}/estado        — activar / desactivar (RF34)
  * GET    /api/comerciantes/{id}/planillas     — historial planillas (RF35)
+ * GET    /api/comerciantes/{id}/planillas/{planillaId} — detalle planilla (RF36-39)
  * </pre>
  */
 @RestController
@@ -143,5 +144,17 @@ public class ComercianteController {
 
         return ResponseEntity.ok(
                 comercianteService.obtenerPlanillas(id, fechaInicio, fechaFin));
+    }
+
+    // ── GET /api/comerciantes/{id}/planillas/{planillaId} ─────────────────────
+
+    @GetMapping("/{id}/planillas/{planillaId}")
+    public ResponseEntity<PlanillaDetalleResponseDTO> obtenerDetallePlanilla(
+            @PathVariable UUID id,
+            @PathVariable UUID planillaId,
+            @AuthenticationPrincipal Usuario usuario) {
+
+        return ResponseEntity.ok(
+                comercianteService.obtenerDetallePlanilla(id, planillaId));
     }
 }
