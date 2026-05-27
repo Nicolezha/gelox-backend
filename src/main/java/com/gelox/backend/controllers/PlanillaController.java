@@ -4,6 +4,7 @@ import com.gelox.backend.dto.CrearDespachoRequest;
 import com.gelox.backend.dto.CrearDespachoResponse;
 import com.gelox.backend.dto.LiquidacionRequestDTO;
 import com.gelox.backend.dto.LiquidacionResponseDTO;
+import com.gelox.backend.dto.PlanillaImpresionResponseDTO;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.services.LiquidacionService;
 import com.gelox.backend.services.PlanillaService;
@@ -39,5 +40,14 @@ public class PlanillaController {
             @Valid @RequestBody LiquidacionRequestDTO request,
             @AuthenticationPrincipal Usuario usuario) {
         return ResponseEntity.ok(liquidacionService.liquidarPlanilla(id, request));
+    }
+
+    // ── GET /api/planillas/{id}/imprimir ──────────────────────────────────
+
+    @GetMapping("/{id}/imprimir")
+    public ResponseEntity<PlanillaImpresionResponseDTO> imprimir(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(planillaService.obtenerParaImpresion(id));
     }
 }

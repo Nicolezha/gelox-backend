@@ -5,9 +5,13 @@ import com.gelox.backend.entities.Comerciante;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.ComercianteRepository;
+import com.gelox.backend.repositories.ItemPlanillaRepository;
+import com.gelox.backend.repositories.PlanillaComercianteRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -22,8 +26,10 @@ import java.util.UUID;
 @Transactional
 public class ComercianteService {
 
-    private final ComercianteRepository comercianteRepo;
-    private final EventoSistemaService  eventoService;
+    private final ComercianteRepository        comercianteRepo;
+    private final EventoSistemaService         eventoService;
+    private final PlanillaComercianteRepository planillaRepo;
+    private final ItemPlanillaRepository        itemPlanillaRepo;
 
     // ══════════════════════════════════════════════════════════════════════
     // RF34 — CRUD de comerciantes
@@ -149,6 +155,31 @@ public class ComercianteService {
                 .stream()
                 .map(PlanillaResumenDTO::fromRow)
                 .toList();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // RF36-39 — Detalle completo de una planilla
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Retorna la cabecera y el desglose por producto de una planilla cerrada
+     * que pertenezca al comerciante indicado.
+     */
+    @Transactional(readOnly = true)
+    public PlanillaDetalleResponseDTO obtenerDetallePlanilla(UUID comercianteId, UUID planillaId) {
+        var planilla = planillaRepo
+                .findByIdAndComerciante_IdAndCerrada(planillaId, comercianteId, true)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Planilla no encontrada, no pertenece a este comerciante o no está cerrada"));
+
+        List<ItemPlanillaDetalleDTO> items = itemPlanillaRepo
+                .findByPlanillaIdWithProducto(planillaId)
+                .stream()
+                .map(ItemPlanillaDetalleDTO::from)
+                .toList();
+
+        return PlanillaDetalleResponseDTO.from(planilla, items);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────

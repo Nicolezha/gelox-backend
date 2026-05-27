@@ -4,6 +4,8 @@ import com.gelox.backend.dto.CrearDespachoRequest;
 import com.gelox.backend.dto.CrearDespachoResponse;
 import com.gelox.backend.dto.ItemDespachoRequest;
 import com.gelox.backend.dto.ItemDespachoResponseDTO;
+import com.gelox.backend.dto.ItemImpresionPlanillaDTO;
+import com.gelox.backend.dto.PlanillaImpresionResponseDTO;
 import com.gelox.backend.entities.*;
 import com.gelox.backend.exceptions.StockInsuficienteException;
 import com.gelox.backend.repositories.ComercianteRepository;
@@ -144,5 +146,63 @@ public class PlanillaService {
                 req.fecha(),
                 responseItems,
                 totalValorDespachado);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // RF39 — Datos para impresión de planilla
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Transactional(readOnly = true)
+    public PlanillaImpresionResponseDTO obtenerParaImpresion(UUID planillaId) {
+        PlanillaComerciante planilla = planillaRepository.findById(planillaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Planilla no encontrada"));
+
+        List<ItemPlanilla> itemEntities = itemPlanillaRepository.findByPlanillaIdWithProducto(planillaId);
+
+        int totalDespachadas = 0;
+        int totalDevueltas   = 0;
+        int totalVendidas    = 0;
+        BigDecimal sumaGanancia = BigDecimal.ZERO;
+        List<ItemImpresionPlanillaDTO> items = new ArrayList<>();
+
+        for (ItemPlanilla item : itemEntities) {
+            ItemImpresionPlanillaDTO dto = ItemImpresionPlanillaDTO.from(item);
+            totalDespachadas += dto.unidadesDespachadas();
+            totalDevueltas   += dto.unidadesDevueltas();
+            totalVendidas    += dto.unidadesVendidas();
+            sumaGanancia      = sumaGanancia.add(dto.subtotal());
+            items.add(dto);
+        }
+
+        // Si está cerrada usar el valor consolidado de la BD; si está abierta, calcular
+        BigDecimal totalGanancia = Boolean.TRUE.equals(planilla.getCerrada())
+                && planilla.getTotalGanancia() != null
+                ? planilla.getTotalGanancia()
+                : sumaGanancia;
+
+        var comerciante = planilla.getComerciante();
+        var usuario     = planilla.getUsuario();
+
+        return new PlanillaImpresionResponseDTO(
+                planilla.getId(),
+                planilla.getFecha(),
+                Boolean.TRUE.equals(planilla.getCerrada()),
+                planilla.getTimestampCierre(),
+                planilla.getCreatedAt(),
+                comerciante.getId(),
+                comerciante.getNombre(),
+                comerciante.getTelefono(),
+                comerciante.getMunicipio(),
+                comerciante.getDireccion(),
+                usuario.getId(),
+                usuario.getNombre(),
+                items,
+                totalDespachadas,
+                totalDevueltas,
+                totalVendidas,
+                totalGanancia,
+                planilla.getEfectivoRecibido()
+        );
     }
 }
