@@ -49,6 +49,7 @@ public class UsuarioService {
         usuario.setCorreo(dto.getCorreo());
         usuario.setFirebaseUid(firebaseUser.getUid());
         usuario.setRol(RolUsuario.valueOf(dto.getRol()));
+        usuario.setFotoUrl(dto.getFotoUrl());
         usuario.setActivo(true);
 
         Usuario saved = usuarioRepository.save(usuario);
@@ -80,6 +81,7 @@ public class UsuarioService {
         usuario.setNombre(dto.getNombre());
         usuario.setCorreo(dto.getCorreo());
         usuario.setRol(RolUsuario.valueOf(dto.getRol()));
+        if (dto.getFotoUrl() != null) usuario.setFotoUrl(dto.getFotoUrl());
 
         Usuario actualizado = usuarioRepository.save(usuario);
         eventoSistemaService.registrarEvento(
@@ -136,6 +138,7 @@ public class UsuarioService {
         dto.setRol(u.getRol().name());
         dto.setActivo(u.getActivo());
         dto.setUltimoAcceso(u.getUltimoAcceso());
+        dto.setFotoUrl(u.getFotoUrl());
         return dto;
     }
 
