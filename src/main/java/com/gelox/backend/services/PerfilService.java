@@ -27,21 +27,18 @@ public class PerfilService {
     private final UsuarioRepository usuarioRepository;
     private final FirebaseAuth firebaseAuth;
     private final EventoSistemaService eventoSistemaService;
-
-    @Value("${supabase.url}")
-    private String supabaseUrl;
-
-    @Value("${supabase.service-key}")
-    private String supabaseServiceKey;
+    private final SupabaseStorageService storageService;
 
     @Value("${firebase.web-api-key}")
     private String firebaseWebApiKey;
 
     public PerfilService(UsuarioRepository usuarioRepository, FirebaseAuth firebaseAuth,
-                         EventoSistemaService eventoSistemaService) {
+                         EventoSistemaService eventoSistemaService,
+                         SupabaseStorageService storageService) {
         this.usuarioRepository = usuarioRepository;
         this.firebaseAuth = firebaseAuth;
         this.eventoSistemaService = eventoSistemaService;
+        this.storageService = storageService;
     }
 
     @Transactional
@@ -124,24 +121,7 @@ public class PerfilService {
     }
 
     public String subirFotoPerfil(UUID userId, MultipartFile foto) {
-        try {
-            String nombreArchivo = "perfil_" + userId + "_" + System.currentTimeMillis()
-                    + getExtension(foto.getOriginalFilename());
-            String uploadUrl = supabaseUrl + "/storage/v1/object/fotos-perfil/" + nombreArchivo;
-
-            RestTemplate restTemplate = new RestTemplate();
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + supabaseServiceKey);
-            headers.setContentType(MediaType.parseMediaType(foto.getContentType()));
-
-            HttpEntity<byte[]> requestEntity = new HttpEntity<>(foto.getBytes(), headers);
-            restTemplate.exchange(uploadUrl, HttpMethod.POST, requestEntity, String.class);
-
-            return supabaseUrl + "/storage/v1/object/public/fotos-perfil/" + nombreArchivo;
-
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Error al subir la foto: " + e.getMessage());
-        }
+        return storageService.subirImagen(foto, "usuarios");
     }
 
     @Transactional
@@ -152,8 +132,5 @@ public class PerfilService {
         usuarioRepository.save(usuario);
     }
 
-    private String getExtension(String filename) {
-        if (filename == null || !filename.contains(".")) return ".jpg";
-        return filename.substring(filename.lastIndexOf("."));
-    }
+
 }
