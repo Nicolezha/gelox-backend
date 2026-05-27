@@ -42,7 +42,7 @@ public class Venta {
 
     /** Método de pago registrado en ventas de canal VENTANILLA. Null para ventas rurales. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "metodo_de_pago", length = 20)
+    @Column(name = "metodo_pago", length = 20)
     private MetodoPago metodoDePago;
 
     @Column(name = "created_at", updatable = false)
