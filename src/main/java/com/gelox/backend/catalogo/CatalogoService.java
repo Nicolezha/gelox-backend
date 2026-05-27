@@ -29,7 +29,7 @@ public class CatalogoService {
 
     // ─────────────────────────── RF18 ────────────────────────────
 
-    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO", "ENCARGADO_VENTAS"})
     @Transactional(readOnly = true)
     public PagedResponse<CatalogoProductoDTO> listarProductos(
             String categoria, int page, int size, Usuario usuario) {
