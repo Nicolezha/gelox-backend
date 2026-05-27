@@ -9,6 +9,7 @@ public record ClienteRuralDTO(
         UUID    id,
         String  nombre,
         String  telefono,
+        String  correo,
         String  direccion,
         String  corregimiento,
         Boolean recurrente

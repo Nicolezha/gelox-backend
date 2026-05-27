@@ -12,5 +12,9 @@ public record ReporteDiarioDTO(
         long transaccionesVentanilla,
         long transaccionesRural,
         long transaccionesComerciantes,
-        long totalTransacciones
+        long totalTransacciones,
+        // Variación porcentual respecto al día anterior (null si no hay datos de ayer)
+        BigDecimal variacionVentanilla,
+        BigDecimal variacionRural,
+        BigDecimal variacionComerciantes
 ) {}

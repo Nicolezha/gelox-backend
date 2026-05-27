@@ -11,9 +11,17 @@ import java.util.List;
 /**
  * Repositorio para los reportes diarios (RF40, RF41).
  *
- * NOTA DE DISEÑO: Los canales de venta (VENTANILLA, RURAL) se comparan como
- * literales SQL directos —no como parámetros JDBC— para evitar el error
- * "could not determine data type of parameter $N" de PostgreSQL con columnas ENUM.
+ * Los canales de venta se comparan como literales SQL directos para evitar
+ * el error "could not determine data type of parameter $N" con columnas ENUM.
+ *
+ * Columnas retornadas por los métodos de transacciones (mismo orden en los 4):
+ *   [0] id                  (text)
+ *   [1] tipo                (text)   VENTANILLA | RURAL | PLANILLA
+ *   [2] cliente             (text, nullable)
+ *   [3] detalles_productos  (text/JSON)  array de {nombre, cantidad, tipoUnidad}
+ *   [4] total               (numeric)
+ *   [5] hora                (timestamp, nullable)
+ *   [6] metodo_pago         (text, nullable)
  */
 @Repository
 public class ReporteDiarioRepository {
@@ -99,15 +107,6 @@ public class ReporteDiarioRepository {
 
     // ══════════════════════════════════════════════════════════════════════════
     // RF41 — Lista paginada de transacciones del día
-    //
-    // Columnas retornadas (mismo orden en todos los métodos):
-    //   [0] id       (text)
-    //   [1] tipo     (text)  VENTANILLA | RURAL | PLANILLA
-    //   [2] cliente  (text, nullable)
-    //   [3] productos(text)
-    //   [4] cantidad (int)
-    //   [5] total    (numeric)
-    //   [6] hora     (timestamp, nullable)
     // ══════════════════════════════════════════════════════════════════════════
 
     @SuppressWarnings("unchecked")
@@ -115,18 +114,27 @@ public class ReporteDiarioRepository {
         return em.createNativeQuery("""
                 SELECT
                     v.id::text,
-                    'VENTANILLA'                                                      AS tipo,
-                    NULL::text                                                        AS cliente,
-                    COALESCE(STRING_AGG(DISTINCT p.nombre, ', '), '')                AS productos,
-                    COALESCE(SUM(iv.cantidad_unidades + iv.cantidad_cajas), 0)::int  AS cantidad,
+                    'VENTANILLA' AS tipo,
+                    NULL::text   AS cliente,
+                    COALESCE(
+                        (SELECT JSON_AGG(d)
+                         FROM (
+                           SELECT JSON_BUILD_OBJECT('nombre', p2.nombre, 'cantidad', iv2.cantidad_unidades, 'tipoUnidad', 'UNIDAD') AS d
+                           FROM item_venta iv2 JOIN producto p2 ON p2.id = iv2.producto_id
+                           WHERE iv2.venta_id = v.id AND iv2.cantidad_unidades > 0
+                           UNION ALL
+                           SELECT JSON_BUILD_OBJECT('nombre', p3.nombre, 'cantidad', iv3.cantidad_cajas, 'tipoUnidad', 'CAJA') AS d
+                           FROM item_venta iv3 JOIN producto p3 ON p3.id = iv3.producto_id
+                           WHERE iv3.venta_id = v.id AND iv3.cantidad_cajas > 0
+                         ) items
+                        ), '[]'::json
+                    )::text      AS detalles_productos,
                     v.total,
-                    v.fecha                                                           AS hora
+                    v.fecha      AS hora,
+                    v.metodo_pago::text AS metodo_pago
                 FROM venta v
-                LEFT JOIN item_venta iv ON iv.venta_id = v.id
-                LEFT JOIN producto   p  ON p.id        = iv.producto_id
                 WHERE v.fecha::date = :fecha
                   AND v.canal = 'VENTANILLA'
-                GROUP BY v.id, v.total, v.fecha
                 ORDER BY v.fecha DESC
                 LIMIT :limit OFFSET :offset
                 """)
@@ -141,18 +149,27 @@ public class ReporteDiarioRepository {
         return em.createNativeQuery("""
                 SELECT
                     v.id::text,
-                    'RURAL'                                                           AS tipo,
-                    NULL::text                                                        AS cliente,
-                    COALESCE(STRING_AGG(DISTINCT p.nombre, ', '), '')                AS productos,
-                    COALESCE(SUM(iv.cantidad_unidades + iv.cantidad_cajas), 0)::int  AS cantidad,
+                    'RURAL'      AS tipo,
+                    NULL::text   AS cliente,
+                    COALESCE(
+                        (SELECT JSON_AGG(d)
+                         FROM (
+                           SELECT JSON_BUILD_OBJECT('nombre', p2.nombre, 'cantidad', iv2.cantidad_unidades, 'tipoUnidad', 'UNIDAD') AS d
+                           FROM item_venta iv2 JOIN producto p2 ON p2.id = iv2.producto_id
+                           WHERE iv2.venta_id = v.id AND iv2.cantidad_unidades > 0
+                           UNION ALL
+                           SELECT JSON_BUILD_OBJECT('nombre', p3.nombre, 'cantidad', iv3.cantidad_cajas, 'tipoUnidad', 'CAJA') AS d
+                           FROM item_venta iv3 JOIN producto p3 ON p3.id = iv3.producto_id
+                           WHERE iv3.venta_id = v.id AND iv3.cantidad_cajas > 0
+                         ) items
+                        ), '[]'::json
+                    )::text      AS detalles_productos,
                     v.total,
-                    v.fecha                                                           AS hora
+                    v.fecha      AS hora,
+                    'TRANSFERENCIA' AS metodo_pago
                 FROM venta v
-                LEFT JOIN item_venta iv ON iv.venta_id = v.id
-                LEFT JOIN producto   p  ON p.id        = iv.producto_id
                 WHERE v.fecha::date = :fecha
                   AND v.canal = 'RURAL'
-                GROUP BY v.id, v.total, v.fecha
                 ORDER BY v.fecha DESC
                 LIMIT :limit OFFSET :offset
                 """)
@@ -167,19 +184,23 @@ public class ReporteDiarioRepository {
         return em.createNativeQuery("""
                 SELECT
                     pc.id::text,
-                    'PLANILLA'                                                        AS tipo,
-                    c.nombre                                                          AS cliente,
-                    COALESCE(STRING_AGG(DISTINCT p.nombre, ', '), '')                AS productos,
-                    COALESCE(SUM(ip.unidades_despachadas), 0)::int                   AS cantidad,
-                    pc.total_ganancia                                                 AS total,
-                    NULL::timestamp                                                   AS hora
+                    'PLANILLA'   AS tipo,
+                    c.nombre     AS cliente,
+                    COALESCE(
+                        (SELECT JSON_AGG(
+                            JSON_BUILD_OBJECT('nombre', p2.nombre, 'cantidad', ip2.unidades_despachadas, 'tipoUnidad', 'UNIDAD')
+                         )
+                         FROM item_planilla ip2 JOIN producto p2 ON p2.id = ip2.producto_id
+                         WHERE ip2.planilla_id = pc.id AND ip2.unidades_despachadas > 0
+                        ), '[]'::json
+                    )::text      AS detalles_productos,
+                    pc.total_ganancia AS total,
+                    NULL::timestamp   AS hora,
+                    'EFECTIVO'        AS metodo_pago
                 FROM planilla_comerciante pc
                 JOIN comerciante c ON c.id = pc.comerciante_id
-                LEFT JOIN item_planilla ip ON ip.planilla_id = pc.id
-                LEFT JOIN producto      p  ON p.id           = ip.producto_id
                 WHERE pc.fecha = :fecha
                   AND pc.cerrada = true
-                GROUP BY pc.id, c.nombre, pc.total_ganancia
                 ORDER BY pc.total_ganancia DESC
                 LIMIT :limit OFFSET :offset
                 """)
@@ -189,44 +210,77 @@ public class ReporteDiarioRepository {
                 .getResultList();
     }
 
-    /**
-     * UNION ALL de los tres canales. Permite paginar sin filtro de canal.
-     * Los canales de venta se seleccionan con literales SQL para evitar el
-     * problema de inferencia de tipos con columnas ENUM de PostgreSQL.
-     */
     @SuppressWarnings("unchecked")
     public List<Object[]> getTodasTransacciones(LocalDate fecha, int offset, int limit) {
         return em.createNativeQuery("""
                 SELECT * FROM (
                     (SELECT
                         v.id::text,
-                        v.canal::text                                                     AS tipo,
-                        NULL::text                                                        AS cliente,
-                        COALESCE(STRING_AGG(DISTINCT p.nombre, ', '), '')                AS productos,
-                        COALESCE(SUM(iv.cantidad_unidades + iv.cantidad_cajas), 0)::int  AS cantidad,
+                        'VENTANILLA' AS tipo,
+                        NULL::text   AS cliente,
+                        COALESCE(
+                            (SELECT JSON_AGG(d)
+                             FROM (
+                               SELECT JSON_BUILD_OBJECT('nombre', p2.nombre, 'cantidad', iv2.cantidad_unidades, 'tipoUnidad', 'UNIDAD') AS d
+                               FROM item_venta iv2 JOIN producto p2 ON p2.id = iv2.producto_id
+                               WHERE iv2.venta_id = v.id AND iv2.cantidad_unidades > 0
+                               UNION ALL
+                               SELECT JSON_BUILD_OBJECT('nombre', p3.nombre, 'cantidad', iv3.cantidad_cajas, 'tipoUnidad', 'CAJA') AS d
+                               FROM item_venta iv3 JOIN producto p3 ON p3.id = iv3.producto_id
+                               WHERE iv3.venta_id = v.id AND iv3.cantidad_cajas > 0
+                             ) items
+                            ), '[]'::json
+                        )::text      AS detalles_productos,
                         v.total,
-                        v.fecha                                                           AS hora
+                        v.fecha      AS hora,
+                        v.metodo_pago::text AS metodo_pago
                     FROM venta v
-                    LEFT JOIN item_venta iv ON iv.venta_id = v.id
-                    LEFT JOIN producto   p  ON p.id        = iv.producto_id
                     WHERE v.fecha::date = :fecha
-                    GROUP BY v.id, v.canal, v.total, v.fecha)
+                      AND v.canal = 'VENTANILLA')
+                    UNION ALL
+                    (SELECT
+                        v.id::text,
+                        'RURAL'      AS tipo,
+                        NULL::text   AS cliente,
+                        COALESCE(
+                            (SELECT JSON_AGG(d)
+                             FROM (
+                               SELECT JSON_BUILD_OBJECT('nombre', p2.nombre, 'cantidad', iv2.cantidad_unidades, 'tipoUnidad', 'UNIDAD') AS d
+                               FROM item_venta iv2 JOIN producto p2 ON p2.id = iv2.producto_id
+                               WHERE iv2.venta_id = v.id AND iv2.cantidad_unidades > 0
+                               UNION ALL
+                               SELECT JSON_BUILD_OBJECT('nombre', p3.nombre, 'cantidad', iv3.cantidad_cajas, 'tipoUnidad', 'CAJA') AS d
+                               FROM item_venta iv3 JOIN producto p3 ON p3.id = iv3.producto_id
+                               WHERE iv3.venta_id = v.id AND iv3.cantidad_cajas > 0
+                             ) items
+                            ), '[]'::json
+                        )::text      AS detalles_productos,
+                        v.total,
+                        v.fecha      AS hora,
+                        'TRANSFERENCIA' AS metodo_pago
+                    FROM venta v
+                    WHERE v.fecha::date = :fecha
+                      AND v.canal = 'RURAL')
                     UNION ALL
                     (SELECT
                         pc.id::text,
-                        'PLANILLA'                                                        AS tipo,
-                        c.nombre                                                          AS cliente,
-                        COALESCE(STRING_AGG(DISTINCT p.nombre, ', '), '')                AS productos,
-                        COALESCE(SUM(ip.unidades_despachadas), 0)::int                   AS cantidad,
-                        pc.total_ganancia                                                 AS total,
-                        pc.fecha::timestamp                                               AS hora
+                        'PLANILLA'   AS tipo,
+                        c.nombre     AS cliente,
+                        COALESCE(
+                            (SELECT JSON_AGG(
+                                JSON_BUILD_OBJECT('nombre', p2.nombre, 'cantidad', ip2.unidades_despachadas, 'tipoUnidad', 'UNIDAD')
+                             )
+                             FROM item_planilla ip2 JOIN producto p2 ON p2.id = ip2.producto_id
+                             WHERE ip2.planilla_id = pc.id AND ip2.unidades_despachadas > 0
+                            ), '[]'::json
+                        )::text      AS detalles_productos,
+                        pc.total_ganancia  AS total,
+                        pc.fecha::timestamp AS hora,
+                        'EFECTIVO'         AS metodo_pago
                     FROM planilla_comerciante pc
                     JOIN comerciante c ON c.id = pc.comerciante_id
-                    LEFT JOIN item_planilla ip ON ip.planilla_id = pc.id
-                    LEFT JOIN producto      p  ON p.id           = ip.producto_id
                     WHERE pc.fecha = :fecha
-                      AND pc.cerrada = true
-                    GROUP BY pc.id, c.nombre, pc.total_ganancia, pc.fecha)
+                      AND pc.cerrada = true)
                 ) t
                 ORDER BY hora DESC NULLS LAST
                 LIMIT :limit OFFSET :offset

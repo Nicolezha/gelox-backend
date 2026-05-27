@@ -5,6 +5,7 @@ import com.gelox.backend.entities.ClienteRural;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.ventas.rural.dto.ClienteRuralDTO;
 import com.gelox.backend.ventas.rural.dto.CrearClienteRuralRequest;
+import com.gelox.backend.ventas.rural.dto.EditarClienteRuralRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -93,7 +94,8 @@ public class ClienteRuralService {
         // 2. Insertar con recurrente = true (se registra para uso recurrente)
         ClienteRural cliente = ClienteRural.builder()
                 .nombre(req.nombre().trim())
-                .telefono(req.telefono() != null ? req.telefono().trim() : null)
+                .telefono(req.telefono().trim())
+                .correo(req.correo())
                 .direccion(req.direccion())
                 .corregimiento(req.corregimiento())
                 .recurrente(true)
@@ -103,6 +105,35 @@ public class ClienteRuralService {
         return toDTO(guardado);
     }
 
+    // ─────────────────────────── RF33 — PUT ──────────────────────────
+
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
+    public ClienteRuralDTO editarCliente(java.util.UUID id, EditarClienteRuralRequest req) {
+        ClienteRural cliente = clienteRuralRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Cliente no encontrado con id: " + id));
+
+        // Si cambia el teléfono, verificar que no pertenezca a otro cliente
+        if (req.telefono() != null && !req.telefono().isBlank()) {
+            clienteRuralRepository.findByTelefono(req.telefono().trim())
+                    .ifPresent(existente -> {
+                        if (!existente.getId().equals(id)) {
+                            throw new ResponseStatusException(
+                                    HttpStatus.CONFLICT,
+                                    "Ese teléfono ya pertenece a otro cliente");
+                        }
+                    });
+        }
+
+        cliente.setNombre(req.nombre().trim());
+        cliente.setTelefono(req.telefono().trim());
+        cliente.setCorreo(req.correo());
+        cliente.setDireccion(req.direccion());
+        cliente.setCorregimiento(req.corregimiento());
+
+        return toDTO(clienteRuralRepository.save(cliente));
+    }
+
     // ─────────────────────────── Helper ──────────────────────────────
 
     private ClienteRuralDTO toDTO(ClienteRural c) {
@@ -110,6 +141,7 @@ public class ClienteRuralService {
                 c.getId(),
                 c.getNombre(),
                 c.getTelefono(),
+                c.getCorreo(),
                 c.getDireccion(),
                 c.getCorregimiento(),
                 c.getRecurrente()

@@ -34,6 +34,9 @@ public class ClienteRural {
     @Column
     private String corregimiento;
 
+    @Column
+    private String correo;
+
     /** true cuando se registra explícitamente como cliente recurrente. */
     @Column(nullable = false)
     @Builder.Default

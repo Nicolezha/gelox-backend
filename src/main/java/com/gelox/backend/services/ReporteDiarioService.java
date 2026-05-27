@@ -1,5 +1,8 @@
 package com.gelox.backend.services;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gelox.backend.dto.DetalleProductoDTO;
 import com.gelox.backend.dto.ReporteDiarioDTO;
 import com.gelox.backend.dto.TransaccionDiaDTO;
 import com.gelox.backend.dto.TransaccionesDiaPageDTO;
@@ -11,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -22,6 +26,7 @@ import java.util.List;
 public class ReporteDiarioService {
 
     private final ReporteDiarioRepository reporteDiarioRepository;
+    private final ObjectMapper objectMapper;
 
     // ══════════════════════════════════════════════════════════════════════════
     // RF40 — Reporte consolidado del día
@@ -37,6 +42,12 @@ public class ReporteDiarioService {
         long txRural        = reporteDiarioRepository.countRuralDia(fecha);
         long txComerciantes = reporteDiarioRepository.countPlanillasDia(fecha);
 
+        // Variación respecto al día anterior
+        LocalDate ayer = fecha.minusDays(1);
+        BigDecimal ayerVentanilla   = reporteDiarioRepository.getIngresosVentanillaDia(ayer);
+        BigDecimal ayerRural        = reporteDiarioRepository.getIngresosRuralDia(ayer);
+        BigDecimal ayerComerciantes = reporteDiarioRepository.getIngresosComerciantesDia(ayer);
+
         return new ReporteDiarioDTO(
                 fecha,
                 ingVentanilla,
@@ -46,7 +57,10 @@ public class ReporteDiarioService {
                 txVentanilla,
                 txRural,
                 txComerciantes,
-                txVentanilla + txRural + txComerciantes
+                txVentanilla + txRural + txComerciantes,
+                calcularVariacion(ingVentanilla, ayerVentanilla),
+                calcularVariacion(ingRural, ayerRural),
+                calcularVariacion(ingComerciantes, ayerComerciantes)
         );
     }
 
@@ -54,11 +68,6 @@ public class ReporteDiarioService {
     // RF41 — Lista paginada de transacciones del día
     // ══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * @param canal  VENTANILLA | RURAL | PLANILLA | null (todos)
-     * @param page   página comenzando en 1
-     * @param limit  registros por página
-     */
     public TransaccionesDiaPageDTO listarTransacciones(
             LocalDate fecha, String canal, int page, int limit) {
 
@@ -75,7 +84,7 @@ public class ReporteDiarioService {
                   + reporteDiarioRepository.countRuralDia(fecha)
                   + reporteDiarioRepository.countPlanillasDia(fecha);
         } else {
-            rows  = switch (canal.trim().toUpperCase()) {
+            rows = switch (canal.trim().toUpperCase()) {
                 case "VENTANILLA" -> reporteDiarioRepository.getTransaccionesVentanilla(fecha, offset, limit);
                 case "RURAL"      -> reporteDiarioRepository.getTransaccionesRural(fecha, offset, limit);
                 case "PLANILLA"   -> reporteDiarioRepository.getTransaccionesPlanilla(fecha, offset, limit);
@@ -104,29 +113,47 @@ public class ReporteDiarioService {
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Mapea una fila de Object[] al DTO.
-     * Orden de columnas (definido en ReporteDiarioRepository):
-     *   [0] id       (String)
-     *   [1] tipo     (String)
-     *   [2] cliente  (String, nullable)
-     *   [3] productos(String)
-     *   [4] cantidad (Number → int)
-     *   [5] total    (Number → BigDecimal)
-     *   [6] hora     (Timestamp, nullable)
+     * Columnas esperadas (definidas en ReporteDiarioRepository):
+     *   [0] id                  (String)
+     *   [1] tipo                (String)
+     *   [2] cliente             (String, nullable)
+     *   [3] detalles_productos  (String/JSON)
+     *   [4] total               (Number → BigDecimal)
+     *   [5] hora                (Timestamp, nullable)
+     *   [6] metodo_pago         (String, nullable)
      */
     private TransaccionDiaDTO toTransaccionDTO(Object[] row) {
-        Timestamp ts = (Timestamp) row[6];
+        Timestamp ts = (Timestamp) row[5];
         LocalDateTime hora = ts != null ? ts.toLocalDateTime() : null;
 
         return new TransaccionDiaDTO(
                 (String) row[0],
                 (String) row[1],
                 (String) row[2],
-                (String) row[3],
-                row[4] != null ? ((Number) row[4]).intValue() : 0,
-                toBigDecimal(row[5]),
-                hora
+                parseDetalles(row[3]),
+                toBigDecimal(row[4]),
+                hora,
+                (String) row[6]
         );
+    }
+
+    private List<DetalleProductoDTO> parseDetalles(Object raw) {
+        if (raw == null) return List.of();
+        try {
+            return objectMapper.readValue(
+                    raw.toString(),
+                    new TypeReference<List<DetalleProductoDTO>>() {});
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private BigDecimal calcularVariacion(BigDecimal hoy, BigDecimal ayer) {
+        if (ayer == null || ayer.compareTo(BigDecimal.ZERO) == 0) return null;
+        return hoy.subtract(ayer)
+                .divide(ayer, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(1, RoundingMode.HALF_UP);
     }
 
     private BigDecimal toBigDecimal(Object value) {
