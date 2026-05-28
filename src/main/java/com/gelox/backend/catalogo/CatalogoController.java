@@ -61,7 +61,7 @@ public class CatalogoController {
             @RequestParam                    String        nombre,
             @RequestParam                    String        categoria,
             @RequestParam                    BigDecimal    precioVenta,
-            @RequestParam                    BigDecimal    precioCosto,
+            @RequestParam(required = false)  BigDecimal    precioCosto,
             @RequestParam(required = false)  String        descripcion,
             @RequestParam(required = false)  Integer       stockMinimo,
             @RequestParam(required = false)  MultipartFile imagen,

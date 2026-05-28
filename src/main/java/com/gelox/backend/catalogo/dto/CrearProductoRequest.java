@@ -22,7 +22,6 @@ public class CrearProductoRequest {
     @DecimalMin(value = "0", message = "El precio de venta debe ser >= 0")
     private BigDecimal precioVenta;
 
-    @NotNull(message = "El precio de costo es obligatorio")
     @DecimalMin(value = "0", message = "El precio de costo debe ser >= 0")
     private BigDecimal precioCosto;
 
