@@ -29,8 +29,6 @@ import java.util.stream.Collectors;
 @Transactional
 public class PlanillaService {
 
-    private static final int UNIDADES_POR_CAJA = 24;
-
     private final ComercianteRepository comercianteRepository;
     private final PlanillaComercianteRepository planillaRepository;
     private final ItemPlanillaRepository itemPlanillaRepository;
@@ -83,10 +81,10 @@ public class PlanillaService {
             }
         }
 
-        // 5-6. Calcular totalUnidades y validar stock de todos los ítems antes de modificar
+        // 5-6. Validar stock de todos los ítems antes de modificar
         List<Integer> totales = new ArrayList<>();
         for (ItemDespachoRequest item : req.items()) {
-            int totalUnidades = item.cajas() * UNIDADES_POR_CAJA + item.unidades();
+            int totalUnidades = item.unidades();
             totales.add(totalUnidades);
             Producto p = productoMap.get(item.productoId());
             if (p.getStockActual() < totalUnidades) {
@@ -125,8 +123,6 @@ public class PlanillaService {
             responseItems.add(new ItemDespachoResponseDTO(
                     p.getId(),
                     p.getNombre(),
-                    item.cajas(),
-                    item.unidades(),
                     totalUnidades,
                     item.precioUnitario(),
                     subtotal));
