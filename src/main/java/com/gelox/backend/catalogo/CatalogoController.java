@@ -64,6 +64,7 @@ public class CatalogoController {
             @RequestParam(required = false)  BigDecimal    precioCosto,
             @RequestParam(required = false)  String        descripcion,
             @RequestParam(required = false)  Integer       stockMinimo,
+            @RequestParam(required = false)  String        unidadMedida,
             @RequestParam(required = false)  MultipartFile imagen,
             @AuthenticationPrincipal         Usuario       usuario) {
 
@@ -75,6 +76,7 @@ public class CatalogoController {
         request.setPrecioCosto(precioCosto);
         request.setDescripcion(descripcion);
         request.setStockMinimo(stockMinimo);
+        request.setUnidadMedida(unidadMedida);
 
         if (imagen != null && !imagen.isEmpty()) {
             request.setImagenUrl(storageService.subirImagen(imagen, "productos"));
@@ -104,6 +106,7 @@ public class CatalogoController {
             @RequestParam(required = false)  BigDecimal    precioCosto,
             @RequestParam(required = false)  String        descripcion,
             @RequestParam(required = false)  Integer       stockMinimo,
+            @RequestParam(required = false)  String        unidadMedida,
             @RequestParam(required = false)  MultipartFile imagen,
             @AuthenticationPrincipal         Usuario       usuario) {
 
@@ -114,6 +117,7 @@ public class CatalogoController {
         request.setPrecioCosto(precioCosto);
         request.setDescripcion(descripcion);
         request.setStockMinimo(stockMinimo);
+        request.setUnidadMedida(unidadMedida);
 
         if (imagen != null && !imagen.isEmpty()) {
             request.setImagenUrl(storageService.subirImagen(imagen, "productos"));
