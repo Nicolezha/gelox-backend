@@ -22,7 +22,6 @@ public class CrearProductoRequest {
     @DecimalMin(value = "0", message = "El precio de venta debe ser >= 0")
     private BigDecimal precioVenta;
 
-    @NotNull(message = "El precio de costo es obligatorio")
     @DecimalMin(value = "0", message = "El precio de costo debe ser >= 0")
     private BigDecimal precioCosto;
 
@@ -32,6 +31,8 @@ public class CrearProductoRequest {
     private Integer stockMinimo;
 
     private String imagenUrl;
+
+    private String unidadMedida;
 
     // Getters y Setters
 
@@ -58,4 +59,7 @@ public class CrearProductoRequest {
 
     public String getImagenUrl() { return imagenUrl; }
     public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }
+
+    public String getUnidadMedida() { return unidadMedida; }
+    public void setUnidadMedida(String unidadMedida) { this.unidadMedida = unidadMedida; }
 }

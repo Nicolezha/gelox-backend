@@ -49,6 +49,9 @@ public class Producto {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "unidad_medida", length = 50)
+    private String unidadMedida;
+
     @PrePersist
     public void prePersist() {
         createdAt = LocalDateTime.now();
@@ -99,4 +102,7 @@ public class Producto {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getUnidadMedida() { return unidadMedida; }
+    public void setUnidadMedida(String unidadMedida) { this.unidadMedida = unidadMedida; }
 }

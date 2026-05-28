@@ -30,6 +30,8 @@ public class EditarProductoRequest {
 
     private String imagenUrl;
 
+    private String unidadMedida;
+
     // Getters y Setters
 
     public String getCodigoTecnico() { return codigoTecnico; }
@@ -55,4 +57,7 @@ public class EditarProductoRequest {
 
     public String getImagenUrl() { return imagenUrl; }
     public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }
+
+    public String getUnidadMedida() { return unidadMedida; }
+    public void setUnidadMedida(String unidadMedida) { this.unidadMedida = unidadMedida; }
 }
