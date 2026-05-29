@@ -12,5 +12,6 @@ public record CatalogoProductoDTO(
         String descripcion,
         Integer stockMinimo,
         Integer stockActual,
-        String imagenUrl
+        String imagenUrl,
+        String unidadMedida
 ) {}

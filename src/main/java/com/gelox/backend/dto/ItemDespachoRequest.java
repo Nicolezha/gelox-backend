@@ -9,7 +9,6 @@ import java.util.UUID;
 
 public record ItemDespachoRequest(
         @NotNull UUID productoId,
-        @Positive int cajas,
         @PositiveOrZero int unidades,
         @NotNull @Positive BigDecimal precioUnitario
 ) {}

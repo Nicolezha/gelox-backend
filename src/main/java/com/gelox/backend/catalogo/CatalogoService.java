@@ -29,7 +29,7 @@ public class CatalogoService {
 
     // ─────────────────────────── RF18 ────────────────────────────
 
-    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO", "ENCARGADO_VENTAS"})
     @Transactional(readOnly = true)
     public PagedResponse<CatalogoProductoDTO> listarProductos(
             String categoria, int page, int size, Usuario usuario) {
@@ -86,6 +86,7 @@ public class CatalogoService {
         producto.setStockMinimo(req.getStockMinimo() != null ? req.getStockMinimo() : 0);
         producto.setStockActual(0);
         producto.setImagenUrl(req.getImagenUrl());
+        producto.setUnidadMedida(req.getUnidadMedida() != null ? req.getUnidadMedida() : "Unidades");
         producto.setActivo(true);
 
         Producto guardado = catalogoRepository.save(producto);
@@ -114,13 +115,14 @@ public class CatalogoService {
             producto.setCodigoTecnico(req.getCodigoTecnico());
         }
 
-        if (req.getNombre() != null)       producto.setNombre(req.getNombre());
-        if (req.getCategoria() != null)    producto.setCategoria(parsearCategoria(req.getCategoria()));
-        if (req.getPrecioVenta() != null)  producto.setPrecioVenta(req.getPrecioVenta());
-        if (req.getPrecioCosto() != null)  producto.setPrecioCosto(req.getPrecioCosto());
-        if (req.getDescripcion() != null)  producto.setDescripcion(req.getDescripcion());
-        if (req.getStockMinimo() != null)  producto.setStockMinimo(req.getStockMinimo());
-        if (req.getImagenUrl() != null)    producto.setImagenUrl(req.getImagenUrl());
+        if (req.getNombre() != null)        producto.setNombre(req.getNombre());
+        if (req.getCategoria() != null)     producto.setCategoria(parsearCategoria(req.getCategoria()));
+        if (req.getPrecioVenta() != null)   producto.setPrecioVenta(req.getPrecioVenta());
+        if (req.getPrecioCosto() != null)   producto.setPrecioCosto(req.getPrecioCosto());
+        if (req.getDescripcion() != null)   producto.setDescripcion(req.getDescripcion());
+        if (req.getStockMinimo() != null)   producto.setStockMinimo(req.getStockMinimo());
+        if (req.getImagenUrl() != null)     producto.setImagenUrl(req.getImagenUrl());
+        if (req.getUnidadMedida() != null)  producto.setUnidadMedida(req.getUnidadMedida());
 
         Producto actualizado = catalogoRepository.save(producto);
 
@@ -164,7 +166,8 @@ public class CatalogoService {
                 p.getDescripcion(),
                 p.getStockMinimo(),
                 p.getStockActual(),
-                p.getImagenUrl()
+                p.getImagenUrl(),
+                p.getUnidadMedida()
         );
     }
 }
