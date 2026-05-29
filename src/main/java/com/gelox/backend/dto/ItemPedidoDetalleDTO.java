@@ -12,7 +12,8 @@ public record ItemPedidoDetalleDTO(
         UUID   productoId,
         String codigoTecnico,
         String nombre,
-        int    cantidadSolicitada,
+        int    cantidadCajas,
+        int    cantidadUnidades,
         int    cantidadRecibida
 ) {
     public static ItemPedidoDetalleDTO from(ItemPedidoProveedor item) {
@@ -20,8 +21,9 @@ public record ItemPedidoDetalleDTO(
                 item.getProducto().getId(),
                 item.getProducto().getCodigoTecnico(),
                 item.getProducto().getNombre(),
-                item.getCantidadSolicitada() != null ? item.getCantidadSolicitada() : 0,
-                item.getCantidadRecibida()   != null ? item.getCantidadRecibida()   : 0
+                item.getCantidadCajas()    != null ? item.getCantidadCajas()    : 0,
+                item.getCantidadUnidades() != null ? item.getCantidadUnidades() : 0,
+                item.getCantidadRecibida() != null ? item.getCantidadRecibida() : 0
         );
     }
 }

@@ -31,9 +31,15 @@ public class ItemPedidoProveedor {
     @JoinColumn(name = "producto_id", nullable = false)
     private Producto producto;
 
-    /** Unidades solicitadas al proveedor (RF21). */
-    @Column(name = "cantidad_solicitada", nullable = false)
-    private Integer cantidadSolicitada;
+    /** Cajas solicitadas al proveedor (RF21). */
+    @Builder.Default
+    @Column(name = "cantidad_cajas", nullable = false)
+    private Integer cantidadCajas = 0;
+
+    /** Unidades sueltas solicitadas al proveedor (RF21). */
+    @Builder.Default
+    @Column(name = "cantidad_unidades", nullable = false)
+    private Integer cantidadUnidades = 0;
 
     /** Unidades efectivamente recibidas (se llena en RF23). */
     @Builder.Default

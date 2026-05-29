@@ -48,22 +48,22 @@ public class PlanillaService {
                     "El comerciante no está activo.");
         }
 
-        // 2. Verificar que no exista planilla cerrada para ese comerciante en esa fecha
-        Optional<PlanillaComerciante> existente =
-                planillaRepository.findByComercianteIdAndFecha(req.comercianteId(), req.fecha());
-        if (existente.isPresent() && Boolean.TRUE.equals(existente.get().getCerrada())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "La planilla de esa fecha ya está cerrada.");
-        }
+        // 2. Verificar que no exista planilla ya para ese comerciante en esa fecha
+        planillaRepository.findByComercianteIdAndFecha(req.comercianteId(), req.fecha())
+                .ifPresent(existente -> {
+                    String msg = Boolean.TRUE.equals(existente.getCerrada())
+                            ? "La planilla de esa fecha ya está cerrada."
+                            : "Ya existe una planilla abierta para este comerciante en esta fecha.";
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, msg);
+                });
 
-        // 3. Obtener o crear la planilla del día
-        PlanillaComerciante planilla = existente.orElseGet(() ->
-                planillaRepository.save(PlanillaComerciante.builder()
+        // 3. Crear la planilla del día
+        PlanillaComerciante planilla = planillaRepository.save(PlanillaComerciante.builder()
                         .comerciante(comerciante)
                         .usuario(usuario)
                         .fecha(req.fecha())
                         .cerrada(false)
-                        .build()));
+                        .build());
 
         // 4. Leer todos los productos con bloqueo pesimista en una sola query
         List<UUID> productoIds = req.items().stream()

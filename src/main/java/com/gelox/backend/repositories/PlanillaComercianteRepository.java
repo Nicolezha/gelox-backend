@@ -11,6 +11,9 @@ public interface PlanillaComercianteRepository extends JpaRepository<PlanillaCom
 
     Optional<PlanillaComerciante> findByComercianteIdAndFecha(UUID comercianteId, LocalDate fecha);
 
+    /** Verifica si ya existe una planilla abierta para ese comerciante en esa fecha (anti-duplicado). */
+    boolean existsByComercianteIdAndFechaAndCerradaFalse(UUID comercianteId, LocalDate fecha);
+
     /** Busca una planilla cerrada que pertenezca al comerciante indicado (RF36-39). */
     Optional<PlanillaComerciante> findByIdAndComerciante_IdAndCerrada(UUID id, UUID comercianteId, boolean cerrada);
 }

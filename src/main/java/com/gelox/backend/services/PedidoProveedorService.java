@@ -6,17 +6,19 @@ import com.gelox.backend.entities.*;
 import com.gelox.backend.repositories.*;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.NoSuchElementException;
 
 @Service
@@ -31,8 +33,8 @@ public class PedidoProveedorService {
     private final PerdidaRepository             perdidaRepo;
     private final EventoSistemaService          eventoService;
 
-    // ── Formato fecha para el Excel ────────────────────────────────────────
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    @Value("classpath:templates/catalogo.xlsx")
+    private Resource plantillaExcel;
 
     // ══════════════════════════════════════════════════════════════════════
     // RF21 — Crear pedido + generar Excel Nutresa
@@ -64,9 +66,10 @@ public class PedidoProveedorService {
             ItemPedidoProveedor item = ItemPedidoProveedor.builder()
                     .pedido(pedido)
                     .producto(producto)
-                    .cantidadSolicitada(ir.cantidadSolicitada())
+                    .cantidadCajas(ir.cantidadCajas())
+                    .cantidadUnidades(ir.cantidadUnidades())
                     .cantidadRecibida(0)
-                    .precioUnitario(producto.getPrecioCosto()) // precio base del catálogo
+                    .precioUnitario(producto.getPrecioCosto())
                     .build();
             items.add(item);
         }
@@ -83,8 +86,8 @@ public class PedidoProveedorService {
                         items.size()),
                 usuarioActual.getId());
 
-        // 5. Generar Excel
-        byte[] excel = generarExcelNutresa(guardado);
+        // 5. Generar Excel llenando la plantilla catálogo
+        byte[] excel = generarExcelDesdeTemplate(guardado);
 
         return Map.of("pedidoId", guardado.getId(), "excel", excel);
     }
@@ -159,11 +162,13 @@ public class PedidoProveedorService {
                     itemPedido.setPrecioUnitario(precio);
                     itemPedidoRepo.save(itemPedido);
 
+                    int totalSolicitado = (itemPedido.getCantidadCajas()    != null ? itemPedido.getCantidadCajas()    : 0)
+                                       + (itemPedido.getCantidadUnidades() != null ? itemPedido.getCantidadUnidades() : 0);
                     comparacion.add(ComparacionItemDTO.of(
                             producto.getId(),
                             producto.getCodigoTecnico(),
                             producto.getNombre(),
-                            itemPedido.getCantidadSolicitada(),
+                            totalSolicitado,
                             ir.cantidadRecibida()));
                 } else {
                     // Producto recibido que no estaba en el pedido → sobrante total
@@ -187,9 +192,11 @@ public class PedidoProveedorService {
                 itemsPedidoMap.forEach((prodId, itemPedido) -> {
                     if (!recibidosIds.contains(prodId)) {
                         Producto p = itemPedido.getProducto();
-                        comparacionFinal.add(ComparacionItemDTO.of(       // ← usa la final
+                        int totalSolicitado = (itemPedido.getCantidadCajas()    != null ? itemPedido.getCantidadCajas()    : 0)
+                                           + (itemPedido.getCantidadUnidades() != null ? itemPedido.getCantidadUnidades() : 0);
+                        comparacionFinal.add(ComparacionItemDTO.of(
                         p.getId(), p.getCodigoTecnico(), p.getNombre(),
-                        itemPedido.getCantidadSolicitada(), 0));
+                        totalSolicitado, 0));
                     }
                 });
 
@@ -291,150 +298,92 @@ public class PedidoProveedorService {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // Generación de Excel con formato Nutresa (RF21)
+    // Generación de Excel desde plantilla catálogo (RF21)
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * Genera un archivo {@code .xlsx} con el formato de orden de compra
-     * requerido por el portal de proveedores de Nutresa.
-     *
-     * Estructura:
-     * <pre>
-     * Fila 1 (merge A1:F1)  — Título "ORDEN DE COMPRA – GELOX"
-     * Fila 2                 — Fecha, N° Pedido
-     * Fila 3                 — Notas (si existen)
-     * Fila 4                 — vacía (separador)
-     * Fila 5 (encabezados)   — #, Código, Referencia, Descripción, Categoría, Cant. Solicitada
-     * Filas 6+               — datos por producto
-     * Última fila            — TOTAL UNIDADES
-     * </pre>
+     * Carga la plantilla {@code catalogo.xlsx}, localiza las columnas
+     * "Producto/SKU" y "Cantidad", y escribe las cantidades del pedido
+     * en cada fila cuyo SKU coincida con un codigoTecnico del carrito.
+     * El resto de filas queda en blanco en la columna Cantidad.
      */
-    private byte[] generarExcelNutresa(PedidoProveedor pedido) {
-        try (XSSFWorkbook wb = new XSSFWorkbook();
+    private byte[] generarExcelDesdeTemplate(PedidoProveedor pedido) {
+
+        // Clave compuesta "SKU|CJ" y "SKU|UN" para llenar la fila correcta en la plantilla
+        Map<String, Integer> cantidades = new HashMap<>();
+        for (ItemPedidoProveedor item : pedido.getItems()) {
+            String sku = item.getProducto().getCodigoTecnico().trim();
+            if (item.getCantidadCajas() != null && item.getCantidadCajas() > 0) {
+                cantidades.put(sku + "|CJ", item.getCantidadCajas());
+            }
+            if (item.getCantidadUnidades() != null && item.getCantidadUnidades() > 0) {
+                cantidades.put(sku + "|UN", item.getCantidadUnidades());
+            }
+        }
+
+        try (InputStream tplStream = plantillaExcel.getInputStream();
+             Workbook wb = new XSSFWorkbook(tplStream);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
-            Sheet sheet = wb.createSheet("Pedido Nutresa");
-            sheet.setColumnWidth(0, 4  * 256);  // #
-            sheet.setColumnWidth(1, 16 * 256);  // Código
-            sheet.setColumnWidth(2, 22 * 256);  // Referencia
-            sheet.setColumnWidth(3, 32 * 256);  // Descripción
-            sheet.setColumnWidth(4, 14 * 256);  // Categoría
-            sheet.setColumnWidth(5, 18 * 256);  // Cantidad
+            Sheet sheet = wb.getSheetAt(0);
 
-            // ── Estilos ────────────────────────────────────────────────
-            CellStyle estiloTitulo = wb.createCellStyle();
-            Font fuenteTitulo = wb.createFont();
-            fuenteTitulo.setBold(true);
-            fuenteTitulo.setFontHeightInPoints((short) 14);
-            fuenteTitulo.setColor(IndexedColors.WHITE.getIndex());
-            estiloTitulo.setFont(fuenteTitulo);
-            estiloTitulo.setFillForegroundColor(IndexedColors.DARK_RED.getIndex());
-            estiloTitulo.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            estiloTitulo.setAlignment(HorizontalAlignment.CENTER);
-            estiloTitulo.setVerticalAlignment(VerticalAlignment.CENTER);
-
-            CellStyle estiloEncabezado = wb.createCellStyle();
-            Font fuenteEncabezado = wb.createFont();
-            fuenteEncabezado.setBold(true);
-            fuenteEncabezado.setColor(IndexedColors.WHITE.getIndex());
-            estiloEncabezado.setFont(fuenteEncabezado);
-            estiloEncabezado.setFillForegroundColor(IndexedColors.GREY_50_PERCENT.getIndex());
-            estiloEncabezado.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            estiloEncabezado.setAlignment(HorizontalAlignment.CENTER);
-            estiloEncabezado.setBorderBottom(BorderStyle.THIN);
-
-            CellStyle estiloDato = wb.createCellStyle();
-            estiloDato.setBorderBottom(BorderStyle.HAIR);
-            estiloDato.setBorderLeft(BorderStyle.HAIR);
-            estiloDato.setBorderRight(BorderStyle.HAIR);
-
-            CellStyle estiloNumero = wb.createCellStyle();
-            estiloNumero.cloneStyleFrom(estiloDato);
-            estiloNumero.setAlignment(HorizontalAlignment.CENTER);
-
-            CellStyle estiloTotal = wb.createCellStyle();
-            Font fuenteTotal = wb.createFont();
-            fuenteTotal.setBold(true);
-            estiloTotal.setFont(fuenteTotal);
-            estiloTotal.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
-            estiloTotal.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            estiloTotal.setAlignment(HorizontalAlignment.RIGHT);
-
-            CellStyle estiloMeta = wb.createCellStyle();
-            Font fuenteMeta = wb.createFont();
-            fuenteMeta.setBold(true);
-            estiloMeta.setFont(fuenteMeta);
-
-            // ── Fila 0: Título ─────────────────────────────────────────
-            Row fila0 = sheet.createRow(0);
-            fila0.setHeightInPoints(30);
-            Cell celdaTitulo = fila0.createCell(0);
-            celdaTitulo.setCellValue("ORDEN DE COMPRA – GELOX  ×  NUTRESA");
-            celdaTitulo.setCellStyle(estiloTitulo);
-            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 5));
-
-            // ── Fila 1: Metadatos ──────────────────────────────────────
-            Row fila1 = sheet.createRow(1);
-            crearCeldaMeta(fila1, 0, "Fecha:", estiloMeta);
-            crearCelda(fila1, 1, LocalDate.now().format(FMT), estiloDato);
-            crearCeldaMeta(fila1, 2, "N° Pedido:", estiloMeta);
-            crearCelda(fila1, 3, pedido.getId().toString().toUpperCase(), estiloDato);
-            crearCeldaMeta(fila1, 4, "Estado:", estiloMeta);
-            crearCelda(fila1, 5, pedido.getEstado().name(), estiloDato);
-
-            // ── Fila 2: Notas ──────────────────────────────────────────
-            Row fila2 = sheet.createRow(2);
-            if (pedido.getNotas() != null && !pedido.getNotas().isBlank()) {
-                crearCeldaMeta(fila2, 0, "Notas:", estiloMeta);
-                Cell celdaNota = fila2.createCell(1);
-                celdaNota.setCellValue(pedido.getNotas());
-                sheet.addMergedRegion(new CellRangeAddress(2, 2, 1, 5));
+            // Buscar fila de encabezados y los índices de columna
+            int colSku = -1, colUm = -1, colCantidad = -1, headerRow = -1;
+            outer:
+            for (Row row : sheet) {
+                for (Cell cell : row) {
+                    String val = cellText(cell).trim();
+                    if (val.equalsIgnoreCase("Producto/SKU"))      { colSku      = cell.getColumnIndex(); headerRow = row.getRowNum(); }
+                    if (val.equalsIgnoreCase("Unidad de Medida"))  { colUm       = cell.getColumnIndex(); }
+                    if (val.equalsIgnoreCase("Cantidad"))          { colCantidad = cell.getColumnIndex(); }
+                    if (colSku >= 0 && colUm >= 0 && colCantidad >= 0) break outer;
+                }
             }
 
-            // ── Fila 3: Separador vacío ────────────────────────────────
-            sheet.createRow(3);
-
-            // ── Fila 4: Encabezados de tabla ───────────────────────────
-            Row filaEncabezado = sheet.createRow(4);
-            String[] encabezados = {"#", "Código", "Referencia", "Descripción", "Categoría", "Cant. Solicitada"};
-            for (int i = 0; i < encabezados.length; i++) {
-                Cell c = filaEncabezado.createCell(i);
-                c.setCellValue(encabezados[i]);
-                c.setCellStyle(estiloEncabezado);
+            if (colSku < 0 || colCantidad < 0) {
+                throw new RuntimeException(
+                        "La plantilla catálogo.xlsx no contiene los encabezados 'Producto/SKU' y 'Cantidad'");
             }
 
-            // ── Filas de productos ─────────────────────────────────────
-            int fila = 5;
-            int totalUnidades = 0;
-            for (ItemPedidoProveedor item : pedido.getItems()) {
-                Producto p = item.getProducto();
-                Row row = sheet.createRow(fila++);
+            // Llenar/limpiar columna Cantidad fila a fila
+            for (int i = headerRow + 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
 
-                crearCeldaNum(row, 0, fila - 5, estiloNumero);
-                crearCelda(row, 1, p.getCodigoTecnico(), estiloDato);
-                crearCelda(row, 2, p.getNombre(), estiloDato);
-                crearCelda(row, 3, p.getDescripcion() != null ? p.getDescripcion() : "", estiloDato);
-                crearCelda(row, 4, p.getCategoria() != null ? p.getCategoria().name() : "", estiloDato);
-                crearCeldaNum(row, 5, item.getCantidadSolicitada(), estiloNumero);
+                String sku = cellText(row.getCell(colSku)).trim();
+                if (sku.isBlank()) continue;
 
-                totalUnidades += item.getCantidadSolicitada();
+                // Construir clave con unidad de medida si la columna existe en el Excel
+                String um  = (colUm >= 0) ? cellText(row.getCell(colUm)).trim().toUpperCase() : "";
+                String key = sku + "|" + um;
+
+                Cell cantCell = row.getCell(colCantidad);
+                if (cantCell == null) cantCell = row.createCell(colCantidad, CellType.NUMERIC);
+
+                Integer qty = cantidades.get(key);
+                if (qty != null && qty > 0) {
+                    cantCell.setCellValue(qty);
+                } else {
+                    cantCell.setBlank();
+                }
             }
-
-            // ── Fila total ─────────────────────────────────────────────
-            Row filaTotal = sheet.createRow(fila);
-            Cell celdaLabel = filaTotal.createCell(4);
-            celdaLabel.setCellValue("TOTAL UNIDADES:");
-            celdaLabel.setCellStyle(estiloTotal);
-            Cell celdaTotal = filaTotal.createCell(5);
-            celdaTotal.setCellValue(totalUnidades);
-            celdaTotal.setCellStyle(estiloTotal);
 
             wb.write(out);
             return out.toByteArray();
 
         } catch (IOException e) {
-            throw new RuntimeException("Error generando archivo Excel: " + e.getMessage(), e);
+            throw new RuntimeException("Error al generar Excel desde plantilla: " + e.getMessage(), e);
         }
+    }
+
+    private String cellText(Cell cell) {
+        if (cell == null) return "";
+        return switch (cell.getCellType()) {
+            case STRING  -> cell.getStringCellValue();
+            case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
+            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+            default      -> "";
+        };
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -515,23 +464,4 @@ public class PedidoProveedorService {
         return PedidoDetalleDTO.from(pedido);
     }
 
-    // ── Helpers Excel ──────────────────────────────────────────────────────
-
-    private void crearCelda(Row row, int col, String valor, CellStyle style) {
-        Cell c = row.createCell(col);
-        c.setCellValue(valor);
-        c.setCellStyle(style);
-    }
-
-    private void crearCeldaNum(Row row, int col, int valor, CellStyle style) {
-        Cell c = row.createCell(col);
-        c.setCellValue(valor);
-        c.setCellStyle(style);
-    }
-
-    private void crearCeldaMeta(Row row, int col, String label, CellStyle style) {
-        Cell c = row.createCell(col);
-        c.setCellValue(label);
-        c.setCellStyle(style);
-    }
 }

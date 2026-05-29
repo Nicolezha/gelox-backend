@@ -21,8 +21,8 @@ public interface ComercianteRepository extends JpaRepository<Comerciante, UUID> 
     List<Comerciante> findByNombreContainingIgnoreCaseOrderByNombreAsc(String nombre);
 
     /**
-     * Resumen de planillas cerradas de un comerciante en un rango de fechas (RF35).
-     * Retorna: [planillaId, fecha, totalDespachado, totalDevuelto, unidadesVendidas, ganancia]
+     * Resumen de todas las planillas (abiertas y cerradas) de un comerciante en un rango de fechas (RF35).
+     * Retorna: [planillaId, fecha, totalDespachado, totalDevuelto, unidadesVendidas, ganancia, cerrada]
      */
     @Query(value = """
             SELECT
@@ -32,13 +32,13 @@ public interface ComercianteRepository extends JpaRepository<Comerciante, UUID> 
                 COALESCE(SUM(ip.unidades_devueltas),   0)::int  AS total_devuelto,
                 COALESCE(SUM(ip.unidades_despachadas - ip.unidades_devueltas), 0)::int
                                                                 AS unidades_vendidas,
-                pc.total_ganancia                               AS ganancia
+                pc.total_ganancia                               AS ganancia,
+                pc.cerrada                                      AS cerrada
             FROM planilla_comerciante pc
             LEFT JOIN item_planilla ip ON ip.planilla_id = pc.id
             WHERE pc.comerciante_id = :comercianteId
-              AND pc.cerrada        = true
               AND pc.fecha BETWEEN :fechaInicio AND :fechaFin
-            GROUP BY pc.id, pc.fecha, pc.total_ganancia
+            GROUP BY pc.id, pc.fecha, pc.total_ganancia, pc.cerrada
             ORDER BY pc.fecha DESC
             """, nativeQuery = true)
     List<Object[]> findPlanillasResumen(
