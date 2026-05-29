@@ -37,7 +37,7 @@ public class InventarioService {
      * @param q          búsqueda parcial en nombre o código técnico (null/blank = sin filtro)
      * @param estado     "NORMAL" | "BAJO_STOCK" | null/blank = sin filtro
      */
-    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO", "ENCARGADO_VENTAS"})
     public List<InventarioProductoDTO> listarInventario(String rolUsuario, String q, String estado) {
         // Normalizar: vacío cuando no se aplica el filtro
         String filtroQ      = (q      == null || q.isBlank())      ? "" : q.trim();

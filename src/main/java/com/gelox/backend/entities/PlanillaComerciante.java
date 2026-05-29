@@ -37,7 +37,8 @@ public class PlanillaComerciante {
     private Boolean cerrada = false;
 
     @Column(name = "total_ganancia", precision = 15, scale = 2)
-    private BigDecimal totalGanancia;
+    @Builder.Default
+    private BigDecimal totalGanancia = BigDecimal.ZERO;
 
     @Column(name = "efectivo_recibido", precision = 15, scale = 2)
     private BigDecimal efectivoRecibido;
