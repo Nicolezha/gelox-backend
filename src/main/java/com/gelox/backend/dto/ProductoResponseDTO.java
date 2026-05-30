@@ -12,6 +12,7 @@ public record ProductoResponseDTO(
         BigDecimal precioCosto,
         Integer stockActual,
         Integer stockMinimo,
+        Integer stockMedio,
         String imagenUrl,
         String descripcion,
         String categoria,

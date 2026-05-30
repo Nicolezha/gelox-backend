@@ -11,6 +11,7 @@ public record CatalogoProductoDTO(
         BigDecimal precioCosto,   // null si el usuario no es ADMINISTRADOR
         String descripcion,
         Integer stockMinimo,
+        Integer stockMedio,
         Integer stockActual,
         String imagenUrl,
         String unidadMedida

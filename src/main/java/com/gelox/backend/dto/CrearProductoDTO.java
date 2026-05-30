@@ -31,6 +31,9 @@ public class CrearProductoDTO {
     @Min(value = 0, message = "El stock mínimo no puede ser negativo")
     private Integer stockMinimo = 0;
 
+    @Min(value = 0, message = "El stock medio no puede ser negativo")
+    private Integer stockMedio = 0;
+
     private String imagenUrl;
 
     private String descripcion;

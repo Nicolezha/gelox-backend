@@ -139,7 +139,8 @@ public class InventarioService {
                 p.getNombre(),
                 p.getCategoria() != null ? p.getCategoria().name() : null,
                 p.getStockActual(),
-                p.getStockMinimo()
+                p.getStockMinimo(),
+                p.getStockMedio()
         );
     }
 }

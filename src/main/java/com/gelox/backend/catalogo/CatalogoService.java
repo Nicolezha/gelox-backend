@@ -84,6 +84,7 @@ public class CatalogoService {
         producto.setPrecioCosto(req.getPrecioCosto());
         producto.setDescripcion(req.getDescripcion());
         producto.setStockMinimo(req.getStockMinimo() != null ? req.getStockMinimo() : 0);
+        producto.setStockMedio(req.getStockMedio() != null ? req.getStockMedio() : 0);
         producto.setStockActual(0);
         producto.setImagenUrl(req.getImagenUrl());
         producto.setUnidadMedida(req.getUnidadMedida() != null ? req.getUnidadMedida() : "Unidades");
@@ -121,6 +122,7 @@ public class CatalogoService {
         if (req.getPrecioCosto() != null)   producto.setPrecioCosto(req.getPrecioCosto());
         if (req.getDescripcion() != null)   producto.setDescripcion(req.getDescripcion());
         if (req.getStockMinimo() != null)   producto.setStockMinimo(req.getStockMinimo());
+        if (req.getStockMedio()  != null)   producto.setStockMedio(req.getStockMedio());
         if (req.getImagenUrl() != null)     producto.setImagenUrl(req.getImagenUrl());
         if (req.getUnidadMedida() != null)  producto.setUnidadMedida(req.getUnidadMedida());
 
@@ -165,6 +167,7 @@ public class CatalogoService {
                 esAdmin ? p.getPrecioCosto() : null,   // solo ADMINISTRADOR ve precioCosto
                 p.getDescripcion(),
                 p.getStockMinimo(),
+                p.getStockMedio(),
                 p.getStockActual(),
                 p.getImagenUrl(),
                 p.getUnidadMedida()

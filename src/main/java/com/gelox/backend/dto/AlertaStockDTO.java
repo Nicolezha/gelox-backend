@@ -11,17 +11,19 @@ public class AlertaStockDTO {
     private String categoria;
     private Integer stockActual;
     private Integer stockMinimo;
+    private Integer stockMedio;
 
     public AlertaStockDTO() {}
 
     public AlertaStockDTO(String id, String codigoTecnico, String nombre,
-                          String categoria, Integer stockActual, Integer stockMinimo) {
+                          String categoria, Integer stockActual, Integer stockMinimo, Integer stockMedio) {
         this.id = id;
         this.codigoTecnico = codigoTecnico;
         this.nombre = nombre;
         this.categoria = categoria;
         this.stockActual = stockActual;
         this.stockMinimo = stockMinimo;
+        this.stockMedio = stockMedio;
     }
 
     public String getId() { return id; }
@@ -41,4 +43,7 @@ public class AlertaStockDTO {
 
     public Integer getStockMinimo() { return stockMinimo; }
     public void setStockMinimo(Integer stockMinimo) { this.stockMinimo = stockMinimo; }
+
+    public Integer getStockMedio() { return stockMedio; }
+    public void setStockMedio(Integer stockMedio) { this.stockMedio = stockMedio; }
 }

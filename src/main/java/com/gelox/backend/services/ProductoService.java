@@ -42,6 +42,7 @@ public class ProductoService {
         producto.setCategoria(CategoriaProducto.valueOf(dto.getCategoria()));
         producto.setStockActual(dto.getStockActual() != null ? dto.getStockActual() : 0);
         producto.setStockMinimo(dto.getStockMinimo() != null ? dto.getStockMinimo() : 0);
+        producto.setStockMedio(dto.getStockMedio() != null ? dto.getStockMedio() : 0);
         producto.setImagenUrl(dto.getImagenUrl());
         producto.setDescripcion(dto.getDescripcion());
         producto.setActivo(true);
@@ -72,6 +73,7 @@ public class ProductoService {
         producto.setPrecioCosto(dto.getPrecioCosto());
         producto.setCategoria(CategoriaProducto.valueOf(dto.getCategoria()));
         if (dto.getStockMinimo() != null) producto.setStockMinimo(dto.getStockMinimo());
+        if (dto.getStockMedio()  != null) producto.setStockMedio(dto.getStockMedio());
         if (dto.getImagenUrl() != null) producto.setImagenUrl(dto.getImagenUrl());
         if (dto.getDescripcion() != null) producto.setDescripcion(dto.getDescripcion());
         if (dto.getActivo() != null) producto.setActivo(dto.getActivo());
@@ -167,6 +169,7 @@ public class ProductoService {
                 p.getPrecioCosto(),
                 p.getStockActual(),
                 p.getStockMinimo(),
+                p.getStockMedio(),
                 p.getImagenUrl(),
                 p.getDescripcion(),
                 p.getCategoria() != null ? p.getCategoria().name() : null,

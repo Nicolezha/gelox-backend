@@ -25,6 +25,9 @@ public class EditarProductoDTO {
     @Min(value = 0, message = "El stock mínimo no puede ser negativo")
     private Integer stockMinimo;
 
+    @Min(value = 0, message = "El stock medio no puede ser negativo")
+    private Integer stockMedio;
+
     private String imagenUrl;
 
     private String descripcion;

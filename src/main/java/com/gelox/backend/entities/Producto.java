@@ -31,6 +31,9 @@ public class Producto {
     @Column(name = "stock_minimo", nullable = false)
     private Integer stockMinimo = 0;
 
+    @Column(name = "stock_medio", nullable = false)
+    private Integer stockMedio = 0;
+
     @Column(name = "imagen_url")
     private String imagenUrl;
 
@@ -84,6 +87,9 @@ public class Producto {
 
     public Integer getStockMinimo() { return stockMinimo; }
     public void setStockMinimo(Integer stockMinimo) { this.stockMinimo = stockMinimo; }
+
+    public Integer getStockMedio() { return stockMedio; }
+    public void setStockMedio(Integer stockMedio) { this.stockMedio = stockMedio; }
 
     public String getImagenUrl() { return imagenUrl; }
     public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }

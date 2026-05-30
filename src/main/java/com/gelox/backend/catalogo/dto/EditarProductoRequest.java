@@ -28,6 +28,9 @@ public class EditarProductoRequest {
     @Min(value = 0, message = "El stock mínimo debe ser >= 0")
     private Integer stockMinimo;
 
+    @Min(value = 0, message = "El stock medio debe ser >= 0")
+    private Integer stockMedio;
+
     private String imagenUrl;
 
     private String unidadMedida;
@@ -54,6 +57,9 @@ public class EditarProductoRequest {
 
     public Integer getStockMinimo() { return stockMinimo; }
     public void setStockMinimo(Integer stockMinimo) { this.stockMinimo = stockMinimo; }
+
+    public Integer getStockMedio() { return stockMedio; }
+    public void setStockMedio(Integer stockMedio) { this.stockMedio = stockMedio; }
 
     public String getImagenUrl() { return imagenUrl; }
     public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }
