@@ -35,7 +35,7 @@ public class CatalogoService {
             String categoria, int page, int size, Usuario usuario) {
 
         // Limitar tamaño máximo
-        int safeSize = Math.min(size, 100);
+        int safeSize = Math.min(size, 300);
         Pageable pageable = PageRequest.of(page, safeSize);
 
         Page<Producto> resultPage;
@@ -134,6 +134,19 @@ public class CatalogoService {
         return toDTO(actualizado, esAdmin);
     }
 
+    // ─────────────────────────── RF20 — ACTIVAR ──────────────────
+
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
+    public CatalogoProductoDTO activarProducto(UUID id, Usuario usuario) {
+        Producto producto = catalogoRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Producto no encontrado"));
+        producto.setActivo(true);
+        Producto actualizado = catalogoRepository.save(producto);
+        boolean esAdmin = usuario.getRol() == RolUsuario.ADMINISTRADOR;
+        return toDTO(actualizado, esAdmin);
+    }
+
     // ─────────────────────────── RF20 — DELETE ───────────────────
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
@@ -155,7 +168,7 @@ public class CatalogoService {
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Categoría inválida. Use: PALETAS, CONOS o FAMILIARES");
+                    "Categoría inválida. Use: PALETAS, CONOS, FAMILIARES o VASOS");
         }
     }
 
