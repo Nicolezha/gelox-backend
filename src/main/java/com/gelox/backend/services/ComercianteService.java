@@ -61,6 +61,9 @@ public class ComercianteService {
                 .contactoEmergenciaParentesco(req.contactoEmergenciaParentesco())
                 .tallaUniforme(req.tallaUniforme())
                 .placa(req.placa())
+                .documento(req.documento())
+                .tipoDocumento(req.tipoDocumento())
+                .eps(req.eps())
                 .fotoUrl(req.fotoUrl())
                 .activo(true)
                 .build();
@@ -92,6 +95,9 @@ public class ComercianteService {
         comerciante.setContactoEmergenciaParentesco(req.contactoEmergenciaParentesco());
         comerciante.setTallaUniforme(req.tallaUniforme());
         comerciante.setPlaca(req.placa());
+        comerciante.setDocumento(req.documento());
+        comerciante.setTipoDocumento(req.tipoDocumento());
+        comerciante.setEps(req.eps());
         // Solo actualiza la foto si viene una nueva URL; preserva la existente si es null
         if (req.fotoUrl() != null) comerciante.setFotoUrl(req.fotoUrl());
 

@@ -1,0 +1,4 @@
+ALTER TABLE comerciante
+  ADD COLUMN IF NOT EXISTS documento      VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS eps            VARCHAR(255);

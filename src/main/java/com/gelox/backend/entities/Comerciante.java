@@ -51,6 +51,18 @@ public class Comerciante {
     @Column(name = "placa", length = 20)
     private String placa;
 
+    /** Número de documento de identidad. */
+    @Column(name = "documento", length = 50)
+    private String documento;
+
+    /** Tipo de documento: CC o PPT. */
+    @Column(name = "tipo_documento", length = 10)
+    private String tipoDocumento;
+
+    /** EPS a la que pertenece el comerciante. */
+    @Column(name = "eps", length = 255)
+    private String eps;
+
     /** URL pública de la fotografía de perfil. */
     @Column(name = "foto_url", columnDefinition = "TEXT")
     private String fotoUrl;

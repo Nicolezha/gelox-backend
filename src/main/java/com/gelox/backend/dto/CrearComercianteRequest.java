@@ -36,6 +36,18 @@ public record CrearComercianteRequest(
         @Size(max = 20)
         String placa,
 
+        /** Número de documento de identidad. */
+        @Size(max = 50)
+        String documento,
+
+        /** Tipo de documento: CC o PPT. */
+        @Size(max = 10)
+        String tipoDocumento,
+
+        /** EPS a la que pertenece el comerciante. */
+        @Size(max = 255)
+        String eps,
+
         /** URL pública de la fotografía de perfil. */
         String fotoUrl
 ) {}
