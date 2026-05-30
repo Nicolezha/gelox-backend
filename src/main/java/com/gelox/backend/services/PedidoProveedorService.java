@@ -424,10 +424,12 @@ public class PedidoProveedorService {
             };
         }
 
-        // 2. Consulta con filtros de estado y fecha (null = sin filtro)
+        // 2. Consulta con filtros de estado y fecha.
+        // Usamos fechas sentinela en lugar de null para evitar el error de inferencia
+        // de tipo de PostgreSQL con parámetros nulos en queries nativas.
         String estadoParam    = (estado != null && !estado.isBlank()) ? estado.toUpperCase() : null;
-        String fechaInicioStr = (fechaInicio != null) ? fechaInicio.toString() : null;
-        String fechaFinStr    = (fechaFin    != null) ? fechaFin.toString()    : null;
+        String fechaInicioStr = (fechaInicio != null) ? fechaInicio.toString() : "0001-01-01";
+        String fechaFinStr    = (fechaFin    != null) ? fechaFin.toString()    : "9999-12-31";
         List<PedidoResumenDTO> todos = pedidoRepo
                 .findResumenWithFilters(estadoParam, fechaInicioStr, fechaFinStr)
                 .stream()
