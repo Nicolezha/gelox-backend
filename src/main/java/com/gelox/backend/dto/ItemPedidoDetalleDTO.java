@@ -9,18 +9,20 @@ import java.util.UUID;
  */
 public record ItemPedidoDetalleDTO(
 
-        UUID   productoId,
-        String codigoTecnico,
-        String nombre,
-        int    cantidadCajas,
-        int    cantidadUnidades,
-        int    cantidadRecibida
+        UUID    productoId,
+        String  codigoTecnico,
+        String  nombre,
+        Integer unidadesPorCaja,
+        int     cantidadCajas,
+        int     cantidadUnidades,
+        int     cantidadRecibida
 ) {
     public static ItemPedidoDetalleDTO from(ItemPedidoProveedor item) {
         return new ItemPedidoDetalleDTO(
                 item.getProducto().getId(),
                 item.getProducto().getCodigoTecnico(),
                 item.getProducto().getNombre(),
+                item.getProducto().getUnidadesPorCaja(),
                 item.getCantidadCajas()    != null ? item.getCantidadCajas()    : 0,
                 item.getCantidadUnidades() != null ? item.getCantidadUnidades() : 0,
                 item.getCantidadRecibida() != null ? item.getCantidadRecibida() : 0
