@@ -69,6 +69,9 @@ public class ComercianteController {
             @RequestParam(required = false) String        contactoEmergenciaParentesco,
             @RequestParam(required = false) String        tallaUniforme,
             @RequestParam(required = false) String        placa,
+            @RequestParam(required = false) String        documento,
+            @RequestParam(required = false) String        tipoDocumento,
+            @RequestParam(required = false) String        eps,
             @RequestParam(required = false) MultipartFile foto,
             @AuthenticationPrincipal        Usuario       usuario) {
 
@@ -79,7 +82,7 @@ public class ComercianteController {
         CrearComercianteRequest req = new CrearComercianteRequest(
                 nombre, municipio, direccion, telefono,
                 contactoEmergenciaNombre, contactoEmergenciaParentesco,
-                tallaUniforme, placa, fotoUrl);
+                tallaUniforme, placa, documento, tipoDocumento, eps, fotoUrl);
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(comercianteService.crear(req, usuario));
@@ -109,6 +112,9 @@ public class ComercianteController {
             @RequestParam(required = false) String        contactoEmergenciaParentesco,
             @RequestParam(required = false) String        tallaUniforme,
             @RequestParam(required = false) String        placa,
+            @RequestParam(required = false) String        documento,
+            @RequestParam(required = false) String        tipoDocumento,
+            @RequestParam(required = false) String        eps,
             @RequestParam(required = false) MultipartFile foto,
             @AuthenticationPrincipal        Usuario       usuario) {
 
@@ -119,7 +125,7 @@ public class ComercianteController {
         EditarComercianteRequest req = new EditarComercianteRequest(
                 nombre, municipio, direccion, telefono,
                 contactoEmergenciaNombre, contactoEmergenciaParentesco,
-                tallaUniforme, placa, fotoUrl);
+                tallaUniforme, placa, documento, tipoDocumento, eps, fotoUrl);
 
         return ResponseEntity.ok(comercianteService.editar(id, req, usuario));
     }
