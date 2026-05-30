@@ -6,7 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,9 +37,9 @@ public interface PedidoProveedorRepository extends JpaRepository<PedidoProveedor
             ORDER BY p.fecha DESC
             """, nativeQuery = true)
     List<Object[]> findResumenWithFilters(
-            @Param("estado")      String    estado,
-            @Param("fechaInicio") LocalDate fechaInicio,
-            @Param("fechaFin")    LocalDate fechaFin);
+            @Param("estado")      String estado,
+            @Param("fechaInicio") String fechaInicio,
+            @Param("fechaFin")    String fechaFin);
 
     /**
      * Detalle completo de un pedido con todos sus ítems y productos cargados

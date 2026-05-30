@@ -425,9 +425,11 @@ public class PedidoProveedorService {
         }
 
         // 2. Consulta con filtros de estado y fecha (null = sin filtro)
-        String estadoParam = (estado != null && !estado.isBlank()) ? estado.toUpperCase() : null;
+        String estadoParam    = (estado != null && !estado.isBlank()) ? estado.toUpperCase() : null;
+        String fechaInicioStr = (fechaInicio != null) ? fechaInicio.toString() : null;
+        String fechaFinStr    = (fechaFin    != null) ? fechaFin.toString()    : null;
         List<PedidoResumenDTO> todos = pedidoRepo
-                .findResumenWithFilters(estadoParam, fechaInicio, fechaFin)
+                .findResumenWithFilters(estadoParam, fechaInicioStr, fechaFinStr)
                 .stream()
                 .map(PedidoResumenDTO::fromRow)
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
