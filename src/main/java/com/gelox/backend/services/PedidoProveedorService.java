@@ -353,8 +353,16 @@ public class PedidoProveedorService {
                 String sku = cellText(row.getCell(colSku)).trim();
                 if (sku.isBlank()) continue;
 
-                // Construir clave con unidad de medida si la columna existe en el Excel
-                String um  = (colUm >= 0) ? cellText(row.getCell(colUm)).trim().toUpperCase() : "";
+                // Normalizar unidad de medida: CAJA/CAJAS → CJ, UNIDAD/UNIDADES/UND/UN → UN
+                String rawUm = (colUm >= 0) ? cellText(row.getCell(colUm)).trim().toUpperCase() : "";
+                String um;
+                if (rawUm.startsWith("CAJ") || rawUm.equals("CJ")) {
+                    um = "CJ";
+                } else if (rawUm.startsWith("UN") || rawUm.equals("UDS")) {
+                    um = "UN";
+                } else {
+                    um = rawUm;
+                }
                 String key = sku + "|" + um;
 
                 Cell cantCell = row.getCell(colCantidad);
