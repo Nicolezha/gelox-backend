@@ -134,7 +134,15 @@ public class CatalogoController {
         return ResponseEntity.ok(catalogoService.editarProducto(id, request, usuario));
     }
 
-    // ── RF20 — eliminar ───────────────────────────────────────────────────────
+    // ── RF20 — activar (revertir inactivación) ───────────────────────────────
+    @PatchMapping("/{id}/activar")
+    public ResponseEntity<CatalogoProductoDTO> activar(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(catalogoService.activarProducto(id, usuario));
+    }
+
+    // ── RF20 — eliminar (soft delete) ────────────────────────────────────────
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminar(
             @PathVariable UUID id,
