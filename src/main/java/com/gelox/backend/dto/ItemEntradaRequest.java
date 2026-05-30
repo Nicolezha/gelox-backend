@@ -14,8 +14,11 @@ public record ItemEntradaRequest(
         @NotNull(message = "El ID del producto es obligatorio")
         UUID productoId,
 
-        @NotNull @Min(value = 1, message = "La cantidad recibida debe ser al menos 1")
-        Integer cantidadRecibida,
+        @NotNull @Min(value = 0, message = "Las cajas recibidas no pueden ser negativas")
+        Integer cantidadCajas,
+
+        @NotNull @Min(value = 0, message = "Las unidades recibidas no pueden ser negativas")
+        Integer cantidadUnidades,
 
         /**
          * Precio negociado con el proveedor.

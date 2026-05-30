@@ -62,7 +62,8 @@ public class VentaService {
                         p.getImagenUrl(),
                         p.getPrecioVenta(),
                         p.getStockActual(),
-                        p.getStockActual() > 0
+                        p.getStockActual() > 0,
+                        p.getUnidadesPorCaja()
                 ))
                 .toList();
     }
@@ -83,12 +84,12 @@ public class VentaService {
                 .findFirst()
                 .ifPresent(id -> { throw new IllegalArgumentException("Producto no encontrado: " + id); });
 
-        final int UNIDADES_POR_CAJA = 24;
-
         List<ItemCalculoResultado> itemsResultado = req.items().stream()
                 .map(item -> {
-                    BigDecimal precio        = productosMap.get(item.productoId()).getPrecioVenta();
-                    int totalUnidades        = item.cajas() * UNIDADES_POR_CAJA + item.unidades();
+                    Producto p               = productosMap.get(item.productoId());
+                    BigDecimal precio        = p.getPrecioVenta();
+                    int upC                  = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
+                    int totalUnidades        = item.cajas() * upC + item.unidades();
                     BigDecimal subtotal      = precio.multiply(BigDecimal.valueOf(totalUnidades))
                             .setScale(2, RoundingMode.HALF_UP);
                     return new ItemCalculoResultado(item.productoId(), item.cajas(), item.unidades(), precio, subtotal);
@@ -105,7 +106,6 @@ public class VentaService {
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public ConfirmarVentaResponse confirmarVenta(ConfirmarVentaRequest req, Usuario usuario) {
-        final int UNIDADES_POR_CAJA = 24;
         List<UUID> ids = req.items().stream().map(ItemVentaRequest::productoId).toList();
 
         // 1. Leer todos los productos con bloqueo pesimista — una sola query
@@ -125,7 +125,8 @@ public class VentaService {
         // 3. Validar stock suficiente para todos antes de modificar cualquiera
         for (ItemVentaRequest item : req.items()) {
             Producto p = productosMap.get(item.productoId());
-            int totalUnidades = item.cajas() * UNIDADES_POR_CAJA + item.unidades();
+            int upC = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
+            int totalUnidades = item.cajas() * upC + item.unidades();
             if (p.getStockActual() < totalUnidades) {
                 throw new StockInsuficienteException(
                         String.format("Stock insuficiente para '%s'. Disponible: %d, solicitado: %d.",
@@ -135,8 +136,12 @@ public class VentaService {
 
         // 4. Calcular total
         BigDecimal total = req.items().stream()
-                .map(item -> productosMap.get(item.productoId()).getPrecioVenta()
-                        .multiply(BigDecimal.valueOf(item.cajas() * UNIDADES_POR_CAJA + item.unidades())))
+                .map(item -> {
+                    Producto p = productosMap.get(item.productoId());
+                    int upC = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
+                    return p.getPrecioVenta()
+                        .multiply(BigDecimal.valueOf(item.cajas() * upC + item.unidades()));
+                })
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
@@ -154,7 +159,8 @@ public class VentaService {
         for (ItemVentaRequest item : req.items()) {
             Producto p           = productosMap.get(item.productoId());
             BigDecimal precio    = p.getPrecioVenta();
-            int totalUnidades    = item.cajas() * UNIDADES_POR_CAJA + item.unidades();
+            int upC              = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
+            int totalUnidades    = item.cajas() * upC + item.unidades();
             BigDecimal subtotal  = precio.multiply(BigDecimal.valueOf(totalUnidades))
                     .setScale(2, RoundingMode.HALF_UP);
 

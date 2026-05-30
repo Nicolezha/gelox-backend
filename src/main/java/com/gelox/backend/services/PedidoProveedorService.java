@@ -18,7 +18,6 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.NoSuchElementException;
 
 @Service
@@ -129,9 +128,11 @@ public class PedidoProveedorService {
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Producto no encontrado: " + ir.productoId()));
 
-            // RF23 — actualizar stock
-            int stockAntes    = producto.getStockActual();
-            int stockDespues  = stockAntes + ir.cantidadRecibida();
+            // RF23 — convertir cajas a unidades y actualizar stock
+            int upC          = producto.getUnidadesPorCaja() != null ? producto.getUnidadesPorCaja() : 1;
+            int totalEntrada = ir.cantidadUnidades() + ir.cantidadCajas() * upC;
+            int stockAntes   = producto.getStockActual();
+            int stockDespues = stockAntes + totalEntrada;
             producto.setStockActual(stockDespues);
             productoRepo.save(producto);
 
@@ -144,10 +145,10 @@ public class PedidoProveedorService {
                     .producto(producto)
                     .usuario(usuarioActual)
                     .tipo(TipoMovimiento.ENTRADA)
-                    .cantidad(ir.cantidadRecibida())
+                    .cantidad(totalEntrada)
                     .stockResultante(stockDespues)
-                    .descripcion(String.format("Entrada de %d unidades. Precio: $%s",
-                            ir.cantidadRecibida(), precio.toPlainString()))
+                    .descripcion(String.format("Entrada de %d uds. (%d cajas × %d + %d sueltas). Precio: $%s",
+                            totalEntrada, ir.cantidadCajas(), upC, ir.cantidadUnidades(), precio.toPlainString()))
                     .build());
 
             stockActualizado.add(new EntradaResponseDTO.StockActualizadoDTO(
@@ -157,8 +158,7 @@ public class PedidoProveedorService {
             if (pedido != null && comparacion != null) {
                 ItemPedidoProveedor itemPedido = itemsPedidoMap.get(ir.productoId());
                 if (itemPedido != null) {
-                    // Actualizar cantidad recibida en el ítem del pedido
-                    itemPedido.setCantidadRecibida(ir.cantidadRecibida());
+                    itemPedido.setCantidadRecibida(totalEntrada);
                     itemPedido.setPrecioUnitario(precio);
                     itemPedidoRepo.save(itemPedido);
 
@@ -169,7 +169,7 @@ public class PedidoProveedorService {
                             producto.getCodigoTecnico(),
                             producto.getNombre(),
                             totalSolicitado,
-                            ir.cantidadRecibida()));
+                            totalEntrada));
                 } else {
                     // Producto recibido que no estaba en el pedido → sobrante total
                     comparacion.add(ComparacionItemDTO.of(
@@ -177,7 +177,7 @@ public class PedidoProveedorService {
                             producto.getCodigoTecnico(),
                             producto.getNombre(),
                             0,
-                            ir.cantidadRecibida()));
+                            totalEntrada));
                 }
             }
         }
@@ -209,7 +209,7 @@ public class PedidoProveedorService {
                 TipoEvento.ENTRADA_MERCANCIA,
                 String.format("Entrada de mercancía registrada: %d referencias, %d unidades en total.",
                         req.items().size(),
-                        req.items().stream().mapToInt(ItemEntradaRequest::cantidadRecibida).sum()),
+                        req.items().stream().mapToInt(i -> i.cantidadUnidades() + i.cantidadCajas()).sum()),
                 usuarioActual.getId());
 
         String mensaje = (pedido != null)

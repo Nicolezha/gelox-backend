@@ -88,6 +88,7 @@ public class CatalogoService {
         producto.setStockActual(0);
         producto.setImagenUrl(req.getImagenUrl());
         producto.setUnidadMedida(req.getUnidadMedida() != null ? req.getUnidadMedida() : "Unidades");
+        producto.setUnidadesPorCaja(req.getUnidadesPorCaja());
         producto.setActivo(true);
 
         Producto guardado = catalogoRepository.save(producto);
@@ -124,7 +125,8 @@ public class CatalogoService {
         if (req.getStockMinimo() != null)   producto.setStockMinimo(req.getStockMinimo());
         if (req.getStockMedio()  != null)   producto.setStockMedio(req.getStockMedio());
         if (req.getImagenUrl() != null)     producto.setImagenUrl(req.getImagenUrl());
-        if (req.getUnidadMedida() != null)  producto.setUnidadMedida(req.getUnidadMedida());
+        if (req.getUnidadMedida()    != null)  producto.setUnidadMedida(req.getUnidadMedida());
+        if (req.getUnidadesPorCaja() != null)  producto.setUnidadesPorCaja(req.getUnidadesPorCaja());
 
         Producto actualizado = catalogoRepository.save(producto);
 
@@ -170,7 +172,8 @@ public class CatalogoService {
                 p.getStockMedio(),
                 p.getStockActual(),
                 p.getImagenUrl(),
-                p.getUnidadMedida()
+                p.getUnidadMedida(),
+                p.getUnidadesPorCaja()
         );
     }
 }

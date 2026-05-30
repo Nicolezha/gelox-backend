@@ -18,5 +18,6 @@ public record ProductoResponseDTO(
         String categoria,
         Boolean activo,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        Integer unidadesPorCaja
 ) {}
