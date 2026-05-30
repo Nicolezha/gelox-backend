@@ -162,8 +162,8 @@ public class PedidoProveedorService {
                     itemPedido.setPrecioUnitario(precio);
                     itemPedidoRepo.save(itemPedido);
 
-                    int totalSolicitado = (itemPedido.getCantidadCajas()    != null ? itemPedido.getCantidadCajas()    : 0)
-                                       + (itemPedido.getCantidadUnidades() != null ? itemPedido.getCantidadUnidades() : 0);
+                    int totalSolicitado = (itemPedido.getCantidadCajas()    != null ? itemPedido.getCantidadCajas() * upC : 0)
+                                       + (itemPedido.getCantidadUnidades() != null ? itemPedido.getCantidadUnidades()      : 0);
                     comparacion.add(ComparacionItemDTO.of(
                             producto.getId(),
                             producto.getCodigoTecnico(),
@@ -192,8 +192,9 @@ public class PedidoProveedorService {
                 itemsPedidoMap.forEach((prodId, itemPedido) -> {
                     if (!recibidosIds.contains(prodId)) {
                         Producto p = itemPedido.getProducto();
-                        int totalSolicitado = (itemPedido.getCantidadCajas()    != null ? itemPedido.getCantidadCajas()    : 0)
-                                           + (itemPedido.getCantidadUnidades() != null ? itemPedido.getCantidadUnidades() : 0);
+                        int upCSol = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 1;
+                        int totalSolicitado = (itemPedido.getCantidadCajas()    != null ? itemPedido.getCantidadCajas() * upCSol : 0)
+                                           + (itemPedido.getCantidadUnidades() != null ? itemPedido.getCantidadUnidades()        : 0);
                         comparacionFinal.add(ComparacionItemDTO.of(
                         p.getId(), p.getCodigoTecnico(), p.getNombre(),
                         totalSolicitado, 0));
