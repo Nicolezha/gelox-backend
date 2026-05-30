@@ -424,17 +424,38 @@ public class PedidoProveedorService {
             };
         }
 
-        // 2. Consulta con filtros de estado y fecha.
-        // Usamos fechas sentinela en lugar de null para evitar el error de inferencia
-        // de tipo de PostgreSQL con parámetros nulos en queries nativas.
-        String estadoParam    = (estado != null && !estado.isBlank()) ? estado.toUpperCase() : null;
-        String fechaInicioStr = (fechaInicio != null) ? fechaInicio.toString() : "0001-01-01";
-        String fechaFinStr    = (fechaFin    != null) ? fechaFin.toString()    : "9999-12-31";
-        List<PedidoResumenDTO> todos = pedidoRepo
-                .findResumenWithFilters(estadoParam, fechaInicioStr, fechaFinStr)
-                .stream()
-                .map(PedidoResumenDTO::fromRow)
-                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+        EstadoPedido estadoEnum = (estado != null && !estado.isBlank())
+                ? EstadoPedido.valueOf(estado.toUpperCase()) : null;
+
+        List<PedidoResumenDTO> todos;
+
+        if (fechaInicio == null && fechaFin == null) {
+            // Caso común (sin filtro de fechas): usar métodos JPA derivados para evitar
+            // la query nativa y sus problemas de tipado de parámetros en Hibernate 6.
+            List<PedidoProveedor> pedidos = (estadoEnum != null)
+                    ? pedidoRepo.findByEstadoOrderByFechaDesc(estadoEnum)
+                    : pedidoRepo.findAllByOrderByFechaDesc();
+
+            todos = pedidos.stream()
+                    .map(p -> {
+                        int total = p.getItems() == null ? 0 : p.getItems().stream()
+                                .mapToInt(i -> (i.getCantidadCajas()    != null ? i.getCantidadCajas()    : 0)
+                                             + (i.getCantidadUnidades() != null ? i.getCantidadUnidades() : 0))
+                                .sum();
+                        return new PedidoResumenDTO(
+                                p.getId(), p.getFecha(), p.getEstado().name(), p.getNotas(), total);
+                    })
+                    .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+        } else {
+            // Caso con filtro de fechas: usar query nativa con fechas como String
+            String estadoParam    = (estadoEnum != null) ? estadoEnum.name() : null;
+            String fechaInicioStr = fechaInicio != null ? fechaInicio.toString() : "0001-01-01";
+            String fechaFinStr    = fechaFin    != null ? fechaFin.toString()    : "9999-12-31";
+            todos = pedidoRepo.findResumenWithFilters(estadoParam, fechaInicioStr, fechaFinStr)
+                    .stream()
+                    .map(PedidoResumenDTO::fromRow)
+                    .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+        }
 
         // 3. Filtrar por q en Java (ID por prefijo o texto en notas)
         if (q != null && !q.isBlank()) {
