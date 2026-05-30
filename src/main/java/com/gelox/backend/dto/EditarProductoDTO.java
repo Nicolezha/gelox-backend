@@ -33,4 +33,6 @@ public class EditarProductoDTO {
     private String descripcion;
 
     private Boolean activo;
+
+    private Integer unidadesPorCaja;
 }

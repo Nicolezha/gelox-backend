@@ -37,4 +37,6 @@ public class CrearProductoDTO {
     private String imagenUrl;
 
     private String descripcion;
+
+    private Integer unidadesPorCaja;
 }

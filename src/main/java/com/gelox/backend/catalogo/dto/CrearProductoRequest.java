@@ -37,6 +37,8 @@ public class CrearProductoRequest {
 
     private String unidadMedida;
 
+    private Integer unidadesPorCaja;
+
     // Getters y Setters
 
     public String getCodigoTecnico() { return codigoTecnico; }
@@ -68,4 +70,7 @@ public class CrearProductoRequest {
 
     public String getUnidadMedida() { return unidadMedida; }
     public void setUnidadMedida(String unidadMedida) { this.unidadMedida = unidadMedida; }
+
+    public Integer getUnidadesPorCaja() { return unidadesPorCaja; }
+    public void setUnidadesPorCaja(Integer unidadesPorCaja) { this.unidadesPorCaja = unidadesPorCaja; }
 }

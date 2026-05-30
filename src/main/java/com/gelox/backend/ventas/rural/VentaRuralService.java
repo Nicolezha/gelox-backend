@@ -26,22 +26,12 @@ import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * RF32 — Lógica de negocio para pedidos rurales.
- *
- * Constante UNIDADES_POR_CAJA = 24:
- *   La tabla 'producto' no tiene una columna 'unidades_por_caja' en BD.
- *   Se usa este valor fijo como convención del negocio. Si en el futuro
- *   se agrega dicha columna, reemplazar la constante por producto.getUnidadesPorCaja().
- */
+/** RF32 — Lógica de negocio para pedidos rurales. */
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class VentaRuralService {
 
-    // Convención de negocio: una caja contiene 24 unidades.
-    // TODO: mover a producto.unidades_por_caja cuando se agregue ese campo a BD.
-    private static final int UNIDADES_POR_CAJA = 24;
 
     private final VentaRepository        ventaRepository;
     private final VentaRuralRepository   pedidoRuralRepository;
@@ -106,13 +96,14 @@ public class VentaRuralService {
 
         // ── 3. Validar stock antes de escribir nada ───────────────────────
         for (ItemPedidoRuralRequest item : req.items()) {
-            int totalUnidades = (item.cajas() * UNIDADES_POR_CAJA) + item.unidades();
+            Producto p  = productosMap.get(item.productoId());
+            int upC     = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
+            int totalUnidades = (item.cajas() * upC) + item.unidades();
             if (totalUnidades == 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "El ítem para el producto " + item.productoId()
                         + " debe tener al menos una unidad o caja > 0");
             }
-            Producto p = productosMap.get(item.productoId());
             if (p.getStockActual() < totalUnidades) {
                 throw new StockInsuficienteException("Stock insuficiente para " + p.getNombre());
             }
@@ -158,8 +149,10 @@ public class VentaRuralService {
 
         List<CalcItem> calcItems = new ArrayList<>();
         for (ItemPedidoRuralRequest item : req.items()) {
-            int totalUnidades = (item.cajas() * UNIDADES_POR_CAJA) + item.unidades();
-            BigDecimal subtotal = productosMap.get(item.productoId()).getPrecioVenta()
+            Producto pCalc = productosMap.get(item.productoId());
+            int upC        = pCalc.getUnidadesPorCaja() != null ? pCalc.getUnidadesPorCaja() : 0;
+            int totalUnidades = (item.cajas() * upC) + item.unidades();
+            BigDecimal subtotal = pCalc.getPrecioVenta()
                     .multiply(BigDecimal.valueOf(totalUnidades))
                     .setScale(2, RoundingMode.HALF_UP);
             calcItems.add(new CalcItem(item, productosMap.get(item.productoId()), totalUnidades, subtotal));
