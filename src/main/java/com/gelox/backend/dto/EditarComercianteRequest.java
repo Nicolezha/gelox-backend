@@ -30,5 +30,9 @@ public record EditarComercianteRequest(
         @Size(max = 10)
         String tallaUniforme,
 
+        /** Placa del carrito de helados. */
+        @Size(max = 20)
+        String placa,
+
         String fotoUrl
 ) {}

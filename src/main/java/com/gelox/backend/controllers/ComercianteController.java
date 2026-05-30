@@ -68,6 +68,7 @@ public class ComercianteController {
             @RequestParam(required = false) String        contactoEmergenciaNombre,
             @RequestParam(required = false) String        contactoEmergenciaParentesco,
             @RequestParam(required = false) String        tallaUniforme,
+            @RequestParam(required = false) String        placa,
             @RequestParam(required = false) MultipartFile foto,
             @AuthenticationPrincipal        Usuario       usuario) {
 
@@ -78,7 +79,7 @@ public class ComercianteController {
         CrearComercianteRequest req = new CrearComercianteRequest(
                 nombre, municipio, direccion, telefono,
                 contactoEmergenciaNombre, contactoEmergenciaParentesco,
-                tallaUniforme, fotoUrl);
+                tallaUniforme, placa, fotoUrl);
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(comercianteService.crear(req, usuario));
@@ -107,6 +108,7 @@ public class ComercianteController {
             @RequestParam(required = false) String        contactoEmergenciaNombre,
             @RequestParam(required = false) String        contactoEmergenciaParentesco,
             @RequestParam(required = false) String        tallaUniforme,
+            @RequestParam(required = false) String        placa,
             @RequestParam(required = false) MultipartFile foto,
             @AuthenticationPrincipal        Usuario       usuario) {
 
@@ -117,7 +119,7 @@ public class ComercianteController {
         EditarComercianteRequest req = new EditarComercianteRequest(
                 nombre, municipio, direccion, telefono,
                 contactoEmergenciaNombre, contactoEmergenciaParentesco,
-                tallaUniforme, fotoUrl);
+                tallaUniforme, placa, fotoUrl);
 
         return ResponseEntity.ok(comercianteService.editar(id, req, usuario));
     }

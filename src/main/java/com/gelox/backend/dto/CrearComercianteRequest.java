@@ -32,6 +32,10 @@ public record CrearComercianteRequest(
         @Size(max = 10)
         String tallaUniforme,
 
+        /** Placa del carrito de helados. */
+        @Size(max = 20)
+        String placa,
+
         /** URL pública de la fotografía de perfil. */
         String fotoUrl
 ) {}

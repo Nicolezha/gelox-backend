@@ -47,6 +47,10 @@ public class Comerciante {
     @Column(name = "talla_uniforme", length = 10)
     private String tallaUniforme;
 
+    /** Placa del carrito de helados. */
+    @Column(name = "placa", length = 20)
+    private String placa;
+
     /** URL pública de la fotografía de perfil. */
     @Column(name = "foto_url", columnDefinition = "TEXT")
     private String fotoUrl;
