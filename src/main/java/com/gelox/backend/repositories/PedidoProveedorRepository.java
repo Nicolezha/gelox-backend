@@ -23,11 +23,12 @@ public interface PedidoProveedorRepository extends JpaRepository<PedidoProveedor
      */
     @Query(value = """
             SELECT
-                p.id::text                                          AS id,
-                p.fecha                                             AS fecha,
-                p.estado::text                                      AS estado,
-                p.notas                                             AS notas,
-                COALESCE(SUM(COALESCE(i.cantidad_cajas, 0) + COALESCE(i.cantidad_unidades, 0)), 0)::int AS total_solicitado
+                p.id::text                                           AS id,
+                p.fecha                                              AS fecha,
+                p.estado::text                                       AS estado,
+                p.notas                                              AS notas,
+                COALESCE(SUM(COALESCE(i.cantidad_cajas, 0)), 0)::int     AS total_cajas,
+                COALESCE(SUM(COALESCE(i.cantidad_unidades, 0)), 0)::int  AS total_unidades
             FROM pedido_proveedor p
             LEFT JOIN item_pedido_proveedor i ON i.pedido_id = p.id
             WHERE (:estado IS NULL OR p.estado::text = :estado)

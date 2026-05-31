@@ -439,12 +439,15 @@ public class PedidoProveedorService {
 
             todos = pedidos.stream()
                     .map(p -> {
-                        int total = p.getItems() == null ? 0 : p.getItems().stream()
-                                .mapToInt(i -> (i.getCantidadCajas()    != null ? i.getCantidadCajas()    : 0)
-                                             + (i.getCantidadUnidades() != null ? i.getCantidadUnidades() : 0))
+                        int totalCajas = p.getItems() == null ? 0 : p.getItems().stream()
+                                .mapToInt(i -> i.getCantidadCajas() != null ? i.getCantidadCajas() : 0)
+                                .sum();
+                        int totalUnidades = p.getItems() == null ? 0 : p.getItems().stream()
+                                .mapToInt(i -> i.getCantidadUnidades() != null ? i.getCantidadUnidades() : 0)
                                 .sum();
                         return new PedidoResumenDTO(
-                                p.getId(), p.getFecha(), p.getEstado().name(), p.getNotas(), total);
+                                p.getId(), p.getFecha(), p.getEstado().name(), p.getNotas(),
+                                totalCajas, totalUnidades);
                     })
                     .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
         } else {

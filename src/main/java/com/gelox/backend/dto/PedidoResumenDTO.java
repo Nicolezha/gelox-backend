@@ -13,11 +13,15 @@ public record PedidoResumenDTO(
         LocalDate fecha,
         String    estado,
         String    notas,
-        int       totalSolicitado
+        int       totalCajas,
+        int       totalUnidades
 ) {
+    /** Suma total en valores brutos (backward-compat para KPI). */
+    public int totalSolicitado() { return totalCajas + totalUnidades; }
+
     /**
      * Convierte una fila de la native query a DTO.
-     * Orden de columnas: id::text, fecha, estado::text, notas, total_solicitado::int
+     * Orden de columnas: id::text, fecha, estado::text, notas, total_cajas::int, total_unidades::int
      */
     public static PedidoResumenDTO fromRow(Object[] row) {
         return new PedidoResumenDTO(
@@ -25,7 +29,8 @@ public record PedidoResumenDTO(
                 toLocalDate(row[1]),
                 row[2] != null ? row[2].toString() : null,
                 row[3] != null ? row[3].toString() : null,
-                row[4] != null ? ((Number) row[4]).intValue() : 0
+                row[4] != null ? ((Number) row[4]).intValue() : 0,
+                row[5] != null ? ((Number) row[5]).intValue() : 0
         );
     }
 
