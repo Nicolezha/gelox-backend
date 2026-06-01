@@ -10,5 +10,6 @@ import java.util.UUID;
 public record ItemDespachoRequest(
         @NotNull UUID productoId,
         @PositiveOrZero int unidades,
-        @NotNull @Positive BigDecimal precioUnitario
+        @NotNull @PositiveOrZero BigDecimal precioUnitario,
+        @PositiveOrZero int saldoAnterior   // unidades ya con el comerciante (devoluciones del día anterior)
 ) {}

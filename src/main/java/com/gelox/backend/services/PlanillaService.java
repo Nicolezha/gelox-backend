@@ -81,26 +81,29 @@ public class PlanillaService {
             }
         }
 
-        // 5-6. Validar stock de todos los ítems antes de modificar
-        List<Integer> totales = new ArrayList<>();
+        // 5-6. Validar stock: solo para unidades NUEVAS (saldoAnterior ya está con el comerciante)
+        record ItemConNuevas(ItemDespachoRequest item, int nuevas) {}
+        List<ItemConNuevas> itemsConNuevas = new ArrayList<>();
         for (ItemDespachoRequest item : req.items()) {
-            int totalUnidades = item.unidades();
-            totales.add(totalUnidades);
+            int nuevas = Math.max(0, item.unidades() - item.saldoAnterior());
+            itemsConNuevas.add(new ItemConNuevas(item, nuevas));
             Producto p = productoMap.get(item.productoId());
-            if (p.getStockActual() < totalUnidades) {
-                throw new StockInsuficienteException("Stock insuficiente para " + p.getNombre());
+            if (p.getStockActual() < nuevas) {
+                throw new StockInsuficienteException("Stock insuficiente para " + p.getNombre()
+                        + " (se solicitan " + nuevas + " unidades nuevas, stock: " + p.getStockActual() + ")");
             }
         }
 
-        // 7-8. Persistir cada ItemPlanilla y descontar stock
+        // 7-8. Persistir cada ItemPlanilla y descontar SOLO las unidades nuevas del stock global
         List<ItemDespachoResponseDTO> responseItems = new ArrayList<>();
         BigDecimal totalValorDespachado = BigDecimal.ZERO;
         String planillaIdCorto = planilla.getId().toString().substring(0, 8);
 
-        for (int i = 0; i < req.items().size(); i++) {
-            ItemDespachoRequest item = req.items().get(i);
+        for (ItemConNuevas ic : itemsConNuevas) {
+            ItemDespachoRequest item = ic.item();
             Producto p = productoMap.get(item.productoId());
-            int totalUnidades = totales.get(i);
+            int totalUnidades = item.unidades();
+            int nuevasUnidades = ic.nuevas();
 
             itemPlanillaRepository.save(ItemPlanilla.builder()
                     .planilla(planilla)
@@ -110,12 +113,16 @@ public class PlanillaService {
                     .precioVenta(item.precioUnitario())
                     .build());
 
-            inventarioService.descontarStock(
-                    p.getId(),
-                    totalUnidades,
-                    TipoMovimiento.SALIDA_DESPACHO,
-                    "Despacho planilla " + planillaIdCorto + " — " + totalUnidades + " uds.",
-                    usuario);
+            // Solo descontar del stock global las unidades que no venían de devoluciones anteriores
+            if (nuevasUnidades > 0) {
+                inventarioService.descontarStock(
+                        p.getId(),
+                        nuevasUnidades,
+                        TipoMovimiento.SALIDA_DESPACHO,
+                        "Despacho planilla " + planillaIdCorto
+                            + " — " + nuevasUnidades + " uds. nuevas (+" + item.saldoAnterior() + " saldo ant.)",
+                        usuario);
+            }
 
             BigDecimal subtotal = item.precioUnitario().multiply(BigDecimal.valueOf(totalUnidades));
             totalValorDespachado = totalValorDespachado.add(subtotal);

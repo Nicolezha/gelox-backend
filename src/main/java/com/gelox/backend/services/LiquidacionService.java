@@ -78,16 +78,8 @@ public class LiquidacionService {
             item.setUnidadesDevueltas(devueltas);
             itemPlanillaRepository.save(item);
 
-            // e. Reintegrar unidades devueltas al stock del catálogo
-            if (devueltas > 0) {
-                inventarioService.agregarStock(
-                        item.getProducto().getId(),
-                        devueltas,
-                        TipoMovimiento.DEVOLUCION,
-                        "Devolución planilla " + planillaId.toString().substring(0, 8).toUpperCase()
-                            + " — " + devueltas + " uds. de " + item.getProducto().getNombre(),
-                        usuario);
-            }
+            // Las unidades devueltas quedan con el comerciante (no regresan al stock global).
+            // Se recuperan como saldo_anterior en la siguiente planilla de ese comerciante.
 
             gananciaTotal = gananciaTotal.add(ganancia);
 
