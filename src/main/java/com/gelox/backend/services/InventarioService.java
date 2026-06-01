@@ -113,6 +113,31 @@ public class InventarioService {
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // RF — Reintegrar stock (devoluciones de planilla)
+    // ──────────────────────────────────────────────────────────────────────
+
+    @Transactional
+    public void agregarStock(UUID productoId, int cantidad, TipoMovimiento tipo,
+                             String descripcion, Usuario usuario) {
+        Producto p = productoRepository.findByIdWithLock(productoId)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Producto no encontrado: " + productoId));
+
+        int stockDespues = p.getStockActual() + cantidad;
+        p.setStockActual(stockDespues);
+        productoRepository.save(p);
+
+        movimientoRepository.save(MovimientoInventario.builder()
+                .producto(p)
+                .usuario(usuario)
+                .tipo(tipo)
+                .cantidad(cantidad)
+                .stockResultante(stockDespues)
+                .descripcion(descripcion)
+                .build());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // Helpers privados
     // ──────────────────────────────────────────────────────────────────────
 

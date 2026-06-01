@@ -6,6 +6,8 @@ import com.gelox.backend.dto.LiquidacionRequestDTO;
 import com.gelox.backend.dto.LiquidacionResponseDTO;
 import com.gelox.backend.entities.ItemPlanilla;
 import com.gelox.backend.entities.PlanillaComerciante;
+import com.gelox.backend.entities.TipoMovimiento;
+import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.exceptions.DevolucionInvalidaException;
 import com.gelox.backend.exceptions.PlanillaNoEncontradaException;
 import com.gelox.backend.exceptions.PlanillaYaLiquidadaException;
@@ -28,10 +30,11 @@ import java.util.UUID;
 public class LiquidacionService {
 
     private final PlanillaComercianteRepository planillaRepository;
-    private final ItemPlanillaRepository itemPlanillaRepository;
+    private final ItemPlanillaRepository        itemPlanillaRepository;
+    private final InventarioService             inventarioService;
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
-    public LiquidacionResponseDTO liquidarPlanilla(UUID planillaId, LiquidacionRequestDTO request) {
+    public LiquidacionResponseDTO liquidarPlanilla(UUID planillaId, LiquidacionRequestDTO request, Usuario usuario) {
 
         // 1. Obtener planilla; lanzar 404 si no existe
         PlanillaComerciante planilla = planillaRepository.findById(planillaId)
@@ -74,6 +77,17 @@ public class LiquidacionService {
             // d. Persistir devolución en el detalle
             item.setUnidadesDevueltas(devueltas);
             itemPlanillaRepository.save(item);
+
+            // e. Reintegrar unidades devueltas al stock del catálogo
+            if (devueltas > 0) {
+                inventarioService.agregarStock(
+                        item.getProducto().getId(),
+                        devueltas,
+                        TipoMovimiento.DEVOLUCION,
+                        "Devolución planilla " + planillaId.toString().substring(0, 8).toUpperCase()
+                            + " — " + devueltas + " uds. de " + item.getProducto().getNombre(),
+                        usuario);
+            }
 
             gananciaTotal = gananciaTotal.add(ganancia);
 

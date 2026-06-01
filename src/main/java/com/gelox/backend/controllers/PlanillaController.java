@@ -39,7 +39,7 @@ public class PlanillaController {
             @PathVariable UUID id,
             @Valid @RequestBody LiquidacionRequestDTO request,
             @AuthenticationPrincipal Usuario usuario) {
-        return ResponseEntity.ok(liquidacionService.liquidarPlanilla(id, request));
+        return ResponseEntity.ok(liquidacionService.liquidarPlanilla(id, request, usuario));
     }
 
     // ── GET /api/planillas/{id}/imprimir ──────────────────────────────────
