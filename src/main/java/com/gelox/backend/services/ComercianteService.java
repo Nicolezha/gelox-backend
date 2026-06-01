@@ -142,24 +142,18 @@ public class ComercianteService {
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * Devuelve el historial de planillas cerradas de un comerciante,
-     * filtrado por rango de fechas, en orden cronológico descendente.
-     *
-     * <p>Si no se pasan fechas, el método usa el mes en curso por defecto.</p>
+     * Devuelve el historial de planillas (abiertas y cerradas) de un comerciante,
+     * filtrado por rango de fechas si se proporcionan; sin límite si son null.
      */
     @Transactional(readOnly = true)
     public List<PlanillaResumenDTO> obtenerPlanillas(UUID comercianteId,
                                                      LocalDate fechaInicio,
                                                      LocalDate fechaFin) {
-        // Verificar que el comerciante exista
         buscarOFallar(comercianteId);
 
-        // Valores por defecto: mes en curso
-        LocalDate inicio = (fechaInicio != null) ? fechaInicio : LocalDate.now().withDayOfMonth(1);
-        LocalDate fin    = (fechaFin    != null) ? fechaFin    : LocalDate.now();
-
+        // Sin fechas → sin límite (la query filtra con IS NULL OR)
         return comercianteRepo
-                .findPlanillasResumen(comercianteId, inicio, fin)
+                .findPlanillasResumen(comercianteId, fechaInicio, fechaFin)
                 .stream()
                 .map(PlanillaResumenDTO::fromRow)
                 .toList();

@@ -37,7 +37,8 @@ public interface ComercianteRepository extends JpaRepository<Comerciante, UUID> 
             FROM planilla_comerciante pc
             LEFT JOIN item_planilla ip ON ip.planilla_id = pc.id
             WHERE pc.comerciante_id = :comercianteId
-              AND pc.fecha BETWEEN :fechaInicio AND :fechaFin
+              AND (:fechaInicio IS NULL OR pc.fecha >= CAST(:fechaInicio AS date))
+              AND (:fechaFin    IS NULL OR pc.fecha <= CAST(:fechaFin    AS date))
             GROUP BY pc.id, pc.fecha, pc.total_ganancia, pc.cerrada
             ORDER BY pc.fecha DESC
             """, nativeQuery = true)
