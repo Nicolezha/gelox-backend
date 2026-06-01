@@ -313,7 +313,9 @@ public class PedidoProveedorService {
         // Clave compuesta "SKU|CJ" y "SKU|UN" para llenar la fila correcta en la plantilla
         Map<String, Integer> cantidades = new HashMap<>();
         for (ItemPedidoProveedor item : pedido.getItems()) {
-            String sku = item.getProducto().getCodigoTecnico().trim();
+            String raw = item.getProducto().getCodigoTecnico();
+            if (raw == null || raw.isBlank()) continue; // sin SKU no se puede mapear al Excel
+            String sku = raw.trim();
             if (item.getCantidadCajas() != null && item.getCantidadCajas() > 0) {
                 cantidades.put(sku + "|CJ", item.getCantidadCajas());
             }
