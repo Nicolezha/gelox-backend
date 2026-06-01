@@ -135,9 +135,12 @@ public class DashboardService {
         boolean hoyEsCero   = actual  == null || actual.compareTo(BigDecimal.ZERO) == 0;
 
         if (ayerFueCero) {
-            // Ayer = $0, hoy > $0 → actividad nueva desde cero (+100 %)
-            // Ayer = $0, hoy = $0 → sin dato de comparación (null)
-            return hoyEsCero ? null : new BigDecimal("100.00");
+            // Ayer = $0, hoy = $0 → sin comparación
+            if (hoyEsCero) return null;
+            // Ayer = $0, hoy negativo → sin comparación significativa
+            if (actual.compareTo(BigDecimal.ZERO) < 0) return null;
+            // Ayer = $0, hoy > $0 → actividad nueva desde cero
+            return new BigDecimal("100.00");
         }
 
         // Caso normal: (actual - anterior) / anterior × 100
