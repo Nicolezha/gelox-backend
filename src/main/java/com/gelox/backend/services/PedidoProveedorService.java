@@ -370,6 +370,17 @@ public class PedidoProveedorService {
                 if (cantCell == null) cantCell = row.createCell(colCantidad, CellType.NUMERIC);
 
                 Integer qty = cantidades.get(key);
+                // Fallback: si la UM no mapeó (nula, vacía u otro valor),
+                // buscar la primera cantidad registrada para ese SKU sin importar la UM
+                if (qty == null || qty == 0) {
+                    final String skuPrefix = sku + "|";
+                    qty = cantidades.entrySet().stream()
+                            .filter(e -> e.getKey().startsWith(skuPrefix)
+                                    && e.getValue() != null && e.getValue() > 0)
+                            .map(Map.Entry::getValue)
+                            .findFirst()
+                            .orElse(null);
+                }
                 if (qty != null && qty > 0) {
                     cantCell.setCellValue(qty);
                 } else {
