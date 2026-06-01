@@ -317,7 +317,11 @@ public class ReporteRepository {
                 SELECT
                     v.canal,
                     COALESCE(SUM(iv.subtotal), 0) AS ingresos,
-                    COALESCE(SUM((iv.cantidad_unidades + iv.cantidad_cajas) * pr.precio_costo), 0) AS costos
+                    COALESCE(SUM(
+                        iv.cantidad_cajas * pr.precio_costo
+                        + iv.cantidad_unidades * pr.precio_costo
+                            / COALESCE(pr.unidades_por_caja, 1)::numeric
+                    ), 0) AS costos
                 FROM venta v
                 JOIN item_venta iv ON iv.venta_id = v.id
                 JOIN producto pr   ON pr.id = iv.producto_id
@@ -336,7 +340,10 @@ public class ReporteRepository {
      */
     public BigDecimal getCostosComerciantesEnPeriodo(PeriodoFiltroDTO periodo) {
         Object result = em.createNativeQuery("""
-                SELECT COALESCE(SUM(ip.unidades_despachadas * pr.precio_costo), 0)
+                SELECT COALESCE(SUM(
+                    ip.unidades_despachadas * pr.precio_costo
+                        / COALESCE(pr.unidades_por_caja, 1)::numeric
+                ), 0)
                 FROM item_planilla ip
                 JOIN planilla_comerciante pl ON pl.id = ip.planilla_id
                 JOIN producto pr             ON pr.id = ip.producto_id

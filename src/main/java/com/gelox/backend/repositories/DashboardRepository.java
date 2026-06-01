@@ -39,9 +39,13 @@ public class DashboardRepository {
 
     public BigDecimal getCostosVentasDia(LocalDate fecha) {
         Object result = em.createNativeQuery("""
-                SELECT COALESCE(SUM((iv.cantidad_unidades + iv.cantidad_cajas) * pr.precio_costo), 0)
+                SELECT COALESCE(SUM(
+                    iv.cantidad_cajas * pr.precio_costo
+                    + iv.cantidad_unidades * pr.precio_costo
+                        / COALESCE(pr.unidades_por_caja, 1)::numeric
+                ), 0)
                 FROM item_venta iv
-                JOIN venta v  ON v.id  = iv.venta_id
+                JOIN venta v     ON v.id  = iv.venta_id
                 JOIN producto pr ON pr.id = iv.producto_id
                 WHERE v.fecha::date = :fecha
                 """)
@@ -52,7 +56,10 @@ public class DashboardRepository {
 
     public BigDecimal getCostosPlanilasDia(LocalDate fecha) {
         Object result = em.createNativeQuery("""
-                SELECT COALESCE(SUM(ip.unidades_despachadas * pr.precio_costo), 0)
+                SELECT COALESCE(SUM(
+                    ip.unidades_despachadas * pr.precio_costo
+                        / COALESCE(pr.unidades_por_caja, 1)::numeric
+                ), 0)
                 FROM item_planilla ip
                 JOIN planilla_comerciante pl  ON pl.id  = ip.planilla_id
                 JOIN producto pr              ON pr.id  = ip.producto_id
