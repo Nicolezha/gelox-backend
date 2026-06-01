@@ -354,25 +354,11 @@ public class PedidoProveedorService {
                 String sku = cellText(row.getCell(colSku)).trim();
                 if (sku.isBlank()) continue;
 
-                // Normalizar unidad de medida: CAJA/CAJAS → CJ, UNIDAD/UNIDADES/UND/UN → UN
                 String rawUm = (colUm >= 0) ? cellText(row.getCell(colUm)).trim().toUpperCase() : "";
-                String um;
-                if (rawUm.startsWith("CAJ") || rawUm.equals("CJ")) {
-                    um = "CJ";
-                } else if (rawUm.startsWith("UN") || rawUm.equals("UDS")) {
-                    um = "UN";
-                } else {
-                    um = rawUm;
-                }
-                String key = sku + "|" + um;
 
-                Cell cantCell = row.getCell(colCantidad);
-                if (cantCell == null) cantCell = row.createCell(colCantidad, CellType.NUMERIC);
-
-                Integer qty = cantidades.get(key);
-                // Fallback: si la UM no mapeó (nula, vacía u otro valor),
-                // buscar la primera cantidad registrada para ese SKU sin importar la UM
-                if (qty == null || qty == 0) {
+                Integer qty;
+                if (rawUm.isBlank()) {
+                    // UM nula/vacía en el Excel → buscar solo por código técnico
                     final String skuPrefix = sku + "|";
                     qty = cantidades.entrySet().stream()
                             .filter(e -> e.getKey().startsWith(skuPrefix)
@@ -380,7 +366,22 @@ public class PedidoProveedorService {
                             .map(Map.Entry::getValue)
                             .findFirst()
                             .orElse(null);
+                } else {
+                    // UM presente → normalizar y buscar por clave compuesta SKU|UM
+                    String um;
+                    if (rawUm.startsWith("CAJ") || rawUm.equals("CJ")) {
+                        um = "CJ";
+                    } else if (rawUm.startsWith("UN") || rawUm.equals("UDS")) {
+                        um = "UN";
+                    } else {
+                        um = rawUm;
+                    }
+                    qty = cantidades.get(sku + "|" + um);
                 }
+
+                Cell cantCell = row.getCell(colCantidad);
+                if (cantCell == null) cantCell = row.createCell(colCantidad, CellType.NUMERIC);
+
                 if (qty != null && qty > 0) {
                     cantCell.setCellValue(qty);
                 } else {
