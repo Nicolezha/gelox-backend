@@ -46,7 +46,7 @@ public interface ProductoRepository extends JpaRepository<Producto, UUID> {
             AND (:estado = ''
                  OR (:estado = 'BAJO_STOCK' AND p.stockActual <= p.stockMinimo)
                  OR (:estado = 'NORMAL'     AND p.stockActual >  p.stockMinimo))
-            ORDER BY p.nombre ASC
+            ORDER BY p.stockActual DESC, p.nombre ASC
             """)
     List<Producto> findConFiltros(@Param("q") String q, @Param("estado") String estado);
 }
