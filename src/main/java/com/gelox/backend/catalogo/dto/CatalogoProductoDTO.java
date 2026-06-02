@@ -15,5 +15,6 @@ public record CatalogoProductoDTO(
         Integer stockActual,
         String imagenUrl,
         String unidadMedida,
-        Integer unidadesPorCaja
+        Integer unidadesPorCaja,
+        BigDecimal precioComerciente  // precio diferenciado para planillas de comerciantes
 ) {}

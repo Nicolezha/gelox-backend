@@ -37,6 +37,8 @@ public class EditarProductoRequest {
 
     private Integer unidadesPorCaja;
 
+    private java.math.BigDecimal precioComerciente;
+
     // Getters y Setters
 
     public String getCodigoTecnico() { return codigoTecnico; }
@@ -71,4 +73,7 @@ public class EditarProductoRequest {
 
     public Integer getUnidadesPorCaja() { return unidadesPorCaja; }
     public void setUnidadesPorCaja(Integer unidadesPorCaja) { this.unidadesPorCaja = unidadesPorCaja; }
+
+    public java.math.BigDecimal getPrecioComerciente() { return precioComerciente; }
+    public void setPrecioComerciente(java.math.BigDecimal precioComerciente) { this.precioComerciente = precioComerciente; }
 }

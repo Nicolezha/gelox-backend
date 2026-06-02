@@ -67,6 +67,7 @@ public class CatalogoController {
             @RequestParam(required = false)  Integer       stockMedio,
             @RequestParam(required = false)  Integer       unidadesPorCaja,
             @RequestParam(required = false)  String        unidadMedida,
+            @RequestParam(required = false)  BigDecimal    precioComerciente,
             @RequestParam(required = false)  MultipartFile imagen,
             @AuthenticationPrincipal         Usuario       usuario) {
 
@@ -81,6 +82,7 @@ public class CatalogoController {
         request.setStockMedio(stockMedio);
         request.setUnidadesPorCaja(unidadesPorCaja);
         request.setUnidadMedida(unidadMedida);
+        request.setPrecioComerciente(precioComerciente);
 
         if (imagen != null && !imagen.isEmpty()) {
             request.setImagenUrl(storageService.subirImagen(imagen, "productos"));
@@ -113,6 +115,7 @@ public class CatalogoController {
             @RequestParam(required = false)  Integer       stockMedio,
             @RequestParam(required = false)  Integer       unidadesPorCaja,
             @RequestParam(required = false)  String        unidadMedida,
+            @RequestParam(required = false)  BigDecimal    precioComerciente,
             @RequestParam(required = false)  MultipartFile imagen,
             @AuthenticationPrincipal         Usuario       usuario) {
 
@@ -126,6 +129,7 @@ public class CatalogoController {
         request.setStockMedio(stockMedio);
         request.setUnidadesPorCaja(unidadesPorCaja);
         request.setUnidadMedida(unidadMedida);
+        request.setPrecioComerciente(precioComerciente);
 
         if (imagen != null && !imagen.isEmpty()) {
             request.setImagenUrl(storageService.subirImagen(imagen, "productos"));

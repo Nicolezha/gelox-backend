@@ -153,7 +153,8 @@ public class InventarioService {
                 p.getStockActual(),
                 p.getPrecioVenta(),
                 estado,
-                precioCosto
+                precioCosto,
+                p.getPrecioComerciente()
         );
     }
 

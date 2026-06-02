@@ -58,6 +58,9 @@ public class Producto {
     @Column(name = "unidades_por_caja")
     private Integer unidadesPorCaja;
 
+    @Column(name = "precio_comerciante")
+    private BigDecimal precioComerciente;
+
     @PrePersist
     public void prePersist() {
         createdAt = LocalDateTime.now();
@@ -117,4 +120,7 @@ public class Producto {
 
     public Integer getUnidadesPorCaja() { return unidadesPorCaja; }
     public void setUnidadesPorCaja(Integer unidadesPorCaja) { this.unidadesPorCaja = unidadesPorCaja; }
+
+    public BigDecimal getPrecioComerciente() { return precioComerciente; }
+    public void setPrecioComerciente(BigDecimal precioComerciente) { this.precioComerciente = precioComerciente; }
 }

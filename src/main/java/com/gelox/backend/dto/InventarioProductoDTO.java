@@ -13,13 +13,15 @@ public class InventarioProductoDTO {
     private Integer cantidadDisponible;
     private BigDecimal precio;
     private String estado;
-    private BigDecimal precioCosto; // null si el rol no es ADMINISTRADOR
+    private BigDecimal precioCosto;        // null si el rol no es ADMINISTRADOR
+    private BigDecimal precioComerciente;  // precio diferenciado para planillas
 
     public InventarioProductoDTO() {}
 
     public InventarioProductoDTO(String id, String codigoTecnico, String nombre,
                                   Integer cantidadDisponible, BigDecimal precio,
-                                  String estado, BigDecimal precioCosto) {
+                                  String estado, BigDecimal precioCosto,
+                                  BigDecimal precioComerciente) {
         this.id = id;
         this.codigoTecnico = codigoTecnico;
         this.nombre = nombre;
@@ -27,6 +29,7 @@ public class InventarioProductoDTO {
         this.precio = precio;
         this.estado = estado;
         this.precioCosto = precioCosto;
+        this.precioComerciente = precioComerciente;
     }
 
     public String getId() { return id; }
@@ -49,4 +52,7 @@ public class InventarioProductoDTO {
 
     public BigDecimal getPrecioCosto() { return precioCosto; }
     public void setPrecioCosto(BigDecimal precioCosto) { this.precioCosto = precioCosto; }
+
+    public BigDecimal getPrecioComerciente() { return precioComerciente; }
+    public void setPrecioComerciente(BigDecimal precioComerciente) { this.precioComerciente = precioComerciente; }
 }
