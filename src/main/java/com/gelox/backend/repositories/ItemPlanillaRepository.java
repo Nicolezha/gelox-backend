@@ -13,6 +13,9 @@ public interface ItemPlanillaRepository extends JpaRepository<ItemPlanilla, UUID
 
     Optional<ItemPlanilla> findByIdAndPlanillaId(UUID id, UUID planillaId);
 
+    @Query("SELECT i FROM ItemPlanilla i WHERE i.planilla.id = :planillaId AND i.producto.id = :productoId")
+    Optional<ItemPlanilla> findByPlanillaIdAndProductoId(@Param("planillaId") UUID planillaId, @Param("productoId") UUID productoId);
+
     List<ItemPlanilla> findByPlanillaId(UUID planillaId);
 
     /** Carga ítems con producto en una sola query para el detalle de planilla (RF36-39). */

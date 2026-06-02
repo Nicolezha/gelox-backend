@@ -171,9 +171,9 @@ public class PlanillaService {
         }
 
         for (ActualizarDespachoItemRequest req : items) {
-            ItemPlanilla item = itemPlanillaRepository.findByIdAndPlanillaId(req.detalleId(), planillaId)
+            ItemPlanilla item = itemPlanillaRepository.findByPlanillaIdAndProductoId(planillaId, req.productoId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Ítem no pertenece a esta planilla: " + req.detalleId()));
+                            "El producto no tiene ítem en esta planilla: " + req.productoId()));
 
             int original = item.getUnidadesDespachadas();
             int nuevo    = req.unidades();

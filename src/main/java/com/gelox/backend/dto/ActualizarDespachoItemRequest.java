@@ -6,6 +6,6 @@ import jakarta.validation.constraints.PositiveOrZero;
 import java.util.UUID;
 
 public record ActualizarDespachoItemRequest(
-        @NotNull UUID detalleId,
+        @NotNull UUID productoId,
         @PositiveOrZero int unidades
 ) {}
