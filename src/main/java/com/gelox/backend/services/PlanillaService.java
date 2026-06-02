@@ -1,5 +1,6 @@
 package com.gelox.backend.services;
 
+import com.gelox.backend.dto.ActualizarDespachoItemRequest;
 import com.gelox.backend.dto.CrearDespachoRequest;
 import com.gelox.backend.dto.CrearDespachoResponse;
 import com.gelox.backend.dto.ItemDespachoRequest;
@@ -152,6 +153,55 @@ public class PlanillaService {
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════
+    // Actualizar cantidades de un despacho ya registrado (editar cierre matutino)
+    // ══════════════════════════════════════════════════════════════════════
+
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
+    public void actualizarDespacho(UUID planillaId,
+                                   List<ActualizarDespachoItemRequest> items,
+                                   Usuario usuario) {
+
+        PlanillaComerciante planilla = planillaRepository.findById(planillaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Planilla no encontrada"));
+        if (Boolean.TRUE.equals(planilla.getCerrada())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La planilla ya está cerrada y no se puede editar.");
+        }
+
+        for (ActualizarDespachoItemRequest req : items) {
+            ItemPlanilla item = itemPlanillaRepository.findByIdAndPlanillaId(req.detalleId(), planillaId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Ítem no pertenece a esta planilla: " + req.detalleId()));
+
+            int original = item.getUnidadesDespachadas();
+            int nuevo    = req.unidades();
+            int diff     = nuevo - original;
+
+            if (diff > 0) {
+                // Despachar más: descontar del stock global
+                inventarioService.descontarStock(
+                        item.getProducto().getId(), diff,
+                        TipoMovimiento.SALIDA_DESPACHO,
+                        "Ajuste despacho planilla " + planillaId.toString().substring(0, 8).toUpperCase()
+                                + " +" + diff + " uds.",
+                        usuario);
+            } else if (diff < 0) {
+                // Reducir despacho: devolver la diferencia al stock global
+                inventarioService.agregarStock(
+                        item.getProducto().getId(), -diff,
+                        TipoMovimiento.DEVOLUCION,
+                        "Ajuste despacho planilla " + planillaId.toString().substring(0, 8).toUpperCase()
+                                + " " + diff + " uds.",
+                        usuario);
+            }
+
+            item.setUnidadesDespachadas(nuevo);
+            itemPlanillaRepository.save(item);
+        }
+    }
+
     // RF39 — Datos para impresión de planilla
     // ══════════════════════════════════════════════════════════════════════
 
