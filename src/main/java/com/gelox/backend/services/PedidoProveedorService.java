@@ -358,18 +358,9 @@ public class PedidoProveedorService {
 
                 String rawUm = (colUm >= 0) ? cellText(row.getCell(colUm)).trim().toUpperCase() : "";
 
-                Integer qty;
-                if (rawUm.isBlank()) {
-                    // UM nula/vacía en el Excel → buscar solo por código técnico
-                    final String skuPrefix = sku + "|";
-                    qty = cantidades.entrySet().stream()
-                            .filter(e -> e.getKey().startsWith(skuPrefix)
-                                    && e.getValue() != null && e.getValue() > 0)
-                            .map(Map.Entry::getValue)
-                            .findFirst()
-                            .orElse(null);
-                } else {
-                    // UM presente → normalizar y buscar por clave compuesta SKU|UM
+                Integer qty = null;
+                if (!rawUm.isBlank()) {
+                    // UM presente → normalizar y buscar primero por clave compuesta SKU|UM
                     String um;
                     if (rawUm.startsWith("CAJ") || rawUm.equals("CJ")) {
                         um = "CJ";
@@ -379,6 +370,17 @@ public class PedidoProveedorService {
                         um = rawUm;
                     }
                     qty = cantidades.get(sku + "|" + um);
+                }
+                // Fallback: si la UM estaba vacía O el lookup por UM no encontró cantidad,
+                // buscar por SKU solo (aplica a productos con unidad_medida null o UM no reconocida)
+                if (qty == null || qty == 0) {
+                    final String skuPrefix = sku + "|";
+                    qty = cantidades.entrySet().stream()
+                            .filter(e -> e.getKey().startsWith(skuPrefix)
+                                    && e.getValue() != null && e.getValue() > 0)
+                            .map(Map.Entry::getValue)
+                            .findFirst()
+                            .orElse(null);
                 }
 
                 Cell cantCell = row.getCell(colCantidad);
