@@ -536,4 +536,96 @@ public class PedidoProveedorService {
         return generarExcelDesdeTemplate(pedido);
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // RF53 — Modificar un pedido en estado PENDIENTE (por voz)
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Transactional
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
+    public Map<String, Object> modificarPedidoPendiente(UUID pedidoId, ModificarPedidoRequest req, Usuario usuarioActual) {
+
+        PedidoProveedor pedido = pedidoRepo.findByIdWithItems(pedidoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+
+        if (pedido.getEstado() != EstadoPedido.PENDIENTE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Solo se pueden modificar pedidos en estado PENDIENTE");
+        }
+
+        Producto producto = productoRepo.findById(req.productoId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Producto no encontrado: " + req.productoId()));
+
+        switch (req.accion()) {
+            case AGREGAR    -> agregarItemPedido(pedido, producto, req);
+            case ELIMINAR   -> eliminarItemPedido(pedido, producto);
+            case ACTUALIZAR -> actualizarItemPedido(pedido, producto, req);
+        }
+
+        PedidoProveedor guardado = pedidoRepo.save(pedido);
+
+        eventoService.registrarEvento(
+                TipoEvento.PEDIDO_PROVEEDOR,
+                String.format("Pedido #%s modificado: %s %s.",
+                        guardado.getId().toString().substring(0, 8).toUpperCase(),
+                        req.accion().name(),
+                        producto.getNombre()),
+                usuarioActual.getId());
+
+        return Map.of("pedidoId", guardado.getId(), "excel", generarExcelDesdeTemplate(guardado));
+    }
+
+    private void agregarItemPedido(PedidoProveedor pedido, Producto producto, ModificarPedidoRequest req) {
+        int cajas = valorOrCero(req.cantidadCajas());
+        int unidades = valorOrCero(req.cantidadUnidades());
+
+        pedido.getItems().stream()
+                .filter(i -> i.getProducto().getId().equals(producto.getId()))
+                .findFirst()
+                .ifPresentOrElse(
+                        item -> {
+                            item.setCantidadCajas(item.getCantidadCajas() + cajas);
+                            item.setCantidadUnidades(item.getCantidadUnidades() + unidades);
+                        },
+                        () -> pedido.getItems().add(ItemPedidoProveedor.builder()
+                                .pedido(pedido)
+                                .producto(producto)
+                                .cantidadCajas(cajas)
+                                .cantidadUnidades(unidades)
+                                .cantidadRecibida(0)
+                                .precioUnitario(producto.getPrecioCosto())
+                                .build()));
+    }
+
+    private void eliminarItemPedido(PedidoProveedor pedido, Producto producto) {
+        boolean existia = pedido.getItems().removeIf(i -> i.getProducto().getId().equals(producto.getId()));
+        if (!existia) {
+            throw new IllegalArgumentException("El producto no está en el pedido: " + producto.getId());
+        }
+        if (pedido.getItems().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El pedido no puede quedar sin productos");
+        }
+    }
+
+    private void actualizarItemPedido(PedidoProveedor pedido, Producto producto, ModificarPedidoRequest req) {
+        ItemPedidoProveedor item = pedido.getItems().stream()
+                .filter(i -> i.getProducto().getId().equals(producto.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "El producto no está en el pedido: " + producto.getId()));
+
+        int cajas = valorOrCero(req.cantidadCajas());
+        int unidades = valorOrCero(req.cantidadUnidades());
+        if (cajas < 0 || unidades < 0 || (cajas == 0 && unidades == 0)) {
+            throw new IllegalArgumentException("Las cantidades deben ser >= 0 y al menos una mayor que 0");
+        }
+
+        item.setCantidadCajas(cajas);
+        item.setCantidadUnidades(unidades);
+    }
+
+    private static int valorOrCero(Integer valor) {
+        return valor != null ? valor : 0;
+    }
+
 }

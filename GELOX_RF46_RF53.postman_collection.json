@@ -1,0 +1,247 @@
+{
+  "info": {
+    "name": "GELOX RF46 - RF53 Voz",
+    "_postman_id": "b7e2f4a0-1c3d-4e5f-9a8b-0d1e2f3a4b5c",
+    "description": "Colección para los endpoints de comandos de voz (RF46-RF53). Esta carga inicial solo trae la carpeta RF53 (modificar un pedido PENDIENTE por voz); las de RF46-RF52 se agregan en sus propios PRs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "Firebase ID Token de un usuario ADMINISTRADOR o ENCARGADO_INVENTARIO"
+    },
+    {
+      "key": "comandoId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa automáticamente al correr '01 - Interpretar: agregar a pedido pendiente'"
+    },
+    {
+      "key": "pedidoId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa automáticamente al confirmar el cambio"
+    },
+    {
+      "key": "pedidoRecibidoId",
+      "value": "",
+      "type": "string",
+      "description": "UUID de un pedido en estado RECIBIDO (pegar uno manualmente para probar el 409)"
+    }
+  ],
+  "item": [
+    {
+      "name": "RF53",
+      "item": [
+        {
+          "name": "01 - Interpretar: agregar a pedido pendiente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('requiere confirmación', () => pm.expect(body.requiereConfirmacion).to.eql(true));",
+                  "pm.test('trae comandoId', () => pm.expect(body.comandoId).to.not.be.empty);",
+                  "pm.test('trae cantidadNueva en datos', () => pm.expect(body.datos.cantidadNueva).to.exist);",
+                  "if (body.comandoId) pm.collectionVariables.set('comandoId', body.comandoId);",
+                  "if (body.datos && body.datos.pedidoId) pm.collectionVariables.set('pedidoId', body.datos.pedidoId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "voz", "interpretar"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Al pedido pendiente agrégale 10 de Festival\",\n  \"confianza\": 0.95\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Requiere que ya exista un pedido en estado PENDIENTE con Festival en sus ítems (por ejemplo, el creado en RF52 con 15 cajas). Responde 200 con requiereConfirmacion=true y datos.cantidadNueva (15 + 10 = 25 cajas)."
+          },
+          "response": [
+            {
+              "name": "200 OK - Pide confirmación",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"comandoId\": \"11111111-1111-1111-1111-111111111111\",\n  \"intencion\": \"MODIFICAR_PEDIDO\",\n  \"requiereConfirmacion\": true,\n  \"expiraEnSegundos\": 15,\n  \"textoRespuesta\": \"Al pedido #AB12CD34 se agregan 10 cajas de Festival (quedarían 25). ¿Confirmas?\",\n  \"datos\": {\n    \"pedidoId\": \"22222222-2222-2222-2222-222222222222\",\n    \"accion\": \"AGREGAR\",\n    \"producto\": \"Festival\",\n    \"cantidadAnterior\": 15,\n    \"cantidadNueva\": 25\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "02 - Confirmar: agregar a pedido pendiente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('estado PROCESADO', () => pm.expect(pm.response.json().estado).to.eql('PROCESADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/confirmar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "voz", "confirmar"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comandoId\": \"{{comandoId}}\",\n  \"confirmar\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Corre justo después de 01 (el comandoId vence a los 15 s). Aplica el cambio, guarda el pedido y regenera el Excel; datos.exportUrl apunta a GET /api/inventario/pedidos/{id}/exportar (T47-BE4)."
+          },
+          "response": [
+            {
+              "name": "200 OK - Pedido modificado",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"estado\": \"PROCESADO\",\n  \"textoRespuesta\": \"Pedido modificado. Ya puedes descargar el archivo actualizado.\",\n  \"datos\": {\n    \"pedidoId\": \"22222222-2222-2222-2222-222222222222\",\n    \"exportUrl\": \"/api/inventario/pedidos/22222222-2222-2222-2222-222222222222/exportar\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "03 - Verificar cambio: GET pedido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const festival = (body.items || []).find(i => (i.nombre || '').toLowerCase().includes('festival'));",
+                  "pm.test('Festival quedó en 25 cajas', () => pm.expect(festival.cantidadCajas).to.eql(25));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/inventario/pedidos/{{pedidoId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventario", "pedidos", "{{pedidoId}}"]
+            },
+            "description": "Confirma que el GET de detalle (RF22) refleja el cambio aplicado por voz: Festival debe quedar con 25 cajas."
+          },
+          "response": []
+        },
+        {
+          "name": "04 - Interpretar: sin pedido pendiente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok=false y no pide confirmación', () => pm.expect(body.requiereConfirmacion).to.eql(false));",
+                  "pm.test('trae mensaje de que no hay pedidos', () => pm.expect(body.textoRespuesta).to.include('No hay pedidos pendientes'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "voz", "interpretar"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Al pedido pendiente agrégale 5 de Festival\",\n  \"confianza\": 0.95\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Correr esto cuando NO exista ningún pedido en estado PENDIENTE (por ejemplo, luego de que el paso 02 dejó el único pendiente en curso, o tras recibirlo por RF23). El handler responde ok=false sin crear un pendiente de confirmación; el comando queda guardado como ERROR en comando_voz."
+          },
+          "response": [
+            {
+              "name": "200 OK - No hay pedidos pendientes",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"comandoId\": \"33333333-3333-3333-3333-333333333333\",\n  \"intencion\": \"MODIFICAR_PEDIDO\",\n  \"requiereConfirmacion\": false,\n  \"expiraEnSegundos\": null,\n  \"textoRespuesta\": \"No hay pedidos pendientes.\",\n  \"datos\": {}\n}"
+            }
+          ]
+        },
+        {
+          "name": "05 - Confirmar sobre un pedido ya RECIBIDO (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 CONFLICT', () => pm.response.to.have.status(409));",
+                  "pm.test('cuerpo trae el mensaje de error', () => pm.expect(pm.response.json().error).to.include('PENDIENTE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/confirmar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "voz", "confirmar"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comandoId\": \"{{comandoId}}\",\n  \"confirmar\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Manual: 1) correr 01 apuntando a un pedido que en ese momento esté PENDIENTE (queda el comandoId en {{comandoId}}); 2) antes de confirmar, recibir ese mismo pedido por RF23 (POST /api/inventario/entradas) para que pase a RECIBIDO; 3) correr esta request dentro de los 15 s. El servicio responde 409 'Solo se pueden modificar pedidos en estado PENDIENTE', y GlobalExceptionHandler lo devuelve tal cual como {\"error\": \"...\"}."
+          },
+          "response": [
+            {
+              "name": "409 Conflict - Pedido ya no está PENDIENTE",
+              "status": "Conflict",
+              "code": 409,
+              "body": "{\n  \"error\": \"Solo se pueden modificar pedidos en estado PENDIENTE\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
