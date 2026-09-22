@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
  * {@link ResolvedorProducto}: minúsculas, sin tildes, números escritos a
  * dígitos y montos con separador de miles ("2.500") a número plano.
  */
-final class NormalizadorVoz {
+public final class NormalizadorVoz {
 
     private NormalizadorVoz() {
     }
@@ -34,7 +34,7 @@ final class NormalizadorVoz {
     private static final Pattern MONTO_MILES = Pattern.compile("(?<=\\d)\\.(?=\\d{3}\\b)");
     private static final Pattern ESPACIOS = Pattern.compile("\\s+");
 
-    static String normalizar(String texto) {
+    public static String normalizar(String texto) {
         if (texto == null) return "";
 
         String t = texto.toLowerCase();

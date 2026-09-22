@@ -4,13 +4,16 @@ import com.gelox.backend.catalogo.dto.PagedResponse;
 import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.*;
 import com.gelox.backend.repositories.*;
+import com.gelox.backend.security.RequiereRol;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -515,6 +518,22 @@ public class PedidoProveedorService {
                 .orElseThrow(() -> new NoSuchElementException(
                         "Pedido no encontrado con id: " + id));
         return PedidoDetalleDTO.from(pedido);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // T47 — Reexportar el Excel de un pedido ya creado
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Vuelve a generar el Excel Nutresa de un pedido existente (por ejemplo,
+     * cuando se creó por voz y el archivo no viajó en esa respuesta).
+     */
+    @Transactional(readOnly = true)
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
+    public byte[] exportarExcelPedido(UUID pedidoId) {
+        PedidoProveedor pedido = pedidoRepo.findByIdWithItems(pedidoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+        return generarExcelDesdeTemplate(pedido);
     }
 
 }

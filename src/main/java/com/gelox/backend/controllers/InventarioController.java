@@ -147,6 +147,34 @@ public class InventarioController {
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // T47 — GET /api/inventario/pedidos/{id}/exportar
+    // Reexportar el Excel Nutresa de un pedido ya creado
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Vuelve a descargar el Excel de un pedido existente (p. ej. uno creado
+     * por voz, cuyo archivo no viaja en la respuesta de /api/voz/confirmar).
+     *
+     * Roles: ENCARGADO_INVENTARIO, ADMINISTRADOR.
+     */
+    @GetMapping("/pedidos/{id}/exportar")
+    public ResponseEntity<byte[]> exportarPedido(@PathVariable UUID id) {
+        byte[] excel = pedidoService.exportarExcelPedido(id);
+        String nombreArchivo = "pedido-nutresa-" +
+                LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".xlsx";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentDisposition(
+                ContentDisposition.attachment().filename(nombreArchivo).build());
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excel);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // RF22 + RF23 — POST /api/inventario/entradas
     // Registrar entrada de mercancía (actualiza stock + compara con pedido)
     // ──────────────────────────────────────────────────────────────────────
