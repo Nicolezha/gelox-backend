@@ -182,6 +182,39 @@ class VozServiceTest {
     }
 
     @Test
+    @DisplayName("si el handler responde ok=false: ok=false, no pide confirmación y se guarda ERROR")
+    void handlerSinExito_noCreaPendienteYResponseOkFalso() {
+        stubGuardarComando();
+        handlerVenta.interpretarSinExito = true;
+
+        VozInterpretarResponse interpretado = vozService.interpretar(
+                new VozInterpretarRequest("vende dos festival", 0.95), usuario);
+
+        assertThat(interpretado.ok()).isFalse();
+        assertThat(interpretado.requiereConfirmacion()).isFalse();
+        assertThat(interpretado.expiraEnSegundos()).isNull();
+        assertThat(interpretado.textoRespuesta()).isEqualTo("No hay pedidos pendientes.");
+
+        ArgumentCaptor<ComandoVoz> captor = ArgumentCaptor.forClass(ComandoVoz.class);
+        verify(comandoVozRepository).save(captor.capture());
+        assertThat(captor.getValue().getEstado()).isEqualTo(EstadoComandoVoz.ERROR);
+
+        assertThatThrownBy(() ->
+                vozService.confirmar(new VozConfirmarRequest(interpretado.comandoId(), true), usuario))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode().value()).isEqualTo(404));
+    }
+
+    @Test
+    @DisplayName("una interpretación exitosa responde ok=true")
+    void interpretacionExitosa_okTrue() {
+        VozInterpretarResponse interpretado = vozService.interpretar(
+                new VozInterpretarRequest("vende dos festival", 0.95), usuario);
+
+        assertThat(interpretado.ok()).isTrue();
+    }
+
+    @Test
     @DisplayName("intención sin handler registrado se guarda ERROR")
     void sinHandlerRegistrado_guardaError() {
         stubGuardarComando();
@@ -211,6 +244,7 @@ class VozServiceTest {
         private final boolean requiereConfirmacion;
         boolean seEjecuto = false;
         boolean fallarAlEjecutar = false;
+        boolean interpretarSinExito = false;
         Object payloadRecibidoEnEjecutar;
 
         HandlerDePrueba(TipoIntencionVoz tipo, boolean requiereConfirmacion) {
@@ -230,6 +264,9 @@ class VozServiceTest {
 
         @Override
         public VozResultado interpretar(VozContexto ctx) {
+            if (interpretarSinExito) {
+                return new VozResultado(false, "No hay pedidos pendientes.", Map.of(), null);
+            }
             String payload = tipo == TipoIntencionVoz.REGISTRAR_VENTA ? "payload-interno-venta" : null;
             return new VozResultado(true, "¿Confirmas? " + ctx.texto(), Map.of(), payload);
         }

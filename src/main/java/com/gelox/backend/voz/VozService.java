@@ -68,7 +68,7 @@ public class VozService {
         if (resultado.intencion() == null) {
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
                     null, EstadoComandoVoz.ERROR, MENSAJE_NO_ENTENDIDO);
-            return new VozInterpretarResponse(comando.getId(), null, false, null, MENSAJE_NO_ENTENDIDO, Map.of());
+            return new VozInterpretarResponse(comando.getId(), false, null, false, null, MENSAJE_NO_ENTENDIDO, Map.of());
         }
 
         IntencionHandler handler = handlersPorTipo.get(resultado.intencion());
@@ -76,12 +76,19 @@ public class VozService {
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
                     resultado.intencion(), EstadoComandoVoz.ERROR, MENSAJE_SIN_HANDLER);
             return new VozInterpretarResponse(
-                    comando.getId(), resultado.intencion().name(), false, null, MENSAJE_SIN_HANDLER, Map.of());
+                    comando.getId(), false, resultado.intencion().name(), false, null, MENSAJE_SIN_HANDLER, Map.of());
         }
 
         LocalDate hoy = LocalDate.now(ZONA_BOGOTA);
         VozContexto ctx = new VozContexto(request.texto(), resultado.slots(), request.confianza(), usuario, hoy);
         VozResultado interpretado = handler.interpretar(ctx);
+
+        if (!interpretado.ok()) {
+            ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
+                    resultado.intencion(), EstadoComandoVoz.ERROR, interpretado.textoRespuesta());
+            return new VozInterpretarResponse(comando.getId(), false, resultado.intencion().name(), false, null,
+                    interpretado.textoRespuesta(), interpretado.datos());
+        }
 
         boolean necesitaConfirmacion = handler.requiereConfirmacion() || request.confianza() < UMBRAL_CONFIANZA;
 
@@ -90,13 +97,13 @@ public class VozService {
             DatosPendientes datos = new DatosPendientes(request.texto(), request.confianza(), interpretado.payload());
             pendienteStore.put(comandoId, usuario.getId(), resultado.intencion(), datos);
 
-            return new VozInterpretarResponse(comandoId, resultado.intencion().name(), true,
+            return new VozInterpretarResponse(comandoId, true, resultado.intencion().name(), true,
                     VozPendienteStore.TTL_SEGUNDOS, interpretado.textoRespuesta(), interpretado.datos());
         }
 
         ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
                 resultado.intencion(), EstadoComandoVoz.PROCESADO, interpretado.textoRespuesta());
-        return new VozInterpretarResponse(comando.getId(), resultado.intencion().name(), false, null,
+        return new VozInterpretarResponse(comando.getId(), true, resultado.intencion().name(), false, null,
                 interpretado.textoRespuesta(), interpretado.datos());
     }
 

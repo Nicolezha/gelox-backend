@@ -68,7 +68,11 @@ public class ModificarPedidoHandler implements IntencionHandler {
         if (pendientes.isEmpty()) {
             return sinCambios("No hay pedidos pendientes.");
         }
-        PedidoProveedor pedido = pendientes.get(0);
+        // Los ítems y productos son lazy y aquí no hay sesión: se cargan con JOIN FETCH.
+        PedidoProveedor pedido = pedidoRepository.findByIdWithItems(pendientes.get(0).getId()).orElse(null);
+        if (pedido == null) {
+            return sinCambios("No hay pedidos pendientes.");
+        }
 
         Matcher productoMatcher = PRODUCTO_PATTERN.matcher(texto);
         if (!productoMatcher.find()) {

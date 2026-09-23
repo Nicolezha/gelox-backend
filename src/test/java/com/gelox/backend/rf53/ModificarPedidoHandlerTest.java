@@ -29,6 +29,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -102,6 +103,7 @@ class ModificarPedidoHandlerTest {
     void productoAusenteDelPedido_devuelveOkFalso() {
         PedidoProveedor pedido = pedidoPendienteConFestival(15);
         when(pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)).thenReturn(List.of(pedido));
+        when(pedidoRepository.findByIdWithItems(pedido.getId())).thenReturn(Optional.of(pedido));
 
         UUID idSoloLack = UUID.randomUUID();
         when(resolvedorProducto.resolver("solo lack")).thenReturn(List.of(
@@ -119,6 +121,7 @@ class ModificarPedidoHandlerTest {
     void agregar_elResumenTraeCantidadNuevaCorrecta() {
         PedidoProveedor pedido = pedidoPendienteConFestival(15);
         when(pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)).thenReturn(List.of(pedido));
+        when(pedidoRepository.findByIdWithItems(pedido.getId())).thenReturn(Optional.of(pedido));
         when(resolvedorProducto.resolver("festival")).thenReturn(List.of(
                 new ResolvedorProducto.ProductoCandidato(festival.getId(), "Festival", 1.0, 24)));
 
@@ -137,6 +140,7 @@ class ModificarPedidoHandlerTest {
     void eliminar_generaResumen() {
         PedidoProveedor pedido = pedidoPendienteConFestival(15);
         when(pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)).thenReturn(List.of(pedido));
+        when(pedidoRepository.findByIdWithItems(pedido.getId())).thenReturn(Optional.of(pedido));
         when(resolvedorProducto.resolver("festival")).thenReturn(List.of(
                 new ResolvedorProducto.ProductoCandidato(festival.getId(), "Festival", 1.0, 24)));
 
@@ -153,6 +157,7 @@ class ModificarPedidoHandlerTest {
     void actualizar_generaResumen() {
         PedidoProveedor pedido = pedidoPendienteConFestival(15);
         when(pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)).thenReturn(List.of(pedido));
+        when(pedidoRepository.findByIdWithItems(pedido.getId())).thenReturn(Optional.of(pedido));
         when(resolvedorProducto.resolver("festival")).thenReturn(List.of(
                 new ResolvedorProducto.ProductoCandidato(festival.getId(), "Festival", 1.0, 24)));
 
@@ -169,6 +174,7 @@ class ModificarPedidoHandlerTest {
     void ejecutar_delegaEnModificarPedidoPendiente() {
         PedidoProveedor pedido = pedidoPendienteConFestival(15);
         when(pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)).thenReturn(List.of(pedido));
+        when(pedidoRepository.findByIdWithItems(pedido.getId())).thenReturn(Optional.of(pedido));
         when(resolvedorProducto.resolver("festival")).thenReturn(List.of(
                 new ResolvedorProducto.ProductoCandidato(festival.getId(), "Festival", 1.0, 24)));
 

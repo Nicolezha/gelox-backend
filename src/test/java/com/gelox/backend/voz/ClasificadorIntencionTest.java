@@ -84,6 +84,15 @@ class ClasificadorIntencionTest {
     }
 
     @Test
+    @DisplayName("verbo después de \"pedido\": al pedido pendiente agrégale... es MODIFICAR_PEDIDO")
+    void modificarPedidoConPedidoAntesDelVerbo() {
+        var resultado = clasificador.clasificar("Al pedido pendiente agrégale 10 de Festival");
+
+        assertThat(resultado.intencion()).isEqualTo(TipoIntencionVoz.MODIFICAR_PEDIDO);
+        assertThat(resultado.slots()).containsEntry("cantidad", "10");
+    }
+
+    @Test
     @DisplayName("frase sin coincidencia no devuelve intención")
     void sinCoincidencia() {
         var resultado = clasificador.clasificar("qué clima hace hoy");

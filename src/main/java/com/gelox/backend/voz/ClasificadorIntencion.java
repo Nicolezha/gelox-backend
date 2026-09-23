@@ -36,7 +36,8 @@ public class ClasificadorIntencion {
             new Regla(TipoIntencionVoz.CONSULTAR_FINANZAS,
                     Pattern.compile("cuanto (ganamos|vendimos)|ganancia|ingresos|cierra el dia|cierre del dia|resumen del dia")),
             new Regla(TipoIntencionVoz.MODIFICAR_PEDIDO,
-                    Pattern.compile("(agrega|agregale|quita|elimina|cambia|actualiza).*pedido")),
+                    Pattern.compile("(agrega|agregale|quita|elimina|cambia|actualiza).*pedido"
+                            + "|pedido.*(agrega|agregale|quita|elimina|cambia|actualiza)")),
             new Regla(TipoIntencionVoz.GENERAR_PEDIDO,
                     Pattern.compile("(genera|crea|haz|arma).*pedido"))
     );
