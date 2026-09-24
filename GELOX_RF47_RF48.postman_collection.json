@@ -1,0 +1,854 @@
+{
+  "info": {
+    "name": "GELOX RF47 - RF48 Venta por voz",
+    "_postman_id": "b946601f-e63b-482a-8180-62943fcb1a22",
+    "description": "Registrar ventas por voz: RF47 (ventanilla) y RF48 (rural). Usa POST /api/voz/interpretar y /api/voz/confirmar.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "RF47",
+      "description": "Venta de ventanilla por voz (RegistrarVentaHandler). {{token}}: ADMINISTRADOR (sirve para voz, reporte diario e inventario). {{tokenInventario}}: ENCARGADO_INVENTARIO, solo para 09. Requiere Festival activo con al menos 3 cajas de stock. Cada interpretar vence a los 15 s: corre 02 → 03 y 06 → 07 seguidos. 03 registra una venta real y descuenta stock.",
+      "item": [
+        {
+          "name": "01 - Reporte diario antes de la venta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('ingresoVentanillaAntes', pm.response.json().ingresoVentanilla);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes/diario",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "diario"
+              ]
+            },
+            "description": "Guarda ingresoVentanilla de hoy para compararlo en 04."
+          },
+          "response": []
+        },
+        {
+          "name": "02 - Interpretar: comando del FP-15",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok=true', () => pm.expect(body.ok).to.eql(true));",
+                  "pm.test('intención REGISTRAR_VENTA', () => pm.expect(body.intencion).to.eql('REGISTRAR_VENTA'));",
+                  "pm.test('requiere confirmación', () => pm.expect(body.requiereConfirmacion).to.eql(true));",
+                  "pm.test('canal VENTANILLA y pago EFECTIVO', () => {",
+                  "  pm.expect(body.datos.canal).to.eql('VENTANILLA');",
+                  "  pm.expect(body.datos.metodoPago).to.eql('EFECTIVO');",
+                  "});",
+                  "pm.test('trae total > 0', () => pm.expect(Number(body.datos.total)).to.be.above(0));",
+                  "pm.test('3 cajas de Festival', () => {",
+                  "  pm.expect(body.datos.items).to.have.lengthOf(1);",
+                  "  pm.expect(body.datos.items[0].nombre).to.eql('Festival');",
+                  "  pm.expect(body.datos.items[0].cajas).to.eql(3);",
+                  "});",
+                  "if (body.comandoId) pm.collectionVariables.set('comandoId', body.comandoId);",
+                  "if (body.datos) pm.collectionVariables.set('totalVentanilla', body.datos.total);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "description": "Comando literal del FP-15. Responde 200 con el resumen y datos.total (a precio de catálogo).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Registra tres cajas de Festival a 2.500, canal ventanilla\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK - Pide confirmación",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"comandoId\": \"11111111-1111-1111-1111-111111111111\",\n  \"ok\": true,\n  \"intencion\": \"REGISTRAR_VENTA\",\n  \"requiereConfirmacion\": true,\n  \"expiraEnSegundos\": 15,\n  \"textoRespuesta\": \"Venta ventanilla: 3 cajas de Festival. Total $7500. Pago: efectivo. ¿Confirmas?\",\n  \"datos\": {\n    \"canal\": \"VENTANILLA\",\n    \"metodoPago\": \"EFECTIVO\",\n    \"total\": 7500.0,\n    \"items\": [\n      {\n        \"productoId\": \"22222222-2222-2222-2222-222222222222\",\n        \"nombre\": \"Festival\",\n        \"cajas\": 3,\n        \"unidades\": 0,\n        \"subtotal\": 7500.0\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "03 - Confirmar: venta de ventanilla",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('estado PROCESADO', () => pm.expect(body.estado).to.eql('PROCESADO'));",
+                  "pm.test('trae ventaId', () => pm.expect(body.datos.ventaId).to.exist);",
+                  "pm.test('total igual al interpretado', () => pm.expect(Number(body.datos.total)).to.be.closeTo(Number(pm.collectionVariables.get('totalVentanilla')), 0.001));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/confirmar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "confirmar"
+              ]
+            },
+            "description": "Corre justo después de 02. confirmarVenta registra la venta y descuenta el stock.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comandoId\": \"{{comandoId}}\",\n  \"confirmar\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK - Venta registrada",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"estado\": \"PROCESADO\",\n  \"textoRespuesta\": \"Venta registrada por $7500.\",\n  \"datos\": {\n    \"ventaId\": \"33333333-3333-3333-3333-333333333333\",\n    \"total\": 7500.0\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "04 - Reporte diario: sube ingresoVentanilla",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ingresoVentanilla sube en el total de la venta', () => {",
+                  "  const antes = Number(pm.collectionVariables.get('ingresoVentanillaAntes'));",
+                  "  const venta = Number(pm.collectionVariables.get('totalVentanilla'));",
+                  "  pm.expect(Number(pm.response.json().ingresoVentanilla)).to.be.closeTo(antes + venta, 0.001);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes/diario",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "diario"
+              ]
+            },
+            "description": "ingresoVentanilla = valor de 01 + total de la venta confirmada en 03."
+          },
+          "response": []
+        },
+        {
+          "name": "05 - Inventario antes de cancelar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const festival = pm.response.json().find(p => p.nombre === 'Festival');",
+                  "pm.test('Festival está en el inventario', () => pm.expect(festival).to.exist);",
+                  "pm.collectionVariables.set('stockFestivalAntes', festival.cantidadDisponible);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/inventario/productos?q=Festival",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventario",
+                "productos"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Festival"
+                }
+              ]
+            },
+            "description": "Guarda el stock de Festival antes del comando que se va a cancelar."
+          },
+          "response": []
+        },
+        {
+          "name": "06 - Interpretar: comando a cancelar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok=true', () => pm.expect(body.ok).to.eql(true));",
+                  "if (body.comandoId) pm.collectionVariables.set('comandoId', body.comandoId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "description": "Mismo comando del FP-15; su comandoId se cancela en 07.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Registra tres cajas de Festival a 2.500, canal ventanilla\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "07 - Cancelar: confirmar=false",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('estado CANCELADO', () => pm.expect(pm.response.json().estado).to.eql('CANCELADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/confirmar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "confirmar"
+              ]
+            },
+            "description": "Corre justo después de 06. No registra venta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comandoId\": \"{{comandoId}}\",\n  \"confirmar\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK - Cancelado",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"estado\": \"CANCELADO\",\n  \"textoRespuesta\": \"Comando cancelado.\",\n  \"datos\": {}\n}"
+            }
+          ]
+        },
+        {
+          "name": "08 - Inventario después de cancelar: el stock no cambia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const festival = pm.response.json().find(p => p.nombre === 'Festival');",
+                  "pm.test('stock de Festival igual al de 05', () => pm.expect(festival.cantidadDisponible).to.eql(Number(pm.collectionVariables.get('stockFestivalAntes'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/inventario/productos?q=Festival",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventario",
+                "productos"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Festival"
+                }
+              ]
+            },
+            "description": "El stock de Festival debe ser el mismo que en 05."
+          },
+          "response": []
+        },
+        {
+          "name": "09 - Interpretar con ENCARGADO_INVENTARIO: 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('trae mensaje de error', () => pm.expect(pm.response.json().error).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenInventario}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "description": "RegistrarVentaHandler exige ADMINISTRADOR o ENCARGADO_VENTAS (@RequiereRol).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Registra tres cajas de Festival a 2.500, canal ventanilla\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "RF48",
+      "description": "Venta rural por voz (RegistrarVentaRuralFlujo). {{token}}: ADMINISTRADOR o ENCARGADO_VENTAS. Requiere Festival activo con stock (al menos 2 cajas) y exactamente un cliente rural cuyo nombre o teléfono contenga \"Marta\". Correr 01 → 02 → 03 seguidos: el comandoId vence a los 15 s.",
+      "item": [
+        {
+          "name": "01 - Interpretar: pedido rural a cliente registrado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok=true', () => pm.expect(body.ok).to.eql(true));",
+                  "pm.test('intención REGISTRAR_VENTA', () => pm.expect(body.intencion).to.eql('REGISTRAR_VENTA'));",
+                  "pm.test('requiere confirmación', () => pm.expect(body.requiereConfirmacion).to.eql(true));",
+                  "pm.test('canal RURAL', () => pm.expect(body.datos.canal).to.eql('RURAL'));",
+                  "pm.test('cliente registrado (no destinatario nuevo)', () => pm.expect(body.textoRespuesta).to.not.include('destinatario nuevo'));",
+                  "pm.test('envío 8000', () => pm.expect(Number(body.datos.costoEnvio)).to.eql(8000));",
+                  "pm.test('total = productos + envío', () => {",
+                  "  const d = body.datos;",
+                  "  pm.expect(Number(d.total)).to.be.closeTo(Number(d.totalProductos) + Number(d.costoEnvio), 0.001);",
+                  "});",
+                  "if (body.comandoId) pm.collectionVariables.set('comandoId', body.comandoId);",
+                  "if (body.datos) pm.collectionVariables.set('totalRural', body.datos.total);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Vende dos cajas de Festival para doña Marta, envío 8.000\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Resuelve \"Marta\" contra los clientes rurales (una coincidencia) y responde 200 con requiereConfirmacion=true. datos.total = datos.totalProductos + datos.costoEnvio."
+          },
+          "response": [
+            {
+              "name": "200 OK - Pide confirmación",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"comandoId\": \"33333333-3333-3333-3333-333333333333\",\n  \"ok\": true,\n  \"intencion\": \"REGISTRAR_VENTA\",\n  \"requiereConfirmacion\": true,\n  \"expiraEnSegundos\": 15,\n  \"textoRespuesta\": \"Pedido rural para Marta Pérez: 2 cajas de Festival. Envío $8000. Total $23000. ¿Confirmas?\",\n  \"datos\": {\n    \"canal\": \"RURAL\",\n    \"destinatario\": \"Marta Pérez\",\n    \"items\": [\n      {\n        \"productoId\": \"44444444-4444-4444-4444-444444444444\",\n        \"nombre\": \"Festival\",\n        \"cajas\": 2,\n        \"unidades\": 0,\n        \"subtotal\": 15000.0\n      }\n    ],\n    \"costoEnvio\": 8000,\n    \"totalProductos\": 15000.0,\n    \"total\": 23000.0\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "02 - Confirmar: pedido rural",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('estado PROCESADO', () => pm.expect(body.estado).to.eql('PROCESADO'));",
+                  "pm.test('trae pedidoRuralId y ventaId', () => {",
+                  "  pm.expect(body.datos.pedidoRuralId).to.exist;",
+                  "  pm.expect(body.datos.ventaId).to.exist;",
+                  "});",
+                  "pm.test('total igual al interpretado', () => pm.expect(Number(body.datos.total)).to.be.closeTo(Number(pm.collectionVariables.get('totalRural')), 0.001));",
+                  "if (body.datos) {",
+                  "  pm.collectionVariables.set('pedidoRuralId', body.datos.pedidoRuralId);",
+                  "  pm.collectionVariables.set('ventaId', body.datos.ventaId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/confirmar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "confirmar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comandoId\": \"{{comandoId}}\",\n  \"confirmar\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Corre justo después de 01. Llama a confirmarPedidoRural: crea la venta RURAL y el pedido_rural, y descuenta el stock."
+          },
+          "response": [
+            {
+              "name": "200 OK - Pedido rural registrado",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"estado\": \"PROCESADO\",\n  \"textoRespuesta\": \"Pedido rural registrado por $23000.\",\n  \"datos\": {\n    \"ventaId\": \"55555555-5555-5555-5555-555555555555\",\n    \"pedidoRuralId\": \"66666666-6666-6666-6666-666666666666\",\n    \"total\": 23000.0\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "03 - Verificar: el pedido aparece en GET /api/ventas/rural",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const pedido = pm.response.json().find(p => p.pedidoRuralId === pm.collectionVariables.get('pedidoRuralId'));",
+                  "pm.test('el pedido confirmado está en el listado', () => pm.expect(pedido).to.exist);",
+                  "pm.test('mismo total y envío 8000', () => {",
+                  "  pm.expect(Number(pedido.total)).to.be.closeTo(Number(pm.collectionVariables.get('totalRural')), 0.001);",
+                  "  pm.expect(Number(pedido.costoEnvio)).to.eql(8000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ventas/rural?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ventas",
+                "rural"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "El listado va del más reciente al más antiguo, así que el pedido de 02 sale en la primera página."
+          },
+          "response": []
+        },
+        {
+          "name": "04 - Interpretar: destinatario nuevo con envío \"ocho mil\"",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok=true', () => pm.expect(body.ok).to.eql(true));",
+                  "pm.test('destinatario nuevo', () => pm.expect(body.textoRespuesta).to.include('(destinatario nuevo)'));",
+                  "pm.test('\"ocho mil\" = 8000', () => pm.expect(Number(body.datos.costoEnvio)).to.eql(8000));",
+                  "pm.test('total = productos + envío', () => {",
+                  "  const d = body.datos;",
+                  "  pm.expect(Number(d.total)).to.be.closeTo(Number(d.totalProductos) + Number(d.costoEnvio), 0.001);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Vende una caja de Festival para Cliente Nuevo RF48, envío ocho mil\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Ningún cliente rural coincide con \"Cliente Nuevo RF48\": se trata como destinatario nuevo (no crea cliente_rural). No se confirma; el pendiente vence solo a los 15 s."
+          },
+          "response": [
+            {
+              "name": "200 OK - Destinatario nuevo",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"comandoId\": \"77777777-7777-7777-7777-777777777777\",\n  \"ok\": true,\n  \"intencion\": \"REGISTRAR_VENTA\",\n  \"requiereConfirmacion\": true,\n  \"expiraEnSegundos\": 15,\n  \"textoRespuesta\": \"Pedido rural para Cliente Nuevo RF48 (destinatario nuevo): 1 caja de Festival. Envío $8000. Total $15500. ¿Confirmas?\",\n  \"datos\": {\n    \"canal\": \"RURAL\",\n    \"destinatario\": \"Cliente Nuevo RF48\",\n    \"items\": [\n      {\n        \"productoId\": \"44444444-4444-4444-4444-444444444444\",\n        \"nombre\": \"Festival\",\n        \"cajas\": 1,\n        \"unidades\": 0,\n        \"subtotal\": 7500.0\n      }\n    ],\n    \"costoEnvio\": 8000,\n    \"totalProductos\": 7500.0,\n    \"total\": 15500.0\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "05 - Interpretar: sin destinatario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok=false', () => pm.expect(body.ok).to.eql(false));",
+                  "pm.test('no pide confirmación', () => pm.expect(body.requiereConfirmacion).to.eql(false));",
+                  "pm.test('pregunta el destinatario', () => pm.expect(body.textoRespuesta).to.eql('¿Para quién es el pedido rural?'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Vende dos cajas de Festival, envío 8.000\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "\"envío\" lo manda al flujo rural, pero no dice \"para ...\": responde ok=false y no deja pendiente."
+          },
+          "response": [
+            {
+              "name": "200 OK - Falta destinatario",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"comandoId\": \"88888888-8888-8888-8888-888888888888\",\n  \"ok\": false,\n  \"intencion\": \"REGISTRAR_VENTA\",\n  \"requiereConfirmacion\": false,\n  \"expiraEnSegundos\": null,\n  \"textoRespuesta\": \"¿Para quién es el pedido rural?\",\n  \"datos\": {}\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "Firebase ID Token de un ADMINISTRADOR (RF47 lo usa también para reportes e inventario)"
+    },
+    {
+      "key": "tokenInventario",
+      "value": "",
+      "type": "string",
+      "description": "Firebase ID Token de un ENCARGADO_INVENTARIO (solo RF47 / 09 → 403)"
+    },
+    {
+      "key": "comandoId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa automáticamente al interpretar"
+    },
+    {
+      "key": "totalVentanilla",
+      "value": "",
+      "type": "string",
+      "description": "Se completa en RF47 / 02"
+    },
+    {
+      "key": "ingresoVentanillaAntes",
+      "value": "",
+      "type": "string",
+      "description": "Se completa en RF47 / 01"
+    },
+    {
+      "key": "stockFestivalAntes",
+      "value": "",
+      "type": "string",
+      "description": "Se completa en RF47 / 05"
+    },
+    {
+      "key": "totalRural",
+      "value": "",
+      "type": "string",
+      "description": "Se completa en RF48 / 01"
+    },
+    {
+      "key": "pedidoRuralId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa en RF48 / 02"
+    },
+    {
+      "key": "ventaId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa en RF48 / 02"
+    }
+  ]
+}

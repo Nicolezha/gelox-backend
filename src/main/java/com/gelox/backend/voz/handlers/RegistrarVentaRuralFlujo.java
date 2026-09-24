@@ -3,18 +3,17 @@ package com.gelox.backend.voz.handlers;
 import com.gelox.backend.dto.CalcularVentaRequest;
 import com.gelox.backend.dto.CalcularVentaResponse;
 import com.gelox.backend.dto.CatalogoVentaDTO;
-import com.gelox.backend.dto.ConfirmarVentaRequest;
-import com.gelox.backend.dto.ConfirmarVentaResponse;
 import com.gelox.backend.dto.ItemCalculoRequest;
 import com.gelox.backend.dto.ItemCalculoResultado;
-import com.gelox.backend.dto.ItemVentaRequest;
-import com.gelox.backend.entities.CanalVenta;
-import com.gelox.backend.entities.MetodoPago;
-import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.VentaService;
-import com.gelox.backend.voz.IntencionHandler;
+import com.gelox.backend.ventas.rural.ClienteRuralService;
+import com.gelox.backend.ventas.rural.VentaRuralService;
+import com.gelox.backend.ventas.rural.dto.ClienteRuralDTO;
+import com.gelox.backend.ventas.rural.dto.ConfirmarPedidoRuralRequest;
+import com.gelox.backend.ventas.rural.dto.ItemPedidoRuralRequest;
+import com.gelox.backend.ventas.rural.dto.PedidoRuralResponse;
 import com.gelox.backend.voz.NormalizadorVoz;
 import com.gelox.backend.voz.ResolvedorProducto;
 import com.gelox.backend.voz.VozContexto;
@@ -36,75 +35,65 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * T41 — "registra tres cajas de Festival a 2.500, canal ventanilla".
- * Con {@code ctx.pendiente()} ("agrega 2 cajas de Solo Lack") fusiona lo
- * nuevo con la venta que sigue esperando confirmación.
+ * T41-BE4 — "vende dos cajas de Festival para doña Marta, envío 8.000".
+ * Lo invoca {@link RegistrarVentaHandler} cuando el comando es de canal rural;
+ * al confirmar reutiliza {@link VentaRuralService#confirmarPedidoRural}.
  */
 @Component
 @RequiredArgsConstructor
-public class RegistrarVentaHandler implements IntencionHandler {
+public class RegistrarVentaRuralFlujo {
+
+    /** Sobre el texto original: conserva mayúsculas y tildes del nombre. */
+    private static final Pattern DESTINATARIO_PATTERN = Pattern.compile(
+            "(?iu)\\bpara\\s+(.+?)(?=\\s*,|\\s+con\\s+|\\s+en\\s+|\\s+env[ií]o\\b|$)");
+    private static final Pattern HONORIFICO_PATTERN = Pattern.compile(
+            "(?iu)^(do[nñ]a|don|se[nñ]ora|se[nñ]or|sra?\\.?|sr\\.?)\\s+");
+
+    /** Sobre texto normalizado: "ocho mil" llega como "8 mil". */
+    private static final Pattern ENVIO_PATTERN = Pattern.compile("envio\\s+(?:de\\s+)?\\$?(\\d+)(\\s+mil\\b)?");
 
     /** Grupos: 1 cantidad, 2 caja(s)/unidad(es), 3 producto, 4 precio dicho (opcional). */
     private static final Pattern ITEM_PATTERN = Pattern.compile(
             "(\\d+)\\s*(cajas?|unidades?)\\s+de\\s+(.+?)(?:\\s+a\\s+\\$?(\\d+))?"
-                    + "(?=\\s*,|\\s+y\\s+|\\s+canal\\b|\\s+por\\b|\\s+con\\b|\\s+en\\b|$)");
+                    + "(?=\\s*,|\\s+y\\s+|\\s+para\\b|\\s+envio\\b|\\s+con\\b|\\s+en\\b|\\s+por\\b|$)");
 
-    /** "envío" también marca canal rural: el costo de envío solo existe en pedidos rurales. */
-    private static final Pattern ES_RURAL = Pattern.compile("\\b(rural|envio)\\b");
+    private static final int MAX_CLIENTES_EN_TEXTO = 5;
 
     private final ResolvedorProducto resolvedorProducto;
     private final VentaService ventaService;
-    private final RegistrarVentaRuralFlujo registrarVentaRuralFlujo;
+    private final ClienteRuralService clienteRuralService;
+    private final VentaRuralService ventaRuralService;
 
-    private record Payload(CanalVenta canal, MetodoPago metodoPago, List<ItemVentaRequest> items) {}
+    /** Público: {@link RegistrarVentaHandler} lo usa para enrutar {@code ejecutar}. */
+    public record Payload(UUID clienteRuralId, String nombreDestinatario,
+                          BigDecimal costoEnvio, List<ItemPedidoRuralRequest> items) {}
 
     private record ItemExtraido(int cajas, int unidades, String fragmentoProducto, BigDecimal precioDicho) {}
 
-    @Override
-    public TipoIntencionVoz tipo() {
-        return TipoIntencionVoz.REGISTRAR_VENTA;
-    }
-
-    @Override
-    public boolean requiereConfirmacion() {
-        return true;
-    }
-
-    @Override
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public VozResultado interpretar(VozContexto ctx) {
-        String texto = NormalizadorVoz.normalizar(ctx.texto());
-
-        boolean pendienteRural = ctx.pendiente() != null
-                && ctx.pendiente().payload() instanceof RegistrarVentaRuralFlujo.Payload;
-        if (pendienteRural || ES_RURAL.matcher(texto).find()) {
-            return registrarVentaRuralFlujo.interpretar(ctx);
+        if (ctx.pendiente() != null) {
+            return error("No puedo combinar un pedido rural con una venta en curso. "
+                    + "Confirma o cancela la actual y repite el pedido rural completo.");
         }
 
-        Payload anterior = ctx.pendiente() == null ? null : (Payload) ctx.pendiente().payload();
+        String original = ctx.texto();
+        String texto = NormalizadorVoz.normalizar(original);
 
-        CanalVenta canal;
-        MetodoPago metodoPago;
-        if (anterior != null) {
-            canal = anterior.canal();
-            metodoPago = anterior.metodoPago();
-        } else {
-            canal = CanalVenta.VENTANILLA;
-            metodoPago = texto.contains("transferencia") ? MetodoPago.TRANSFERENCIA : MetodoPago.EFECTIVO;
+        String fragmentoDestinatario = extraerDestinatario(original);
+        if (fragmentoDestinatario.isEmpty()) {
+            return error("¿Para quién es el pedido rural?");
         }
+
+        BigDecimal costoEnvio = extraerCostoEnvio(texto);
 
         List<ItemExtraido> extraidos = extraerItems(texto);
         if (extraidos.isEmpty()) {
-            return error("No entendí las cantidades. Di algo como 'registra tres cajas de Festival a 2.500, canal ventanilla'.");
+            return error("No entendí las cantidades. Di algo como 'vende dos cajas de Festival para doña Marta, envío 8.000'.");
         }
 
-        // productoId -> {cajas, unidades}; parte de lo ya pendiente y suma lo nuevo.
+        // productoId -> {cajas, unidades}; el mismo producto dicho dos veces se suma.
         Map<UUID, int[]> cantidades = new LinkedHashMap<>();
-        if (anterior != null) {
-            for (ItemVentaRequest item : anterior.items()) {
-                cantidades.put(item.productoId(), new int[]{item.cajas(), item.unidades()});
-            }
-        }
         Map<UUID, String> nombresDichos = new HashMap<>();
         Map<UUID, BigDecimal> preciosDichos = new HashMap<>();
 
@@ -134,10 +123,18 @@ public class RegistrarVentaHandler implements IntencionHandler {
             return error("No entendí ninguna cantidad válida. Intenta de nuevo.");
         }
 
+        // Destinatario: uno → cliente existente; ninguno → nuevo; varios → pedir nombre completo.
+        List<ClienteRuralDTO> encontrados = clienteRuralService.listarClientes(fragmentoDestinatario);
+        if (encontrados.size() > 1) {
+            return variosClientes(encontrados);
+        }
+        UUID clienteRuralId = encontrados.isEmpty() ? null : encontrados.get(0).id();
+        String nombreDestinatario = encontrados.isEmpty() ? fragmentoDestinatario : encontrados.get(0).nombre();
+
         Map<UUID, CatalogoVentaDTO> catalogo = ventaService.getCatalogo().stream()
                 .collect(Collectors.toMap(CatalogoVentaDTO::id, Function.identity()));
 
-        List<ItemVentaRequest> items = new ArrayList<>();
+        List<ItemPedidoRuralRequest> items = new ArrayList<>();
         List<ItemCalculoRequest> itemsCalculo = new ArrayList<>();
 
         for (Map.Entry<UUID, int[]> entrada : cantidades.entrySet()) {
@@ -148,8 +145,7 @@ public class RegistrarVentaHandler implements IntencionHandler {
             CatalogoVentaDTO producto = catalogo.get(productoId);
 
             if (producto == null) {
-                String nombre = nombresDichos.getOrDefault(productoId, productoId.toString());
-                return error("No encontré el producto \"" + nombre + "\". ¿Puedes repetirlo?");
+                return error("No encontré el producto \"" + nombresDichos.get(productoId) + "\". ¿Puedes repetirlo?");
             }
 
             int upC = producto.unidadesPorCaja() != null ? producto.unidadesPorCaja() : 0;
@@ -159,19 +155,21 @@ public class RegistrarVentaHandler implements IntencionHandler {
                         + ". Disponible: " + producto.stock() + ", solicitado: " + solicitadas);
             }
 
-            items.add(new ItemVentaRequest(productoId, cajas, unidades));
+            items.add(new ItemPedidoRuralRequest(productoId, cajas, unidades));
             itemsCalculo.add(new ItemCalculoRequest(productoId, cajas, unidades));
         }
 
         CalcularVentaResponse calculo = ventaService.calcularVenta(new CalcularVentaRequest(itemsCalculo));
         Map<UUID, BigDecimal> subtotales = calculo.items().stream()
                 .collect(Collectors.toMap(ItemCalculoResultado::productoId, ItemCalculoResultado::subtotal));
+        BigDecimal totalProductos = calculo.total();
+        BigDecimal total = totalProductos.add(costoEnvio);
 
         List<Map<String, Object>> datosItems = new ArrayList<>();
         List<String> descripciones = new ArrayList<>();
         List<String> avisosPrecio = new ArrayList<>();
 
-        for (ItemVentaRequest item : items) {
+        for (ItemPedidoRuralRequest item : items) {
             CatalogoVentaDTO producto = catalogo.get(item.productoId());
             datosItems.add(Map.of(
                     "productoId", item.productoId(),
@@ -181,7 +179,7 @@ public class RegistrarVentaHandler implements IntencionHandler {
                     "subtotal", subtotales.get(item.productoId())));
             descripciones.add(describir(item.cajas(), item.unidades()) + " de " + producto.nombre());
 
-            // confirmarVenta siempre usa el precio de catálogo: el dicho solo se avisa.
+            // confirmarPedidoRural siempre cobra el precio de catálogo: el dicho solo se avisa.
             BigDecimal precioDicho = preciosDichos.get(item.productoId());
             if (precioDicho != null && precioDicho.compareTo(producto.precioUnitario()) != 0) {
                 avisosPrecio.add(" El precio de catálogo de " + producto.nombre() + " es "
@@ -189,37 +187,83 @@ public class RegistrarVentaHandler implements IntencionHandler {
             }
         }
 
-        String textoRespuesta = "Venta " + canal.name().toLowerCase() + ": " + String.join(" y ", descripciones)
-                + ". Total $" + sinCeros(calculo.total()) + ". Pago: " + metodoPago.name().toLowerCase() + "."
-                + String.join("", avisosPrecio) + " ¿Confirmas?";
+        String textoRespuesta = "Pedido rural para " + nombreDestinatario
+                + (clienteRuralId == null ? " (destinatario nuevo)" : "") + ": "
+                + String.join(" y ", descripciones) + ". Envío $" + sinCeros(costoEnvio)
+                + ". Total $" + sinCeros(total) + "." + String.join("", avisosPrecio) + " ¿Confirmas?";
 
         Map<String, Object> datos = Map.of(
-                "canal", canal.name(),
+                "canal", "RURAL",
+                "destinatario", nombreDestinatario,
                 "items", datosItems,
-                "total", calculo.total(),
-                "metodoPago", metodoPago.name());
+                "costoEnvio", costoEnvio,
+                "totalProductos", totalProductos,
+                "total", total);
 
-        return new VozResultado(true, textoRespuesta, datos, new Payload(canal, metodoPago, items));
+        return new VozResultado(true, textoRespuesta, datos,
+                new Payload(clienteRuralId, nombreDestinatario, costoEnvio, items));
     }
 
-    @Override
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public VozResultado ejecutar(VozPendiente pendiente, Usuario usuario) {
-        if (pendiente.payload() instanceof RegistrarVentaRuralFlujo.Payload) {
-            return registrarVentaRuralFlujo.ejecutar(pendiente, usuario);
-        }
         Payload p = (Payload) pendiente.payload();
 
-        // Si el stock cambió desde interpretar, StockInsuficienteException sube tal cual (422).
-        ConfirmarVentaResponse r = ventaService.confirmarVenta(
-                new ConfirmarVentaRequest(p.canal(), p.metodoPago(), p.items()), usuario);
+        if (p.clienteRuralId() == null && (p.nombreDestinatario() == null || p.nombreDestinatario().isBlank())) {
+            return error("¿Para quién es el pedido rural?");
+        }
 
-        return new VozResultado(true, "Venta registrada por $" + sinCeros(r.total()) + ".",
-                Map.of("ventaId", r.ventaId(), "total", r.total()), null);
+        // Si el stock cambió desde interpretar, StockInsuficienteException sube tal cual (422).
+        PedidoRuralResponse r = ventaRuralService.confirmarPedidoRural(new ConfirmarPedidoRuralRequest(
+                p.clienteRuralId(), p.nombreDestinatario(), null, null, null, p.costoEnvio(), p.items()), usuario);
+
+        return new VozResultado(true, "Pedido rural registrado por $" + sinCeros(r.total()) + ".",
+                Map.of("ventaId", r.ventaId(), "pedidoRuralId", r.pedidoRuralId(), "total", r.total()), null);
     }
 
     private VozResultado error(String mensaje) {
         return new VozResultado(false, mensaje, Map.of(), null);
+    }
+
+    private VozResultado variosClientes(List<ClienteRuralDTO> encontrados) {
+        List<String> nombres = new ArrayList<>();
+        List<Map<String, Object>> clientes = new ArrayList<>();
+
+        for (ClienteRuralDTO c : encontrados) {
+            if (nombres.size() < MAX_CLIENTES_EN_TEXTO) {
+                boolean conCorregimiento = c.corregimiento() != null && !c.corregimiento().isBlank();
+                nombres.add(c.nombre() + (conCorregimiento ? " (" + c.corregimiento() + ")" : ""));
+            }
+            // HashMap: teléfono y corregimiento pueden ser nulos.
+            Map<String, Object> cliente = new HashMap<>();
+            cliente.put("id", c.id());
+            cliente.put("nombre", c.nombre());
+            cliente.put("telefono", c.telefono());
+            cliente.put("corregimiento", c.corregimiento());
+            clientes.add(cliente);
+        }
+
+        int restantes = encontrados.size() - nombres.size();
+        String texto = "Encontré varios clientes: " + String.join(", ", nombres)
+                + (restantes > 0 ? " y " + restantes + " más" : "")
+                + ". Repite el pedido con el nombre completo.";
+
+        return new VozResultado(false, texto, Map.of("clientes", clientes), null);
+    }
+
+    /** "para doña Marta, envío 8.000" → "Marta"; vacío si no se dijo. */
+    private String extraerDestinatario(String original) {
+        Matcher matcher = DESTINATARIO_PATTERN.matcher(original);
+        if (!matcher.find()) return "";
+        String nombre = HONORIFICO_PATTERN.matcher(matcher.group(1).trim()).replaceFirst("");
+        // El dictado suele cerrar con punto: "para doña Marta."
+        return nombre.replaceAll("[.!?]+$", "").trim();
+    }
+
+    private BigDecimal extraerCostoEnvio(String texto) {
+        Matcher matcher = ENVIO_PATTERN.matcher(texto);
+        if (!matcher.find()) return BigDecimal.ZERO;
+        BigDecimal costo = new BigDecimal(matcher.group(1));
+        return matcher.group(2) != null ? costo.multiply(BigDecimal.valueOf(1000)) : costo;
     }
 
     /** Ambiguo si el segundo candidato queda a menos de 0.10 del primero. */
