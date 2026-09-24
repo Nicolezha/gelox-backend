@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -46,6 +48,15 @@ public class VozPendienteStore {
             throw new ResponseStatusException(HttpStatus.GONE, "La confirmación expiró. Repite el comando.");
         }
         return pendiente;
+    }
+
+    /** Pendiente vigente del usuario, sin quitarlo; si hay varios, el que vence más tarde. */
+    public Optional<VozPendiente> peekPorUsuario(UUID usuarioId) {
+        Instant ahora = Instant.now();
+        return pendientes.values().stream()
+                .filter(p -> p.usuarioId().equals(usuarioId))
+                .filter(p -> !ahora.isAfter(p.expiraEn()))
+                .max(Comparator.comparing(VozPendiente::expiraEn));
     }
 
     private void limpiarVencidos() {
