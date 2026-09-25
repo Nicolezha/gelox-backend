@@ -34,6 +34,12 @@
       "value": "",
       "type": "string",
       "description": "UUID de un pedido en estado RECIBIDO (pegar uno manualmente para probar el 409)"
+    },
+    {
+      "key": "tokenVendedor",
+      "value": "",
+      "type": "string",
+      "description": "Firebase ID Token de un usuario con rol distinto a ADMINISTRADOR (ej. ENCARGADO_VENTAS), para probar el 403 de RF50"
     }
   ],
   "item": [
@@ -314,6 +320,128 @@
               "status": "Conflict",
               "code": 409,
               "body": "{\n  \"error\": \"Solo se pueden modificar pedidos en estado PENDIENTE\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RF50",
+      "item": [
+        {
+          "name": "01 - Interpretar: ganancia en ventanilla hoy (ADMINISTRADOR)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test(\"ok=true\", () => pm.expect(body.ok).to.eql(true));",
+                  "pm.test('canal VENTANILLA', () => pm.expect(body.datos.canal).to.eql('VENTANILLA'));",
+                  "pm.test('tipo GANANCIA', () => pm.expect(body.datos.tipo).to.eql('GANANCIA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"¿Cuánto ganamos en ventanilla hoy?\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "{{token}} debe ser de un ADMINISTRADOR. Consulta de solo lectura: con confianza >= 0.70 responde de una vez, sin pedir confirmación. datos.ganancia = ingresos - costos de ventanilla hoy (hora Colombia), igual que GET /api/reportes/por-canal."
+          },
+          "response": [
+            {
+              "name": "200 OK - Ganancia de ventanilla",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"comandoId\": \"44444444-4444-4444-4444-444444444444\",\n  \"ok\": true,\n  \"intencion\": \"CONSULTAR_FINANZAS\",\n  \"requiereConfirmacion\": false,\n  \"expiraEnSegundos\": null,\n  \"textoRespuesta\": \"Ganancia de ventanilla hoy: $ 60.000,00.\",\n  \"datos\": {\n    \"periodo\": \"hoy\",\n    \"canal\": \"VENTANILLA\",\n    \"tipo\": \"GANANCIA\",\n    \"ingresos\": 150000,\n    \"costos\": 90000,\n    \"ganancia\": 60000\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "02 - Interpretar: mismo comando con rol no autorizado (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 FORBIDDEN', () => pm.response.to.have.status(403));",
+                  "pm.test('cuerpo trae el mensaje de error', () => pm.expect(pm.response.json().error).to.exist);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenVendedor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"¿Cuánto ganamos en ventanilla hoy?\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "{{tokenVendedor}} debe ser de un usuario que no sea ADMINISTRADOR (ej. ENCARGADO_VENTAS). @RequiereRol(\"ADMINISTRADOR\") en ConsultaFinancieraHandler responde 403 y GlobalExceptionHandler lo devuelve como {\"error\": \"...\"}."
+          },
+          "response": [
+            {
+              "name": "403 Forbidden - Rol no autorizado",
+              "status": "Forbidden",
+              "code": 403,
+              "body": "{\n  \"error\": \"No tienes permiso para realizar esta acción\"\n}"
             }
           ]
         }

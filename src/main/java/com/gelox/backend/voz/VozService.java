@@ -20,6 +20,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -46,6 +47,9 @@ public class VozService {
 
     private static final String MENSAJE_CANCELADO = "Comando cancelado.";
 
+    /** Sobre texto normalizado: "añade" → "anade", "también" → "tambien". */
+    private static final Pattern ES_AGREGADO = Pattern.compile("^(agrega|anade|tambien)\\b");
+
     private final List<IntencionHandler> handlers;
     private final ClasificadorIntencion clasificador;
     private final ComandoVozRepository comandoVozRepository;
@@ -65,45 +69,74 @@ public class VozService {
     public VozInterpretarResponse interpretar(VozInterpretarRequest request, Usuario usuario) {
         ClasificadorIntencion.ResultadoClasificacion resultado = clasificador.clasificar(request.texto());
 
-        if (resultado.intencion() == null) {
+        // T41-BE5 — "agrega/añade/también ..." continúa la venta que espera confirmación.
+        TipoIntencionVoz intencion = resultado.intencion();
+        VozPendiente ventaEnCurso = null;
+        if ((intencion == null || intencion == TipoIntencionVoz.REGISTRAR_VENTA)
+                && ES_AGREGADO.matcher(NormalizadorVoz.normalizar(request.texto())).find()) {
+            ventaEnCurso = pendienteStore.peekPorUsuario(usuario.getId())
+                    .filter(p -> p.intencion() == TipoIntencionVoz.REGISTRAR_VENTA)
+                    .orElse(null);
+            if (ventaEnCurso != null) intencion = TipoIntencionVoz.REGISTRAR_VENTA;
+        }
+
+        if (intencion == null) {
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
                     null, EstadoComandoVoz.ERROR, MENSAJE_NO_ENTENDIDO);
             return new VozInterpretarResponse(comando.getId(), false, null, false, null, MENSAJE_NO_ENTENDIDO, Map.of());
         }
 
-        IntencionHandler handler = handlersPorTipo.get(resultado.intencion());
+        IntencionHandler handler = handlersPorTipo.get(intencion);
         if (handler == null) {
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
-                    resultado.intencion(), EstadoComandoVoz.ERROR, MENSAJE_SIN_HANDLER);
+                    intencion, EstadoComandoVoz.ERROR, MENSAJE_SIN_HANDLER);
             return new VozInterpretarResponse(
-                    comando.getId(), false, resultado.intencion().name(), false, null, MENSAJE_SIN_HANDLER, Map.of());
+                    comando.getId(), false, intencion.name(), false, null, MENSAJE_SIN_HANDLER, Map.of());
         }
 
         LocalDate hoy = LocalDate.now(ZONA_BOGOTA);
-        VozContexto ctx = new VozContexto(request.texto(), resultado.slots(), request.confianza(), usuario, hoy);
+        DatosPendientes datosPrevios = ventaEnCurso == null ? null : (DatosPendientes) ventaEnCurso.payload();
+        VozContexto ctx;
+        if (ventaEnCurso != null) {
+            VozPendiente paraHandler = new VozPendiente(
+                    ventaEnCurso.comandoId(), ventaEnCurso.usuarioId(), intencion,
+                    datosPrevios.payloadHandler(), ventaEnCurso.expiraEn());
+            ctx = new VozContexto(request.texto(), resultado.slots(), request.confianza(), usuario, hoy, paraHandler);
+        } else {
+            ctx = new VozContexto(request.texto(), resultado.slots(), request.confianza(), usuario, hoy);
+        }
         VozResultado interpretado = handler.interpretar(ctx);
 
         if (!interpretado.ok()) {
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
-                    resultado.intencion(), EstadoComandoVoz.ERROR, interpretado.textoRespuesta());
-            return new VozInterpretarResponse(comando.getId(), false, resultado.intencion().name(), false, null,
+                    intencion, EstadoComandoVoz.ERROR, interpretado.textoRespuesta());
+            return new VozInterpretarResponse(comando.getId(), false, intencion.name(), false, null,
                     interpretado.textoRespuesta(), interpretado.datos());
         }
 
         boolean necesitaConfirmacion = handler.requiereConfirmacion() || request.confianza() < UMBRAL_CONFIANZA;
 
         if (necesitaConfirmacion) {
-            UUID comandoId = UUID.randomUUID();
-            DatosPendientes datos = new DatosPendientes(request.texto(), request.confianza(), interpretado.payload());
-            pendienteStore.put(comandoId, usuario.getId(), resultado.intencion(), datos);
+            UUID comandoId;
+            DatosPendientes datos;
+            if (ventaEnCurso != null) {
+                // Mismo id: put sobrescribe la entrada y reinicia el plazo.
+                comandoId = ventaEnCurso.comandoId();
+                datos = new DatosPendientes(datosPrevios.texto() + "; " + request.texto(),
+                        Math.min(datosPrevios.confianza(), request.confianza()), interpretado.payload());
+            } else {
+                comandoId = UUID.randomUUID();
+                datos = new DatosPendientes(request.texto(), request.confianza(), interpretado.payload());
+            }
+            pendienteStore.put(comandoId, usuario.getId(), intencion, datos);
 
-            return new VozInterpretarResponse(comandoId, true, resultado.intencion().name(), true,
+            return new VozInterpretarResponse(comandoId, true, intencion.name(), true,
                     VozPendienteStore.TTL_SEGUNDOS, interpretado.textoRespuesta(), interpretado.datos());
         }
 
         ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
-                resultado.intencion(), EstadoComandoVoz.PROCESADO, interpretado.textoRespuesta());
-        return new VozInterpretarResponse(comando.getId(), true, resultado.intencion().name(), false, null,
+                intencion, EstadoComandoVoz.PROCESADO, interpretado.textoRespuesta());
+        return new VozInterpretarResponse(comando.getId(), true, intencion.name(), false, null,
                 interpretado.textoRespuesta(), interpretado.datos());
     }
 
