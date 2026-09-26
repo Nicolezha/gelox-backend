@@ -80,7 +80,7 @@ class VozServiceTest {
                 new VozInterpretarRequest("vende dos festival", 0.95), usuario);
 
         assertThat(interpretado.requiereConfirmacion()).isTrue();
-        assertThat(interpretado.expiraEnSegundos()).isEqualTo(15);
+        assertThat(interpretado.expiraEnSegundos()).isEqualTo(VozPendienteStore.TTL_SEGUNDOS);
         assertThat(interpretado.comandoId()).isNotNull();
         verifyNoInteractions(comandoVozRepository);
 

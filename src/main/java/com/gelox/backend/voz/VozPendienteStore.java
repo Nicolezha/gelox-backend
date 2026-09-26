@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class VozPendienteStore {
 
-    public static final int TTL_SEGUNDOS = 15;
+    public static final int TTL_SEGUNDOS = 45;
 
     private final ConcurrentHashMap<UUID, VozPendiente> pendientes = new ConcurrentHashMap<>();
 

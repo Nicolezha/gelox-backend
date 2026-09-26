@@ -17,8 +17,8 @@ class VozPendienteStoreTest {
     private final VozPendienteStore store = new VozPendienteStore();
 
     @Test
-    void elTtlEsDe15Segundos() {
-        assertThat(VozPendienteStore.TTL_SEGUNDOS).isEqualTo(15);
+    void elTtlEsDe45Segundos() {
+        assertThat(VozPendienteStore.TTL_SEGUNDOS).isEqualTo(45);
     }
 
     @Test
@@ -55,7 +55,7 @@ class VozPendienteStoreTest {
     }
 
     @Test
-    void venceALos15SegundosDevuelve410() throws Exception {
+    void venceAlPasarElTtlDevuelve410() throws Exception {
         UUID comandoId = UUID.randomUUID();
         UUID usuarioId = UUID.randomUUID();
         store.put(comandoId, usuarioId, TipoIntencionVoz.REGISTRAR_VENTA, "payload");
