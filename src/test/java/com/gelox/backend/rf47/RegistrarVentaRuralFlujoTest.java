@@ -162,14 +162,42 @@ class RegistrarVentaRuralFlujoTest {
     }
 
     @Test
-    @DisplayName("sin destinatario: pregunta para quién es y no consulta nada")
+    @DisplayName("sin destinatario: pregunta para quién es, guarda el contexto y no consulta nada")
     void sinDestinatario_preguntaParaQuien() {
         VozResultado resultado = flujo.interpretar(ctx("vende dos cajas de Festival, envío 8.000"));
 
-        assertThat(resultado.ok()).isFalse();
-        assertThat(resultado.payload()).isNull();
+        assertThat(resultado.ok()).isTrue();
+        assertThat(resultado.payload()).isEqualTo(new RegistrarVentaRuralFlujo.PendienteDestinatario(
+                "vende dos cajas de Festival, envío 8.000"));
         assertThat(resultado.textoRespuesta()).isEqualTo("¿Para quién es el pedido rural?");
         verifyNoInteractions(resolvedorProducto, ventaService, clienteRuralService, ventaRuralService);
+    }
+
+    @Test
+    @DisplayName("responder solo el nombre completa el pedido que esperaba destinatario")
+    void respuestaConNombre_completaElPedido() {
+        stubFestivalConStock();
+        ClienteRuralDTO marta = cliente("Marta Pérez", "Vereda El Carmen");
+        when(clienteRuralService.listarClientes("Marta")).thenReturn(List.of(marta));
+        VozPendiente pendiente = new VozPendiente(UUID.randomUUID(), usuario.getId(), TipoIntencionVoz.REGISTRAR_VENTA,
+                new RegistrarVentaRuralFlujo.PendienteDestinatario("vende dos cajas de Festival, envío 8.000"),
+                Instant.now().plusSeconds(30));
+
+        VozResultado resultado = flujo.interpretar(new VozContexto(
+                "doña Marta", Map.of(), 0.9, usuario, LocalDate.now(), pendiente));
+
+        assertThat(resultado.ok()).isTrue();
+        assertThat(resultado.payload()).isInstanceOf(RegistrarVentaRuralFlujo.Payload.class);
+        assertThat((BigDecimal) resultado.datos().get("costoEnvio")).isEqualByComparingTo("8000");
+    }
+
+    @Test
+    @DisplayName("sin la palabra cajas/unidades: el error dice qué falta")
+    void sinCajasNiUnidades_errorEspecifico() {
+        VozResultado resultado = flujo.interpretar(ctx("vende dos de Festival para doña Marta"));
+
+        assertThat(resultado.ok()).isFalse();
+        assertThat(resultado.textoRespuesta()).startsWith("Falta decir si son cajas o unidades.");
     }
 
     @Test

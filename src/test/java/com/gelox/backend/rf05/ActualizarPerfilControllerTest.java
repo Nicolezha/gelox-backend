@@ -1,5 +1,7 @@
 package com.gelox.backend.rf05;
 
+import com.gelox.backend.config.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.controllers.PerfilController;
@@ -34,6 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * CP14, CP15.
  */
 @WebMvcTest(controllers = PerfilController.class)
+@Import(SecurityConfig.class)
 class ActualizarPerfilControllerTest {
 
     @Autowired

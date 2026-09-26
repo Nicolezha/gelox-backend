@@ -52,10 +52,11 @@ public class RegistrarVentaRuralFlujo {
     /** Sobre texto normalizado: "ocho mil" llega como "8 mil". */
     private static final Pattern ENVIO_PATTERN = Pattern.compile("envio\\s+(?:de\\s+)?\\$?(\\d+)(\\s+mil\\b)?");
 
-    /** Grupos: 1 cantidad, 2 caja(s)/unidad(es), 3 producto, 4 precio dicho (opcional). */
-    private static final Pattern ITEM_PATTERN = Pattern.compile(
-            "(\\d+)\\s*(cajas?|unidades?)\\s+de\\s+(.+?)(?:\\s+a\\s+\\$?(\\d+))?"
-                    + "(?=\\s*,|\\s+y\\s+|\\s+para\\b|\\s+envio\\b|\\s+con\\b|\\s+en\\b|\\s+por\\b|$)");
+    private static final Pattern ITEM_PATTERN = ItemVozParser.patron(
+            "\\s*,|\\s+y\\s+|\\s+para\\b|\\s+envio\\b|\\s+con\\b|\\s+en\\b|\\s+por\\b");
+
+    private static final String EJEMPLO = "Di algo como 'vende dos cajas de Festival para doña Marta, envío 8.000'.";
+    private static final String PREGUNTA_DESTINATARIO = "¿Para quién es el pedido rural?";
 
     private static final int MAX_CLIENTES_EN_TEXTO = 5;
 
@@ -68,28 +69,44 @@ public class RegistrarVentaRuralFlujo {
     public record Payload(UUID clienteRuralId, String nombreDestinatario,
                           BigDecimal costoEnvio, List<ItemPedidoRuralRequest> items) {}
 
-    private record ItemExtraido(int cajas, int unidades, String fragmentoProducto, BigDecimal precioDicho) {}
+    /**
+     * Pedido rural al que solo le falta el destinatario: recuerda lo dicho para
+     * que la siguiente frase ("doña Marta") lo complete sin repetir todo.
+     */
+    public record PendienteDestinatario(String textoOriginal) implements PendienteAclaracion {}
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public VozResultado interpretar(VozContexto ctx) {
-        if (ctx.pendiente() != null) {
-            return error("No puedo combinar un pedido rural con una venta en curso. "
-                    + "Confirma o cancela la actual y repite el pedido rural completo.");
-        }
-
         String original = ctx.texto();
+        if (ctx.pendiente() != null) {
+            Object previo = ctx.pendiente().payload();
+            if (previo instanceof PendienteDestinatario pendienteDestinatario) {
+                original = pendienteDestinatario.textoOriginal()
+                        + " para " + ctx.texto().trim().replaceFirst("(?iu)^para\\s+", "");
+            } else if (previo instanceof PendienteProducto pendienteProducto && pendienteProducto.rural()) {
+                original = pendienteProducto.completar(ctx.texto());
+                if (original == null) {
+                    return error("No pude aplicar tu respuesta. Repite el pedido rural completo.");
+                }
+            } else {
+                return error("No puedo combinar un pedido rural con una venta en curso. "
+                        + "Confirma o cancela la actual y repite el pedido rural completo.");
+            }
+        }
         String texto = NormalizadorVoz.normalizar(original);
 
         String fragmentoDestinatario = extraerDestinatario(original);
         if (fragmentoDestinatario.isEmpty()) {
-            return error("¿Para quién es el pedido rural?");
+            // ok=true: queda el contexto guardado y el usuario responde solo con el nombre.
+            return new VozResultado(true, PREGUNTA_DESTINATARIO, Map.of("requiereDestinatario", true),
+                    new PendienteDestinatario(original));
         }
 
         BigDecimal costoEnvio = extraerCostoEnvio(texto);
 
-        List<ItemExtraido> extraidos = extraerItems(texto);
+        List<ItemVozParser.ItemExtraido> extraidos = extraerItems(texto);
         if (extraidos.isEmpty()) {
-            return error("No entendí las cantidades. Di algo como 'vende dos cajas de Festival para doña Marta, envío 8.000'.");
+            return error(ItemVozParser.explicarFalta(texto, EJEMPLO));
         }
 
         // productoId -> {cajas, unidades}; el mismo producto dicho dos veces se suma.
@@ -97,7 +114,7 @@ public class RegistrarVentaRuralFlujo {
         Map<UUID, String> nombresDichos = new HashMap<>();
         Map<UUID, BigDecimal> preciosDichos = new HashMap<>();
 
-        for (ItemExtraido extraido : extraidos) {
+        for (ItemVozParser.ItemExtraido extraido : extraidos) {
             List<ResolvedorProducto.ProductoCandidato> candidatos =
                     resolvedorProducto.resolver(extraido.fragmentoProducto());
 
@@ -105,7 +122,12 @@ public class RegistrarVentaRuralFlujo {
                 return error("No encontré el producto \"" + extraido.fragmentoProducto() + "\". ¿Puedes repetirlo?");
             }
             if (esAmbiguo(candidatos)) {
-                return error("¿" + candidatos.get(0).nombre() + " o " + candidatos.get(1).nombre() + "?");
+                // ok=true: queda el contexto guardado y el usuario responde solo cuál producto es.
+                return new VozResultado(true,
+                        "¿" + candidatos.get(0).nombre() + " o " + candidatos.get(1).nombre() + "?",
+                        Map.of("requiereAclaracion", true,
+                                "opciones", List.of(candidatos.get(0).nombre(), candidatos.get(1).nombre())),
+                        new PendienteProducto(original, extraido.fragmentoProducto(), true, null));
             }
 
             ResolvedorProducto.ProductoCandidato producto = candidatos.get(0);
@@ -206,10 +228,12 @@ public class RegistrarVentaRuralFlujo {
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public VozResultado ejecutar(VozPendiente pendiente, Usuario usuario) {
-        Payload p = (Payload) pendiente.payload();
-
-        if (p.clienteRuralId() == null && (p.nombreDestinatario() == null || p.nombreDestinatario().isBlank())) {
-            return error("¿Para quién es el pedido rural?");
+        if (pendiente.payload() instanceof PendienteProducto) {
+            return error("Falta aclarar cuál producto es.");
+        }
+        if (!(pendiente.payload() instanceof Payload p)
+                || (p.clienteRuralId() == null && (p.nombreDestinatario() == null || p.nombreDestinatario().isBlank()))) {
+            return error(PREGUNTA_DESTINATARIO);
         }
 
         // Si el stock cambió desde interpretar, StockInsuficienteException sube tal cual (422).
@@ -271,19 +295,8 @@ public class RegistrarVentaRuralFlujo {
         return candidatos.size() >= 2 && (candidatos.get(0).score() - candidatos.get(1).score()) < 0.10;
     }
 
-    private List<ItemExtraido> extraerItems(String textoNormalizado) {
-        List<ItemExtraido> items = new ArrayList<>();
-        Matcher matcher = ITEM_PATTERN.matcher(textoNormalizado);
-
-        while (matcher.find()) {
-            int cantidad = Integer.parseInt(matcher.group(1));
-            boolean esCaja = matcher.group(2).startsWith("caja");
-            BigDecimal precioDicho = matcher.group(4) == null ? null : new BigDecimal(matcher.group(4));
-
-            items.add(new ItemExtraido(esCaja ? cantidad : 0, esCaja ? 0 : cantidad,
-                    matcher.group(3).trim(), precioDicho));
-        }
-        return items;
+    private List<ItemVozParser.ItemExtraido> extraerItems(String textoNormalizado) {
+        return ItemVozParser.extraer(ITEM_PATTERN, textoNormalizado);
     }
 
     private String describir(int cajas, int unidades) {

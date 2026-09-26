@@ -19,6 +19,7 @@ import com.gelox.backend.voz.VozContexto;
 import com.gelox.backend.voz.VozPendiente;
 import com.gelox.backend.voz.VozResultado;
 import com.gelox.backend.voz.handlers.RegistrarVentaHandler;
+import com.gelox.backend.voz.handlers.PendienteProducto;
 import com.gelox.backend.voz.handlers.RegistrarVentaRuralFlujo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -177,6 +178,68 @@ class RegistrarVentaHandlerTest {
 
         verify(ventaService).confirmarVenta(new ConfirmarVentaRequest(CanalVenta.VENTANILLA, MetodoPago.EFECTIVO,
                 List.of(new ItemVentaRequest(idFestival, 3, 0), new ItemVentaRequest(idSoloLack, 2, 0))), usuario);
+    }
+
+    @Test
+    @DisplayName("el precio se acepta con 'de', 'por' y '$': no se traga como parte del producto")
+    void precioConVariantes_noSeTragaEnElProducto() {
+        resuelve("festival", idFestival, "Festival");
+        when(ventaService.getCatalogo()).thenReturn(List.of(enCatalogo(idFestival, "Festival", "2500.00", 50)));
+        when(ventaService.calcularVenta(any())).thenReturn(new CalcularVentaResponse(
+                List.of(calculado(idFestival, 3, "2500.00", "7500.00")), new BigDecimal("7500.00")));
+
+        for (String precio : List.of("de 3.000", "por 3.000", "$3.000", "a $3.000")) {
+            VozResultado resultado = handler.interpretar(ctx("registra tres cajas de Festival " + precio));
+            assertThat(resultado.ok()).as(precio).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("producto ambiguo: pregunta cuál, guarda el contexto y la respuesta 'fresa' completa la venta")
+    void productoAmbiguo_guardaContextoYSeResuelveConLaRespuesta() {
+        UUID idFresa = UUID.randomUUID();
+        UUID idLimon = UUID.randomUUID();
+        when(resolvedorProducto.resolver("aloha paleta")).thenReturn(List.of(
+                new ResolvedorProducto.ProductoCandidato(idFresa, "Aloha Paleta Fresa", 0.9, 1),
+                new ResolvedorProducto.ProductoCandidato(idLimon, "Aloha Paleta Limon", 0.9, 1)));
+
+        VozResultado pregunta = handler.interpretar(ctx("Registra 3 cajas de Aloha Paleta"));
+
+        assertThat(pregunta.ok()).isTrue();
+        assertThat(pregunta.textoRespuesta()).isEqualTo("¿Aloha Paleta Fresa o Aloha Paleta Limon?");
+        assertThat(pregunta.datos()).containsEntry("requiereAclaracion", true);
+        assertThat(pregunta.payload()).isEqualTo(
+                new PendienteProducto("Registra 3 cajas de Aloha Paleta", "aloha paleta", false, null));
+
+        resuelve("aloha paleta fresa", idFresa, "Aloha Paleta Fresa");
+        when(ventaService.getCatalogo()).thenReturn(List.of(enCatalogo(idFresa, "Aloha Paleta Fresa", "2500.00", 50)));
+        when(ventaService.calcularVenta(any())).thenReturn(new CalcularVentaResponse(
+                List.of(calculado(idFresa, 3, "2500.00", "7500.00")), new BigDecimal("7500.00")));
+
+        VozResultado resuelto = handler.interpretar(ctxConPendiente("Fresa", pregunta.payload()));
+
+        assertThat(resuelto.ok()).isTrue();
+        assertThat(resuelto.textoRespuesta()).contains("3 cajas de Aloha Paleta Fresa");
+    }
+
+    @Test
+    @DisplayName("PendienteProducto: completa con nombre parcial o completo, con tildes y mayúsculas del original")
+    void pendienteProducto_completar() {
+        PendienteProducto p = new PendienteProducto("Vende 2 cajas de Paleta Limón para Marta", "paleta limon", true, null);
+
+        assertThat(p.completar("Fresa")).isEqualTo("Vende 2 cajas de paleta limon Fresa para Marta");
+        assertThat(p.completar("paleta limon fresa.")).isEqualTo("Vende 2 cajas de paleta limon fresa para Marta");
+    }
+
+    @Test
+    @DisplayName("sin cantidad, sin cajas/unidades o sin producto: el error dice qué falta")
+    void erroresEspecificosSegunLoQueFalta() {
+        assertThat(handler.interpretar(ctx("registra cajas de Festival")).textoRespuesta())
+                .startsWith("No entendí la cantidad.");
+        assertThat(handler.interpretar(ctx("registra tres de Festival")).textoRespuesta())
+                .startsWith("Falta decir si son cajas o unidades.");
+        assertThat(handler.interpretar(ctx("registra tres cajas")).textoRespuesta())
+                .startsWith("Falta el producto.");
     }
 
     @Test

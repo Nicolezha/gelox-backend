@@ -17,12 +17,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
+
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,6 +36,12 @@ class PerfilServiceTest {
     @Mock
     private FirebaseAuth firebaseAuth;
 
+    @Mock
+    EventoSistemaService eventoSistemaService;
+
+    @Mock
+    private RestTemplate restTemplate;
+
     @InjectMocks
     private PerfilService perfilService;
 
@@ -43,6 +51,7 @@ class PerfilServiceTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(perfilService, "restTemplate", restTemplate);
         userId = UUID.randomUUID();
 
         usuario = new Usuario();
@@ -112,8 +121,7 @@ class PerfilServiceTest {
         dto.setNuevaContrasena("nueva456");
         dto.setConfirmacion("nueva456");
 
-        UserRecord mockUserRecord = mock(UserRecord.class);
-        when(firebaseAuth.getUser(anyString())).thenReturn(mockUserRecord);
+        when(usuarioRepository.findByFirebaseUid("firebase-uid-abc")).thenReturn(Optional.of(usuario));
         doThrow(mock(FirebaseAuthException.class)).when(firebaseAuth).updateUser(any(UserRecord.UpdateRequest.class));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,

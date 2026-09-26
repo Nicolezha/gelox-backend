@@ -6,6 +6,7 @@ import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.ComandoVozRepository;
 import com.gelox.backend.voz.dto.VozConfirmarRequest;
+import com.gelox.backend.voz.handlers.PendienteAclaracion;
 import com.gelox.backend.voz.dto.VozConfirmarResponse;
 import com.gelox.backend.voz.dto.VozInterpretarRequest;
 import com.gelox.backend.voz.dto.VozInterpretarResponse;
@@ -72,10 +73,14 @@ public class VozService {
         // T41-BE5 — "agrega/añade/también ..." continúa la venta que espera confirmación.
         TipoIntencionVoz intencion = resultado.intencion();
         VozPendiente ventaEnCurso = null;
-        if ((intencion == null || intencion == TipoIntencionVoz.REGISTRAR_VENTA)
-                && ES_AGREGADO.matcher(NormalizadorVoz.normalizar(request.texto())).find()) {
+        // Si la venta quedó esperando una aclaración (destinatario o producto), cualquier frase sin
+        // intención propia ("doña Marta", "fresa") la completa.
+        if (intencion == null || intencion == TipoIntencionVoz.REGISTRAR_VENTA) {
+            boolean agregado = ES_AGREGADO.matcher(NormalizadorVoz.normalizar(request.texto())).find();
+            final TipoIntencionVoz intencionClasificada = intencion;
             ventaEnCurso = pendienteStore.peekPorUsuario(usuario.getId())
                     .filter(p -> p.intencion() == TipoIntencionVoz.REGISTRAR_VENTA)
+                    .filter(p -> esperaDestinatario(p) ? intencionClasificada == null : agregado)
                     .orElse(null);
             if (ventaEnCurso != null) intencion = TipoIntencionVoz.REGISTRAR_VENTA;
         }
@@ -138,6 +143,11 @@ public class VozService {
                 intencion, EstadoComandoVoz.PROCESADO, interpretado.textoRespuesta());
         return new VozInterpretarResponse(comando.getId(), true, intencion.name(), false, null,
                 interpretado.textoRespuesta(), interpretado.datos());
+    }
+
+    private static boolean esperaDestinatario(VozPendiente pendiente) {
+        return pendiente.payload() instanceof DatosPendientes datos
+                && datos.payloadHandler() instanceof PendienteAclaracion;
     }
 
     public VozConfirmarResponse confirmar(VozConfirmarRequest request, Usuario usuario) {

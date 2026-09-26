@@ -1,5 +1,7 @@
 package com.gelox.backend.rf01;
 
+import com.gelox.backend.config.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.controllers.AuthController;
 import com.gelox.backend.dto.UsuarioDTO;
@@ -33,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * cabecera Authorization directamente a los controllers.</p>
  */
 @WebMvcTest(controllers = AuthController.class)
+@Import(SecurityConfig.class)
 class LoginControllerTest {
 
     @Autowired

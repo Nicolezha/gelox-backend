@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -44,10 +43,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RegistrarVentaHandler implements IntencionHandler {
 
-    /** Grupos: 1 cantidad, 2 caja(s)/unidad(es), 3 producto, 4 precio dicho (opcional). */
-    private static final Pattern ITEM_PATTERN = Pattern.compile(
-            "(\\d+)\\s*(cajas?|unidades?)\\s+de\\s+(.+?)(?:\\s+a\\s+\\$?(\\d+))?"
-                    + "(?=\\s*,|\\s+y\\s+|\\s+canal\\b|\\s+por\\b|\\s+con\\b|\\s+en\\b|$)");
+    private static final Pattern ITEM_PATTERN = ItemVozParser.patron(
+            "\\s*,|\\s+y\\s+|\\s+canal\\b|\\s+por\\b|\\s+con\\b|\\s+en\\b");
+
+    private static final String MENSAJE_FALTA_PRODUCTO = "Falta aclarar cuál producto es.";
+
+    private static final String EJEMPLO = "Di algo como 'registra tres cajas de Festival a 2.500, canal ventanilla'.";
 
     /** "envío" también marca canal rural: el costo de envío solo existe en pedidos rurales. */
     private static final Pattern ES_RURAL = Pattern.compile("\\b(rural|envio)\\b");
@@ -57,8 +58,6 @@ public class RegistrarVentaHandler implements IntencionHandler {
     private final RegistrarVentaRuralFlujo registrarVentaRuralFlujo;
 
     private record Payload(CanalVenta canal, MetodoPago metodoPago, List<ItemVentaRequest> items) {}
-
-    private record ItemExtraido(int cajas, int unidades, String fragmentoProducto, BigDecimal precioDicho) {}
 
     @Override
     public TipoIntencionVoz tipo() {
@@ -73,15 +72,26 @@ public class RegistrarVentaHandler implements IntencionHandler {
     @Override
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public VozResultado interpretar(VozContexto ctx) {
-        String texto = NormalizadorVoz.normalizar(ctx.texto());
-
-        boolean pendienteRural = ctx.pendiente() != null
-                && ctx.pendiente().payload() instanceof RegistrarVentaRuralFlujo.Payload;
-        if (pendienteRural || ES_RURAL.matcher(texto).find()) {
+        Object previo = ctx.pendiente() == null ? null : ctx.pendiente().payload();
+        if (previo != null && esPayloadRural(previo)) {
             return registrarVentaRuralFlujo.interpretar(ctx);
         }
 
-        Payload anterior = ctx.pendiente() == null ? null : (Payload) ctx.pendiente().payload();
+        // Si se estaba aclarando un producto, la frase es la respuesta: se reinterpreta el texto completo.
+        String textoOriginal = ctx.texto();
+        Payload anterior = previo instanceof Payload p ? p : null;
+        if (previo instanceof PendienteProducto aclaracion) {
+            textoOriginal = aclaracion.completar(ctx.texto());
+            if (textoOriginal == null) {
+                return error("No pude aplicar tu respuesta. Repite el comando completo.");
+            }
+            anterior = (Payload) aclaracion.anterior();
+        }
+
+        String texto = NormalizadorVoz.normalizar(textoOriginal);
+        if (ES_RURAL.matcher(texto).find()) {
+            return registrarVentaRuralFlujo.interpretar(ctx);
+        }
 
         CanalVenta canal;
         MetodoPago metodoPago;
@@ -93,9 +103,9 @@ public class RegistrarVentaHandler implements IntencionHandler {
             metodoPago = texto.contains("transferencia") ? MetodoPago.TRANSFERENCIA : MetodoPago.EFECTIVO;
         }
 
-        List<ItemExtraido> extraidos = extraerItems(texto);
+        List<ItemVozParser.ItemExtraido> extraidos = extraerItems(texto);
         if (extraidos.isEmpty()) {
-            return error("No entendí las cantidades. Di algo como 'registra tres cajas de Festival a 2.500, canal ventanilla'.");
+            return error(ItemVozParser.explicarFalta(texto, EJEMPLO));
         }
 
         // productoId -> {cajas, unidades}; parte de lo ya pendiente y suma lo nuevo.
@@ -108,7 +118,7 @@ public class RegistrarVentaHandler implements IntencionHandler {
         Map<UUID, String> nombresDichos = new HashMap<>();
         Map<UUID, BigDecimal> preciosDichos = new HashMap<>();
 
-        for (ItemExtraido extraido : extraidos) {
+        for (ItemVozParser.ItemExtraido extraido : extraidos) {
             List<ResolvedorProducto.ProductoCandidato> candidatos =
                     resolvedorProducto.resolver(extraido.fragmentoProducto());
 
@@ -116,7 +126,12 @@ public class RegistrarVentaHandler implements IntencionHandler {
                 return error("No encontré el producto \"" + extraido.fragmentoProducto() + "\". ¿Puedes repetirlo?");
             }
             if (esAmbiguo(candidatos)) {
-                return error("¿" + candidatos.get(0).nombre() + " o " + candidatos.get(1).nombre() + "?");
+                // ok=true: queda el contexto guardado y el usuario responde solo cuál producto es.
+                return new VozResultado(true,
+                        "¿" + candidatos.get(0).nombre() + " o " + candidatos.get(1).nombre() + "?",
+                        Map.of("requiereAclaracion", true,
+                                "opciones", List.of(candidatos.get(0).nombre(), candidatos.get(1).nombre())),
+                        new PendienteProducto(textoOriginal, extraido.fragmentoProducto(), false, anterior));
             }
 
             ResolvedorProducto.ProductoCandidato producto = candidatos.get(0);
@@ -205,10 +220,12 @@ public class RegistrarVentaHandler implements IntencionHandler {
     @Override
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public VozResultado ejecutar(VozPendiente pendiente, Usuario usuario) {
-        if (pendiente.payload() instanceof RegistrarVentaRuralFlujo.Payload) {
+        if (esPayloadRural(pendiente.payload())) {
             return registrarVentaRuralFlujo.ejecutar(pendiente, usuario);
         }
-        Payload p = (Payload) pendiente.payload();
+        if (!(pendiente.payload() instanceof Payload p)) {
+            return error(MENSAJE_FALTA_PRODUCTO);
+        }
 
         // Si el stock cambió desde interpretar, StockInsuficienteException sube tal cual (422).
         ConfirmarVentaResponse r = ventaService.confirmarVenta(
@@ -216,6 +233,12 @@ public class RegistrarVentaHandler implements IntencionHandler {
 
         return new VozResultado(true, "Venta registrada por $" + sinCeros(r.total()) + ".",
                 Map.of("ventaId", r.ventaId(), "total", r.total()), null);
+    }
+
+    private static boolean esPayloadRural(Object payload) {
+        return payload instanceof RegistrarVentaRuralFlujo.Payload
+                || payload instanceof RegistrarVentaRuralFlujo.PendienteDestinatario
+                || (payload instanceof PendienteProducto p && p.rural());
     }
 
     private VozResultado error(String mensaje) {
@@ -227,19 +250,8 @@ public class RegistrarVentaHandler implements IntencionHandler {
         return candidatos.size() >= 2 && (candidatos.get(0).score() - candidatos.get(1).score()) < 0.10;
     }
 
-    private List<ItemExtraido> extraerItems(String textoNormalizado) {
-        List<ItemExtraido> items = new ArrayList<>();
-        Matcher matcher = ITEM_PATTERN.matcher(textoNormalizado);
-
-        while (matcher.find()) {
-            int cantidad = Integer.parseInt(matcher.group(1));
-            boolean esCaja = matcher.group(2).startsWith("caja");
-            BigDecimal precioDicho = matcher.group(4) == null ? null : new BigDecimal(matcher.group(4));
-
-            items.add(new ItemExtraido(esCaja ? cantidad : 0, esCaja ? 0 : cantidad,
-                    matcher.group(3).trim(), precioDicho));
-        }
-        return items;
+    private List<ItemVozParser.ItemExtraido> extraerItems(String textoNormalizado) {
+        return ItemVozParser.extraer(ITEM_PATTERN, textoNormalizado);
     }
 
     private String describir(int cajas, int unidades) {

@@ -1,8 +1,14 @@
 package com.gelox.backend.rf06;
 
+import com.gelox.backend.TestHelper;
 import com.gelox.backend.dto.CambioContrasenaDTO;
+import com.gelox.backend.entities.RolUsuario;
+import com.gelox.backend.entities.TipoEvento;
+import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.exceptions.ContrasenaActualIncorrectaException;
 import com.gelox.backend.exceptions.ContrasenaNoCoincideException;
 import com.gelox.backend.repositories.UsuarioRepository;
+import com.gelox.backend.services.EventoSistemaService;
 import com.gelox.backend.services.PerfilService;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
@@ -13,28 +19,47 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
 
-import static org.assertj.core.api.Assertions.*;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 /**
- * RF06 — Cambio de contraseña.
- * Cubre CP16, CP17, CP18.
+ * RF06 — Cambio de contraseña. Cubre CP16, CP17, CP18.
  *
- * <p>NOTA: Firebase Admin SDK no puede verificar la contraseña actual directamente.
- * La validación de {@code contrasenaActual} es responsabilidad del frontend
- * (signInWithEmailAndPassword). El backend valida que {@code nuevaContrasena}
- * coincida con {@code confirmacion} antes de actualizar en Firebase.
+ * <p>El servicio verifica la contraseña actual contra Firebase (identitytoolkit,
+ * por HTTP) y luego actualiza con el {@code FirebaseAuth} inyectado. Ambos se
+ * reemplazan por mocks: el {@code RestTemplate} vía reflexión, para no salir a red.
  */
 @ExtendWith(MockitoExtension.class)
 class CambioContrasenaTest {
 
     @Mock
     UsuarioRepository usuarioRepository;
+
+    @Mock
+    FirebaseAuth firebaseAuth;
+
+    @Mock
+    EventoSistemaService eventoSistemaService;
+
+    @Mock
+    RestTemplate restTemplate;
 
     @InjectMocks
     PerfilService perfilService;
@@ -45,10 +70,13 @@ class CambioContrasenaTest {
     private static final String CONFIRMACION_OK    = "NuevaPass456!";
     private static final String CONFIRMACION_MAL   = "Diferente789!";
 
+    private Usuario usuario;
+
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(perfilService, "supabaseUrl", "http://localhost:9999");
-        ReflectionTestUtils.setField(perfilService, "supabaseServiceKey", "test-key");
+        ReflectionTestUtils.setField(perfilService, "restTemplate", restTemplate);
+        usuario = TestHelper.buildUsuario(FIREBASE_UID, "encargado@gelox-test.com",
+                RolUsuario.ENCARGADO_INVENTARIO, true);
     }
 
     private CambioContrasenaDTO buildDto(String actual, String nueva, String confirmacion) {
@@ -63,132 +91,77 @@ class CambioContrasenaTest {
     // CP16 — cambio-contrasena-exitoso
     // -----------------------------------------------------------------------
     @Test
-    @DisplayName("CP16 - cambio de contraseña exitoso: Firebase actualiza la contraseña sin excepciones")
+    @DisplayName("CP16 - cambio exitoso: verifica la contraseña actual, actualiza en Firebase y registra el evento")
     void cp16_cambioContrasenaExitoso() throws FirebaseAuthException {
-        CambioContrasenaDTO dto = buildDto(CONTRASENA_ACTUAL, NUEVA_CONTRASENA, CONFIRMACION_OK);
+        when(usuarioRepository.findByFirebaseUid(FIREBASE_UID)).thenReturn(Optional.of(usuario));
+        when(firebaseAuth.updateUser(any(UserRecord.UpdateRequest.class))).thenReturn(mock(UserRecord.class));
 
-        try (MockedStatic<FirebaseAuth> firebaseStatic = mockStatic(FirebaseAuth.class)) {
-            FirebaseAuth mockAuth = mock(FirebaseAuth.class);
-            firebaseStatic.when(FirebaseAuth::getInstance).thenReturn(mockAuth);
+        assertThatNoException().isThrownBy(() -> perfilService.cambiarContrasena(
+                FIREBASE_UID, buildDto(CONTRASENA_ACTUAL, NUEVA_CONTRASENA, CONFIRMACION_OK)));
 
-            UserRecord mockUser = mock(UserRecord.class);
-            when(mockAuth.getUser(FIREBASE_UID)).thenReturn(mockUser);
-            when(mockAuth.updateUser(any(UserRecord.UpdateRequest.class))).thenReturn(mockUser);
-
-            assertThatNoException().isThrownBy(
-                    () -> perfilService.cambiarContrasena(FIREBASE_UID, dto)
-            );
-
-            verify(mockAuth).updateUser(any(UserRecord.UpdateRequest.class));
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // CP16-extra — Firebase.updateUser se llama con el UID correcto
-    // -----------------------------------------------------------------------
-    @Test
-    @DisplayName("CP16-extra - updateUser es invocado con el UID del usuario autenticado")
-    void cp16Extra_updateUserInvocadoConUidCorrecto() throws FirebaseAuthException {
-        CambioContrasenaDTO dto = buildDto(CONTRASENA_ACTUAL, NUEVA_CONTRASENA, CONFIRMACION_OK);
-
-        try (MockedStatic<FirebaseAuth> firebaseStatic = mockStatic(FirebaseAuth.class)) {
-            FirebaseAuth mockAuth = mock(FirebaseAuth.class);
-            firebaseStatic.when(FirebaseAuth::getInstance).thenReturn(mockAuth);
-
-            when(mockAuth.getUser(FIREBASE_UID)).thenReturn(mock(UserRecord.class));
-            when(mockAuth.updateUser(any())).thenReturn(mock(UserRecord.class));
-
-            perfilService.cambiarContrasena(FIREBASE_UID, dto);
-
-            verify(mockAuth).getUser(FIREBASE_UID);
-            verify(mockAuth).updateUser(any(UserRecord.UpdateRequest.class));
-        }
+        verify(restTemplate).postForEntity(anyString(), any(HttpEntity.class), eq(String.class));
+        verify(firebaseAuth).updateUser(any(UserRecord.UpdateRequest.class));
+        verify(eventoSistemaService).registrarEvento(eq(TipoEvento.CAMBIO_CONTRASENA), anyString(), eq(usuario.getId()));
     }
 
     // -----------------------------------------------------------------------
     // CP17 — contrasena-actual-incorrecta
-    // El backend no puede verificar la contraseña actual directamente con Firebase
-    // Admin SDK. Esta validación debe hacerse en el frontend. Sin embargo, si
-    // Firebase no encuentra el usuario (UID inválido), lanza una excepción que
-    // el servicio convierte en IllegalArgumentException.
     // -----------------------------------------------------------------------
     @Test
-    @DisplayName("CP17 - contrasena actual incorrecta: Firebase no encuentra el UID → IllegalArgumentException")
-    void cp17_contrasenaActualIncorrecta_uidInvalido() throws FirebaseAuthException {
-        CambioContrasenaDTO dto = buildDto("ContraWrong!", NUEVA_CONTRASENA, CONFIRMACION_OK);
+    @DisplayName("CP17 - contraseña actual incorrecta: Firebase la rechaza → ContrasenaActualIncorrectaException y no se actualiza")
+    void cp17_contrasenaActualIncorrecta() throws FirebaseAuthException {
+        when(usuarioRepository.findByFirebaseUid(FIREBASE_UID)).thenReturn(Optional.of(usuario));
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenThrow(new HttpClientErrorException(HttpStatus.BAD_REQUEST));
 
-        try (MockedStatic<FirebaseAuth> firebaseStatic = mockStatic(FirebaseAuth.class)) {
-            FirebaseAuth mockAuth = mock(FirebaseAuth.class);
-            firebaseStatic.when(FirebaseAuth::getInstance).thenReturn(mockAuth);
+        assertThatThrownBy(() -> perfilService.cambiarContrasena(
+                FIREBASE_UID, buildDto("ContraWrong!", NUEVA_CONTRASENA, CONFIRMACION_OK)))
+                .isInstanceOf(ContrasenaActualIncorrectaException.class);
 
-            FirebaseAuthException ex = mock(FirebaseAuthException.class);
-            when(ex.getMessage()).thenReturn("No user record found");
-            when(mockAuth.getUser(FIREBASE_UID)).thenThrow(ex);
-
-            assertThatThrownBy(() -> perfilService.cambiarContrasena(FIREBASE_UID, dto))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Error al actualizar la contraseña");
-
-            // updateUser NO debe ser invocado si getUser falla
-            verify(mockAuth, never()).updateUser(any());
-        }
+        verify(firebaseAuth, never()).updateUser(any());
+        verifyNoInteractions(eventoSistemaService);
     }
 
-    // -----------------------------------------------------------------------
-    // CP17-extra — contraseña no cambia cuando Firebase falla
-    // -----------------------------------------------------------------------
     @Test
-    @DisplayName("CP17-extra - cuando Firebase falla, no se actualiza nada en BD")
-    void cp17Extra_cuandoFirebaseFalla_bdNoSeActualiza() throws FirebaseAuthException {
-        CambioContrasenaDTO dto = buildDto(CONTRASENA_ACTUAL, NUEVA_CONTRASENA, CONFIRMACION_OK);
+    @DisplayName("CP17-extra - usuario no registrado: IllegalArgumentException sin llamar a Firebase")
+    void cp17Extra_usuarioNoRegistrado() {
+        when(usuarioRepository.findByFirebaseUid(FIREBASE_UID)).thenReturn(Optional.empty());
 
-        try (MockedStatic<FirebaseAuth> firebaseStatic = mockStatic(FirebaseAuth.class)) {
-            FirebaseAuth mockAuth = mock(FirebaseAuth.class);
-            firebaseStatic.when(FirebaseAuth::getInstance).thenReturn(mockAuth);
+        assertThatThrownBy(() -> perfilService.cambiarContrasena(
+                FIREBASE_UID, buildDto(CONTRASENA_ACTUAL, NUEVA_CONTRASENA, CONFIRMACION_OK)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Usuario no encontrado");
 
-            FirebaseAuthException ex = mock(FirebaseAuthException.class);
-            when(mockAuth.getUser(FIREBASE_UID)).thenThrow(ex);
+        verifyNoInteractions(restTemplate, firebaseAuth);
+    }
 
-            assertThatThrownBy(() -> perfilService.cambiarContrasena(FIREBASE_UID, dto))
-                    .isInstanceOf(IllegalArgumentException.class);
+    @Test
+    @DisplayName("CP17-extra2 - Firebase falla al actualizar: IllegalArgumentException y no se registra evento")
+    void cp17Extra2_firebaseFallaAlActualizar() throws FirebaseAuthException {
+        when(usuarioRepository.findByFirebaseUid(FIREBASE_UID)).thenReturn(Optional.of(usuario));
+        FirebaseAuthException ex = mock(FirebaseAuthException.class);
+        when(ex.getMessage()).thenReturn("No user record found");
+        when(firebaseAuth.updateUser(any(UserRecord.UpdateRequest.class))).thenThrow(ex);
 
-            verifyNoInteractions(usuarioRepository);
-        }
+        assertThatThrownBy(() -> perfilService.cambiarContrasena(
+                FIREBASE_UID, buildDto(CONTRASENA_ACTUAL, NUEVA_CONTRASENA, CONFIRMACION_OK)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Error al actualizar la contraseña");
+
+        verifyNoInteractions(eventoSistemaService);
     }
 
     // -----------------------------------------------------------------------
     // CP18 — confirmacion-no-coincide → ContrasenaNoCoincideException (HTTP 400)
     // -----------------------------------------------------------------------
     @Test
-    @DisplayName("CP18 - confirmación no coincide: servicio lanza ContrasenaNoCoincideException antes de llamar a Firebase")
+    @DisplayName("CP18 - confirmación no coincide: se rechaza antes de tocar el repositorio, la red o Firebase")
     void cp18_confirmacionNoCoincide() {
-        CambioContrasenaDTO dto = buildDto(CONTRASENA_ACTUAL, NUEVA_CONTRASENA, CONFIRMACION_MAL);
+        assertThatThrownBy(() -> perfilService.cambiarContrasena(
+                FIREBASE_UID, buildDto(CONTRASENA_ACTUAL, NUEVA_CONTRASENA, CONFIRMACION_MAL)))
+                .isInstanceOf(ContrasenaNoCoincideException.class)
+                .hasMessageContaining("no coinciden");
 
-        try (MockedStatic<FirebaseAuth> firebaseStatic = mockStatic(FirebaseAuth.class)) {
-            FirebaseAuth mockAuth = mock(FirebaseAuth.class);
-            firebaseStatic.when(FirebaseAuth::getInstance).thenReturn(mockAuth);
-
-            assertThatThrownBy(() -> perfilService.cambiarContrasena(FIREBASE_UID, dto))
-                    .isInstanceOf(ContrasenaNoCoincideException.class)
-                    .hasMessageContaining("no coinciden");
-
-            // Firebase no debe ser invocado si las contraseñas no coinciden
-            verifyNoInteractions(mockAuth);
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // CP18-extra — la validación ocurre en el backend (no solo en frontend)
-    // -----------------------------------------------------------------------
-    @Test
-    @DisplayName("CP18-extra - validación backend: incluso sin validación frontend, backend rechaza confirmación incorrecta")
-    void cp18Extra_validacionOcurreEnBackend() {
-        // Simula que el frontend no validó y envió directo al backend
-        CambioContrasenaDTO dto = buildDto("cualquiera", "NuevaPass!", "DIFERENTE!");
-
-        try (MockedStatic<FirebaseAuth> firebaseStatic = mockStatic(FirebaseAuth.class)) {
-            assertThatThrownBy(() -> perfilService.cambiarContrasena(FIREBASE_UID, dto))
-                    .isInstanceOf(ContrasenaNoCoincideException.class);
-        }
+        verifyNoInteractions(usuarioRepository, restTemplate, firebaseAuth);
     }
 }

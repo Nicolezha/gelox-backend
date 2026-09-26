@@ -32,6 +32,9 @@ public class PerfilService {
     @Value("${firebase.web-api-key}")
     private String firebaseWebApiKey;
 
+    /** No final: los tests lo reemplazan para no llamar a Firebase por red. */
+    private RestTemplate restTemplate = new RestTemplate();
+
     public PerfilService(UsuarioRepository usuarioRepository, FirebaseAuth firebaseAuth,
                          EventoSistemaService eventoSistemaService,
                          SupabaseStorageService storageService) {
@@ -114,7 +117,7 @@ public class PerfilService {
         );
 
         try {
-            new RestTemplate().postForEntity(url, new HttpEntity<>(body, headers), String.class);
+            restTemplate.postForEntity(url, new HttpEntity<>(body, headers), String.class);
         } catch (HttpClientErrorException e) {
             throw new ContrasenaActualIncorrectaException("La contraseña actual es incorrecta");
         }

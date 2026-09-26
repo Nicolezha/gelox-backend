@@ -1,5 +1,7 @@
 package com.gelox.backend.rf06;
 
+import com.gelox.backend.config.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.controllers.PerfilController;
@@ -31,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * CP16, CP17, CP18.
  */
 @WebMvcTest(controllers = PerfilController.class)
+@Import(SecurityConfig.class)
 class CambioContrasenaControllerTest {
 
     @Autowired

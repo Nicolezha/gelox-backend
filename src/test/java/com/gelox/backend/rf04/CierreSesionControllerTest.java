@@ -1,5 +1,7 @@
 package com.gelox.backend.rf04;
 
+import com.gelox.backend.config.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.controllers.AuthController;
 import com.gelox.backend.entities.RolUsuario;
@@ -27,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * CP08, CP09.
  */
 @WebMvcTest(controllers = AuthController.class)
+@Import(SecurityConfig.class)
 class CierreSesionControllerTest {
 
     @Autowired

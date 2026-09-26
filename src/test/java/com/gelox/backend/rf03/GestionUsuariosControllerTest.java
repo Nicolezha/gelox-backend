@@ -1,5 +1,8 @@
 package com.gelox.backend.rf03;
 
+import com.gelox.backend.services.SupabaseStorageService;
+import com.gelox.backend.config.SecurityConfig;
+import org.springframework.context.annotation.Import;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.controllers.UsuarioController;
@@ -36,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * CP10, CP11, CP12, CP13.
  */
 @WebMvcTest(controllers = UsuarioController.class)
+@Import(SecurityConfig.class)
 class GestionUsuariosControllerTest {
 
     @Autowired
@@ -43,6 +47,9 @@ class GestionUsuariosControllerTest {
 
     @Autowired
     ObjectMapper objectMapper;
+
+    @MockBean
+    SupabaseStorageService storageService;
 
     @MockBean
     UsuarioService usuarioService;

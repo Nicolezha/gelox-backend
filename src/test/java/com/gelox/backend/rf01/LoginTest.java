@@ -1,5 +1,10 @@
 package com.gelox.backend.rf01;
 
+import com.gelox.backend.auth.FirebaseAuthFilter;
+import jakarta.servlet.FilterChain;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import com.gelox.backend.services.EventoSistemaService;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.dto.UsuarioDTO;
 import com.gelox.backend.entities.RolUsuario;
@@ -21,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
@@ -35,6 +41,9 @@ class LoginTest {
 
     @Mock
     FirebaseAuth firebaseAuth;
+
+    @Mock
+    EventoSistemaService eventoSistemaService;
 
     @InjectMocks
     AuthService authService;
@@ -129,12 +138,21 @@ class LoginTest {
     // -----------------------------------------------------------------------
     @Test
     @DisplayName("CP03-extra - token Firebase inválido: FirebaseAuth lanza excepción → servicio no se invoca")
-    void cp03Extra_tokenFirebaseInvalido_servicioNoInvocado() throws FirebaseAuthException {
+    void cp03Extra_tokenFirebaseInvalido_servicioNoInvocado() throws Exception {
         when(firebaseAuth.verifyIdToken("token-invalido"))
                 .thenThrow(mock(FirebaseAuthException.class));
 
-        // El filtro capturaría la excepción y respondería 401.
-        // Verificamos que el repositorio no fue consultado (el filtro no llega al servicio).
+        FirebaseAuthFilter filtro = new FirebaseAuthFilter(firebaseAuth, usuarioRepository);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer token-invalido");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain cadena = mock(FilterChain.class);
+
+        filtro.doFilter(request, response, cadena);
+
+        // El filtro responde 401 y no sigue la cadena ni consulta el repositorio.
+        assertThat(response.getStatus()).isEqualTo(401);
+        verify(cadena, never()).doFilter(any(), any());
         verifyNoInteractions(usuarioRepository);
     }
 }

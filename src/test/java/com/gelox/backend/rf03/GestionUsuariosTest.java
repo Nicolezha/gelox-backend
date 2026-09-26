@@ -1,5 +1,6 @@
 package com.gelox.backend.rf03;
 
+import com.gelox.backend.services.EventoSistemaService;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.dto.CrearUsuarioDTO;
 import com.gelox.backend.dto.EditarUsuarioDTO;
@@ -52,6 +53,9 @@ class GestionUsuariosTest {
     @Mock
     UsuarioRepository usuarioRepository;
 
+    @Mock
+    EventoSistemaService eventoSistemaService;
+
     @InjectMocks
     UsuarioService usuarioService;
 
@@ -75,6 +79,12 @@ class GestionUsuariosTest {
                 .rol(RolUsuario.ENCARGADO_VENTAS)
                 .activo(true)
                 .build();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void limpiarContextoDeSeguridad() {
+        // El contexto es thread-local: sin limpiar, contamina a los tests de controlador siguientes.
+        SecurityContextHolder.clearContext();
     }
 
     private void setSecurityContext(Usuario usuario) {

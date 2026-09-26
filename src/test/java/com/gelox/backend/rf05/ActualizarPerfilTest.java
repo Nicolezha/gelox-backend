@@ -1,5 +1,6 @@
 package com.gelox.backend.rf05;
 
+import com.gelox.backend.services.EventoSistemaService;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.dto.ActualizarPerfilDTO;
 import com.gelox.backend.entities.RolUsuario;
@@ -33,6 +34,9 @@ class ActualizarPerfilTest {
     @Mock
     UsuarioRepository usuarioRepository;
 
+    @Mock
+    EventoSistemaService eventoSistemaService;
+
     @InjectMocks
     PerfilService perfilService;
 
@@ -54,9 +58,6 @@ class ActualizarPerfilTest {
                 RolUsuario.ENCARGADO_VENTAS, true);
         ReflectionTestUtils.setField(otroUsuario, "id", ID_OTRO);
 
-        // Inyectar valores de supabase (solo para no fallar en otras rutas del servicio)
-        ReflectionTestUtils.setField(perfilService, "supabaseUrl", "http://localhost:9999");
-        ReflectionTestUtils.setField(perfilService, "supabaseServiceKey", "test-key");
     }
 
     // -----------------------------------------------------------------------
