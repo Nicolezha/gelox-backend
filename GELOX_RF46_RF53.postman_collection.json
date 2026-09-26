@@ -40,6 +40,18 @@
       "value": "",
       "type": "string",
       "description": "Firebase ID Token de un usuario con rol distinto a ADMINISTRADOR (ej. ENCARGADO_VENTAS), para probar el 403 de RF50"
+    },
+    {
+      "key": "fechaCierre",
+      "value": "",
+      "type": "string",
+      "description": "Se completa automáticamente al correr 'RF51 / 01 - Interpretar: cierra el día'"
+    },
+    {
+      "key": "totalIngresosVoz",
+      "value": "",
+      "type": "string",
+      "description": "Se completa automáticamente al correr 'RF51 / 01 - Interpretar: cierra el día'"
     }
   ],
   "item": [
@@ -444,6 +456,115 @@
               "body": "{\n  \"error\": \"No tienes permiso para realizar esta acción\"\n}"
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "RF51",
+      "item": [
+        {
+          "name": "01 - Interpretar: cierra el día",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok=true', () => pm.expect(body.ok).to.eql(true));",
+                  "pm.test('trae conciliación', () => pm.expect(body.datos.conciliacion).to.exist);",
+                  "pm.collectionVariables.set('fechaCierre', body.datos.fecha);",
+                  "pm.collectionVariables.set('totalIngresosVoz', body.datos.totalIngresos);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Cierra el día\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "{{token}} debe ser de un ADMINISTRADOR. Solo lectura: narra los ingresos de hoy (hora Colombia) por canal y el estado de la conciliación. Si aún no se registró el dinero físico (CierreCaja.jsx), datos.conciliacion.registrado=false y el texto dice 'conciliación pendiente'. Guarda fechaCierre y totalIngresosVoz para el request 02."
+          },
+          "response": [
+            {
+              "name": "200 OK - Resumen del cierre",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"comandoId\": \"55555555-5555-5555-5555-555555555555\",\n  \"ok\": true,\n  \"intencion\": \"CONSULTAR_FINANZAS\",\n  \"requiereConfirmacion\": false,\n  \"expiraEnSegundos\": null,\n  \"textoRespuesta\": \"Cierre de hoy: ventanilla $ 150.000,00, rural $ 80.000,00, comerciantes $ 300.000,00; total $ 530.000,00 en 15 transacciones. Conciliación: sin diferencias.\",\n  \"datos\": {\n    \"fecha\": \"2026-09-24\",\n    \"ingresoVentanilla\": 150000,\n    \"ingresoRural\": 80000,\n    \"ingresoComerciantes\": 300000,\n    \"totalIngresos\": 530000,\n    \"totalTransacciones\": 15,\n    \"conciliacion\": {\n      \"registrado\": true,\n      \"tieneDiferencias\": false,\n      \"diferenciaTotal\": 0\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "02 - Comparar contra GET /api/reportes/diario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('totalIngresos igual al del resumen por voz', () => pm.expect(String(pm.response.json().totalIngresos)).to.eql(String(pm.collectionVariables.get('totalIngresosVoz'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes/diario?fecha={{fechaCierre}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "diario"
+              ],
+              "query": [
+                {
+                  "key": "fecha",
+                  "value": "{{fechaCierre}}"
+                }
+              ]
+            },
+            "description": "Requiere haber corrido antes '01 - Interpretar: cierra el día' en esta misma corrida, para tener fechaCierre y totalIngresosVoz."
+          },
+          "response": []
         }
       ]
     }
