@@ -38,6 +38,7 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
     private static final Pattern ANIO_PATTERN = Pattern.compile("\\bano\\b");
 
     private final ReporteFinancieroService reporteFinancieroService;
+    private final CierreDiaResumen cierreDiaResumen;
 
     /** {@code canal} null = todos los canales; {@code tipoConsulta} es "VENTAS" o "GANANCIA". */
     private record Payload(PeriodoFiltroDTO periodo, String etiquetaPeriodo, String canal, String tipoConsulta) {}
@@ -59,9 +60,9 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
     public VozResultado interpretar(VozContexto ctx) {
         String texto = NormalizadorVoz.normalizar(ctx.texto());
 
-        // El cierre del día por voz lo implementa T45-BE3.
+        // RF51: el cierre del día lo narra CierreDiaResumen.
         if (texto.contains("cierra el dia") || texto.contains("cierre del dia") || texto.contains("resumen del dia")) {
-            return new VozResultado(false, "El cierre del día por voz todavía no está disponible.", Map.of(), null);
+            return cierreDiaResumen.generarResumen(ctx.hoy());
         }
 
         Periodo p = detectarPeriodo(texto);
@@ -75,6 +76,9 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
     @Override
     @RequiereRol("ADMINISTRADOR")
     public VozResultado ejecutar(VozPendiente pendiente, Usuario usuario) {
+        if (pendiente.payload() instanceof CierreDiaResumen.Payload cierrePayload) {
+            return cierreDiaResumen.generarResumen(cierrePayload.hoy());
+        }
         Payload payload = (Payload) pendiente.payload();
         return construirRespuesta(payload.periodo(), payload.etiquetaPeriodo(), payload.canal(), payload.tipoConsulta());
     }
