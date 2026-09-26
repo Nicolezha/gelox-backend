@@ -12,6 +12,7 @@ import com.gelox.backend.services.ReporteFinancieroService;
 import com.gelox.backend.voz.VozContexto;
 import com.gelox.backend.voz.VozPendiente;
 import com.gelox.backend.voz.VozResultado;
+import com.gelox.backend.voz.handlers.CierreDiaResumen;
 import com.gelox.backend.voz.handlers.ConsultaFinancieraHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -52,12 +53,15 @@ class ConsultaFinancieraHandlerTest {
     @Mock
     ReporteFinancieroService reporteFinancieroService;
 
+    @Mock
+    CierreDiaResumen cierreDiaResumen;
+
     ConsultaFinancieraHandler handler;
     Usuario usuario;
 
     @BeforeEach
     void setUp() {
-        handler = new ConsultaFinancieraHandler(reporteFinancieroService);
+        handler = new ConsultaFinancieraHandler(reporteFinancieroService, cierreDiaResumen);
         usuario = TestHelper.buildUsuario("uid-1", "voz@gelox-test.com", RolUsuario.ADMINISTRADOR, true);
     }
 
@@ -170,12 +174,14 @@ class ConsultaFinancieraHandlerTest {
     }
 
     @Test
-    @DisplayName("Cierre del día: todavía no disponible, sin consultar reportes")
-    void cierreDelDiaNoDisponible() {
+    @DisplayName("Cierre del día: delega en CierreDiaResumen con ctx.hoy(), sin consultar reportes financieros")
+    void cierreDelDia_delegaEnCierreDiaResumen() {
+        VozResultado esperado = new VozResultado(true, "Cierre de hoy: ...", Map.of(), new CierreDiaResumen.Payload(HOY));
+        when(cierreDiaResumen.generarResumen(HOY)).thenReturn(esperado);
+
         VozResultado r = handler.interpretar(ctx("Gelox, cierra el día", HOY));
 
-        assertThat(r.ok()).isFalse();
-        assertThat(r.textoRespuesta()).isEqualTo("El cierre del día por voz todavía no está disponible.");
+        assertThat(r).isEqualTo(esperado);
         verifyNoInteractions(reporteFinancieroService);
     }
 
