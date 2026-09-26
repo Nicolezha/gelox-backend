@@ -181,6 +181,45 @@ class RegistrarVentaHandlerTest {
     }
 
     @Test
+    @DisplayName("\"una unidad\" (singular) se reconoce como 1 unidad")
+    void unaUnidadSingular() {
+        resuelve("festival", idFestival, "Festival");
+        when(ventaService.getCatalogo()).thenReturn(List.of(enCatalogo(idFestival, "Festival", "2500.00", 50)));
+        when(ventaService.calcularVenta(any())).thenReturn(new CalcularVentaResponse(List.of(
+                new ItemCalculoResultado(idFestival, 0, 1, new BigDecimal("2500.00"), new BigDecimal("2500.00"))),
+                new BigDecimal("2500.00")));
+
+        VozResultado resultado = handler.interpretar(ctx("registra una unidad de Festival a 2.500"));
+
+        assertThat(resultado.ok()).isTrue();
+        assertThat(resultado.textoRespuesta()).startsWith("Venta ventanilla: 1 unidad de Festival.");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items = (List<Map<String, Object>>) resultado.datos().get("items");
+        assertThat(items.get(0)).containsEntry("cajas", 0).containsEntry("unidades", 1);
+    }
+
+    @Test
+    @DisplayName("\"agrega dos unidades más de X\" suma al pendiente")
+    void agregaUnidadesMasDe_sumaAlPendiente() {
+        resuelve("festival", idFestival, "Festival");
+        when(ventaService.getCatalogo()).thenReturn(List.of(enCatalogo(idFestival, "Festival", "2500.00", 50)));
+        when(ventaService.calcularVenta(any())).thenReturn(
+                new CalcularVentaResponse(List.of(new ItemCalculoResultado(
+                        idFestival, 0, 2, new BigDecimal("2500.00"), new BigDecimal("5000.00"))),
+                        new BigDecimal("5000.00")),
+                new CalcularVentaResponse(List.of(new ItemCalculoResultado(
+                        idFestival, 0, 4, new BigDecimal("2500.00"), new BigDecimal("10000.00"))),
+                        new BigDecimal("10000.00")));
+
+        VozResultado primero = handler.interpretar(ctx("registra dos unidades de Festival"));
+        VozResultado agregado = handler.interpretar(
+                ctxConPendiente("agrega dos unidades más de Festival", primero.payload()));
+
+        assertThat(agregado.ok()).isTrue();
+        assertThat(agregado.textoRespuesta()).startsWith("Venta ventanilla: 4 unidades de Festival.");
+    }
+
+    @Test
     @DisplayName("el precio se acepta con 'de', 'por' y '$': no se traga como parte del producto")
     void precioConVariantes_noSeTragaEnElProducto() {
         resuelve("festival", idFestival, "Festival");

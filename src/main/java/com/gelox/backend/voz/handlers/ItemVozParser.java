@@ -14,8 +14,8 @@ import java.util.regex.Pattern;
 final class ItemVozParser {
 
     private static final Pattern HAY_DIGITO = Pattern.compile("\\d");
-    private static final Pattern HAY_TIPO = Pattern.compile("\\b(cajas?|unidades?)\\b");
-    private static final Pattern HAY_PRODUCTO = Pattern.compile("\\b(cajas?|unidades?)\\s+de\\s+\\S");
+    private static final Pattern HAY_TIPO = Pattern.compile("\\b(cajas?|unidad(?:es)?)\\b");
+    private static final Pattern HAY_PRODUCTO = Pattern.compile("\\b(cajas?|unidad(?:es)?)\\s+(?:mas\\s+)?de\\s+\\S");
 
     record ItemExtraido(int cajas, int unidades, String fragmentoProducto, BigDecimal precioDicho) {}
 
@@ -24,11 +24,12 @@ final class ItemVozParser {
 
     /**
      * Grupos: 1 cantidad, 2 caja(s)/unidad(es), 3 producto, 4 precio dicho (opcional).
-     * El precio admite "a 3500", "por 3500", "de 3500" y "$3500".
+     * El precio admite "a 3500", "por 3500", "de 3500" y "$3500". Tolera "más"
+     * entre el tipo y "de" ("agrega 2 unidades más de ...").
      */
     static Pattern patron(String terminadores) {
         return Pattern.compile(
-                "(\\d+)\\s*(cajas?|unidades?)\\s+de\\s+(.+?)"
+                "(\\d+)\\s*(cajas?|unidad(?:es)?)\\s+(?:mas\\s+)?de\\s+(.+?)"
                         + "(?:\\s+(?:(?:a|por|de)\\s+\\$?|\\$)(\\d+))?"
                         + "(?=" + terminadores + "|$)");
     }

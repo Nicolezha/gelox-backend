@@ -48,7 +48,7 @@ public class RegistrarVentaHandler implements IntencionHandler {
 
     private static final String MENSAJE_FALTA_PRODUCTO = "Falta aclarar cuál producto es.";
 
-    private static final String EJEMPLO = "Di algo como 'registra tres cajas de Festival a 2.500, canal ventanilla'.";
+    private static final String EJEMPLO = "Di algo como 'registra tres cajas de Aloha Mango Biche a 2.500, canal ventanilla'.";
 
     /** "envío" también marca canal rural: el costo de envío solo existe en pedidos rurales. */
     private static final Pattern ES_RURAL = Pattern.compile("\\b(rural|envio)\\b");

@@ -142,6 +142,21 @@ class GenerarPedidoHandlerTest {
     }
 
     @Test
+    @DisplayName("Extra: \"una unidad\" (singular) se reconoce como unidad")
+    void unaUnidadSingularExtra() {
+        UUID idFestival = UUID.randomUUID();
+        when(resolvedorProducto.resolver("festival")).thenReturn(List.of(
+                new ResolvedorProducto.ProductoCandidato(idFestival, "Festival", 1.0, 24)));
+
+        VozResultado resultado = handler.interpretar(ctx("genera un pedido con una unidad de festival"));
+
+        assertThat(resultado.ok()).isTrue();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items = (List<Map<String, Object>>) resultado.datos().get("items");
+        assertThat(items.get(0)).containsEntry("cantidadUnidades", 1).containsEntry("cantidadCajas", 0);
+    }
+
+    @Test
     @DisplayName("Extra: ejecutar delega en PedidoProveedorService y descarta el excel")
     void ejecutarDelegaEnPedidoProveedorServiceExtra() {
         UUID pedidoId = UUID.randomUUID();

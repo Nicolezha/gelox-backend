@@ -41,8 +41,13 @@ public class VozService {
     private static final ZoneId ZONA_BOGOTA = ZoneId.of("America/Bogota");
 
     private static final String MENSAJE_NO_ENTENDIDO =
-            "No entendí el comando. Intenta algo como: 'vende 2 festival', "
-                    + "'cuántas paletas de festival quedan' o 'cuánto ganamos hoy'.";
+            "No entendí el comando. Intenta algo como: 'vende 2 cajas de Aloha Mango Biche', "
+                    + "'cuántas Aloha Paleta Limón quedan' o 'cuánto ganamos hoy'.";
+
+    /** "agrega ..." sin una venta esperando confirmación: no hay a qué sumarle. */
+    private static final String MENSAJE_AGREGADO_SIN_VENTA =
+            "No hay una venta en curso a la que agregar. Primero di la venta completa, por ejemplo "
+                    + "'registra 2 cajas de Aloha Mango Biche', y luego 'agrega ...' antes de confirmar.";
 
     private static final String MENSAJE_SIN_HANDLER = "Esa función de voz todavía no está disponible.";
 
@@ -73,22 +78,25 @@ public class VozService {
         // T41-BE5 — "agrega/añade/también ..." continúa la venta que espera confirmación.
         TipoIntencionVoz intencion = resultado.intencion();
         VozPendiente ventaEnCurso = null;
+        boolean agregado = false;
         // Si la venta quedó esperando una aclaración (destinatario o producto), cualquier frase sin
         // intención propia ("doña Marta", "fresa") la completa.
         if (intencion == null || intencion == TipoIntencionVoz.REGISTRAR_VENTA) {
-            boolean agregado = ES_AGREGADO.matcher(NormalizadorVoz.normalizar(request.texto())).find();
+            agregado = ES_AGREGADO.matcher(NormalizadorVoz.normalizar(request.texto())).find();
+            final boolean esAgregado = agregado;
             final TipoIntencionVoz intencionClasificada = intencion;
             ventaEnCurso = pendienteStore.peekPorUsuario(usuario.getId())
                     .filter(p -> p.intencion() == TipoIntencionVoz.REGISTRAR_VENTA)
-                    .filter(p -> esperaDestinatario(p) ? intencionClasificada == null : agregado)
+                    .filter(p -> esperaDestinatario(p) ? intencionClasificada == null : esAgregado)
                     .orElse(null);
             if (ventaEnCurso != null) intencion = TipoIntencionVoz.REGISTRAR_VENTA;
         }
 
         if (intencion == null) {
+            String mensaje = agregado ? MENSAJE_AGREGADO_SIN_VENTA : MENSAJE_NO_ENTENDIDO;
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
-                    null, EstadoComandoVoz.ERROR, MENSAJE_NO_ENTENDIDO);
-            return new VozInterpretarResponse(comando.getId(), false, null, false, null, MENSAJE_NO_ENTENDIDO, Map.of());
+                    null, EstadoComandoVoz.ERROR, mensaje);
+            return new VozInterpretarResponse(comando.getId(), false, null, false, null, mensaje, Map.of());
         }
 
         IntencionHandler handler = handlersPorTipo.get(intencion);

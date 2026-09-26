@@ -53,9 +53,9 @@ public class RegistrarVentaRuralFlujo {
     private static final Pattern ENVIO_PATTERN = Pattern.compile("envio\\s+(?:de\\s+)?\\$?(\\d+)(\\s+mil\\b)?");
 
     private static final Pattern ITEM_PATTERN = ItemVozParser.patron(
-            "\\s*,|\\s+y\\s+|\\s+para\\b|\\s+envio\\b|\\s+con\\b|\\s+en\\b|\\s+por\\b");
+            "\\s*,|\\s+y\\s+|\\s+canal\\b|\\s+para\\b|\\s+envio\\b|\\s+con\\b|\\s+en\\b|\\s+por\\b");
 
-    private static final String EJEMPLO = "Di algo como 'vende dos cajas de Festival para doña Marta, envío 8.000'.";
+    private static final String EJEMPLO = "Di algo como 'vende dos cajas de Aloha Mango Biche para doña Marta, envío 8.000'.";
     private static final String PREGUNTA_DESTINATARIO = "¿Para quién es el pedido rural?";
 
     private static final int MAX_CLIENTES_EN_TEXTO = 5;

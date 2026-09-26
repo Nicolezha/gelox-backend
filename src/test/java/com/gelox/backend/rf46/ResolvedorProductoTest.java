@@ -102,6 +102,41 @@ class ResolvedorProductoTest {
     }
 
     @Test
+    @DisplayName("nombre abreviado con error (\"aloja barra ice\") encuentra los sabores sin penalizar lo no dicho")
+    void nombreAbreviadoConError() {
+        when(productoRepository.findByActivoTrue()).thenReturn(List.of(
+                producto("Aloha Barra Ice Limón", 12), producto("Aloha Barra Ice Fresa", 12), soloLack));
+
+        List<ResolvedorProducto.ProductoCandidato> candidatos = resolvedor.resolver("aloja barra ice");
+
+        assertThat(candidatos).extracting(ResolvedorProducto.ProductoCandidato::nombre)
+                .containsExactlyInAnyOrder("Aloha Barra Ice Limón", "Aloha Barra Ice Fresa");
+        assertThat(candidatos).allSatisfy(c -> assertThat(c.score()).isGreaterThanOrEqualTo(0.9));
+    }
+
+    @Test
+    @DisplayName("abreviado con error que además dice el sabor prefiere ese sabor")
+    void abreviadoConSaborDesempata() {
+        when(productoRepository.findByActivoTrue()).thenReturn(List.of(
+                producto("Aloha Barra Ice Limón", 12), producto("Aloha Barra Ice Fresa", 12)));
+
+        List<ResolvedorProducto.ProductoCandidato> candidatos = resolvedor.resolver("aloja barra ice limon");
+
+        assertThat(candidatos.get(0).nombre()).isEqualTo("Aloha Barra Ice Limón");
+        if (candidatos.size() > 1) {
+            assertThat(candidatos.get(0).score() - candidatos.get(1).score()).isGreaterThanOrEqualTo(0.10);
+        }
+    }
+
+    @Test
+    @DisplayName("fragmento corto con error no hace coincidencia parcial contra nombres largos")
+    void fragmentoCortoNoCoincideParcial() {
+        when(productoRepository.findByActivoTrue()).thenReturn(List.of(producto("Aloha Paleta Limon CM", 12)));
+
+        assertThat(resolvedor.resolver("lima")).isEmpty();
+    }
+
+    @Test
     @DisplayName("producto inexistente devuelve lista vacía")
     void sinCoincidencia() {
         when(productoRepository.findByActivoTrue()).thenReturn(List.of(festival, soloLack));

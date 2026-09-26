@@ -192,6 +192,30 @@ class RegistrarVentaRuralFlujoTest {
     }
 
     @Test
+    @DisplayName("\"canal rural\" no se cuela en el producto al completar el destinatario")
+    void canalRural_noSeCuelaEnElProducto() {
+        when(resolvedorProducto.resolver("aloha mango biche")).thenReturn(List.of(
+                new ResolvedorProducto.ProductoCandidato(idFestival, "Aloha Mango Biche", 1.0, 12)));
+        when(ventaService.getCatalogo()).thenReturn(List.of(new CatalogoVentaDTO(
+                idFestival, "AMB-001", "Aloha Mango Biche", null, new BigDecimal("625.00"), 100, true, 12)));
+        when(ventaService.calcularVenta(any())).thenReturn(new CalcularVentaResponse(
+                List.of(new ItemCalculoResultado(idFestival, 0, 2, new BigDecimal("625.00"), new BigDecimal("1250.00"))),
+                new BigDecimal("1250.00")));
+        when(clienteRuralService.listarClientes("Nicole Hernandez")).thenReturn(List.of());
+
+        VozResultado pregunta = flujo.interpretar(ctx("registra dos unidades de aloha mango biche canal rural"));
+        VozPendiente pendiente = new VozPendiente(UUID.randomUUID(), usuario.getId(), TipoIntencionVoz.REGISTRAR_VENTA,
+                pregunta.payload(), Instant.now().plusSeconds(30));
+        VozResultado resultado = flujo.interpretar(new VozContexto(
+                "para Nicole Hernandez", Map.of(), 0.9, usuario, LocalDate.now(), pendiente));
+
+        assertThat(resultado.ok()).isTrue();
+        RegistrarVentaRuralFlujo.Payload payload = (RegistrarVentaRuralFlujo.Payload) resultado.payload();
+        assertThat(payload.items()).containsExactly(new ItemPedidoRuralRequest(idFestival, 0, 2));
+        assertThat(payload.nombreDestinatario()).isEqualTo("Nicole Hernandez");
+    }
+
+    @Test
     @DisplayName("sin la palabra cajas/unidades: el error dice qué falta")
     void sinCajasNiUnidades_errorEspecifico() {
         VozResultado resultado = flujo.interpretar(ctx("vende dos de Festival para doña Marta"));

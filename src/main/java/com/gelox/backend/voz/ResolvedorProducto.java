@@ -24,6 +24,9 @@ public class ResolvedorProducto {
 
     private static final double PUNTAJE_MINIMO = 0.75;
 
+    /** Por debajo de este largo el fragmento solo se compara contra el nombre completo. */
+    private static final int LARGO_MINIMO_PARCIAL = 5;
+
     private final ProductoRepository productoRepository;
 
     public record ProductoCandidato(UUID id, String nombre, double score, Integer unidadesPorCaja) {
@@ -51,7 +54,37 @@ public class ResolvedorProducto {
 
         int distancia = distanciaLevenshtein(fragmentoNormalizado, nombreNormalizado);
         int largoMayor = Math.max(fragmentoNormalizado.length(), nombreNormalizado.length());
-        return largoMayor == 0 ? 0.0 : 1.0 - (double) distancia / largoMayor;
+        double completo = largoMayor == 0 ? 0.0 : 1.0 - (double) distancia / largoMayor;
+
+        // Nombre dicho a medias ("aloja barra ice" por "Aloha Barra Ice Limón"): se compara
+        // contra la parte del nombre que mejor encaja, sin castigar lo que no se dijo.
+        // Con fragmentos muy cortos un solo error ya coincidiría con medio catálogo.
+        if (fragmentoNormalizado.length() < LARGO_MINIMO_PARCIAL) return completo;
+        int distanciaParcial = distanciaParcial(fragmentoNormalizado, nombreNormalizado);
+        double parcial = 1.0 - (double) distanciaParcial / fragmentoNormalizado.length();
+
+        return Math.max(completo, parcial);
+    }
+
+    /** Levenshtein del fragmento contra la subcadena del nombre que mejor le encaja. */
+    private static int distanciaParcial(String fragmento, String nombre) {
+        int[] previa = new int[nombre.length() + 1]; // fila 0 en ceros: la subcadena puede empezar en cualquier parte
+        int[] actual = new int[nombre.length() + 1];
+
+        for (int i = 1; i <= fragmento.length(); i++) {
+            actual[0] = i;
+            for (int j = 1; j <= nombre.length(); j++) {
+                int costo = fragmento.charAt(i - 1) == nombre.charAt(j - 1) ? 0 : 1;
+                actual[j] = Math.min(Math.min(previa[j] + 1, actual[j - 1] + 1), previa[j - 1] + costo);
+            }
+            int[] tmp = previa;
+            previa = actual;
+            actual = tmp;
+        }
+
+        int minimo = fragmento.length();
+        for (int d : previa) minimo = Math.min(minimo, d); // ...y terminar en cualquier parte
+        return minimo;
     }
 
     private static int distanciaLevenshtein(String a, String b) {

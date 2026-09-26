@@ -182,6 +182,20 @@ class VozServiceTest {
     }
 
     @Test
+    @DisplayName("\"agrega ...\" sin venta en curso explica que primero hay que decir la venta")
+    void agregadoSinVentaEnCurso_mensajeEspecifico() {
+        stubGuardarComando();
+
+        VozInterpretarResponse interpretado = vozService.interpretar(
+                new VozInterpretarRequest("agrega dos unidades de aloha mango biche", 0.9), usuario);
+
+        assertThat(interpretado.ok()).isFalse();
+        assertThat(interpretado.intencion()).isNull();
+        assertThat(interpretado.textoRespuesta()).startsWith("No hay una venta en curso a la que agregar.");
+        assertThat(handlerVenta.seEjecuto).isFalse();
+    }
+
+    @Test
     @DisplayName("si el handler responde ok=false: ok=false, no pide confirmación y se guarda ERROR")
     void handlerSinExito_noCreaPendienteYResponseOkFalso() {
         stubGuardarComando();

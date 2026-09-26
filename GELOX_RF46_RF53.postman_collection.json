@@ -351,8 +351,8 @@
                   "const body = pm.response.json();",
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "pm.test(\"ok=true\", () => pm.expect(body.ok).to.eql(true));",
-                  "pm.test('canal VENTANILLA', () => pm.expect(body.datos.canal).to.eql('VENTANILLA'));",
-                  "pm.test('tipo GANANCIA', () => pm.expect(body.datos.tipo).to.eql('GANANCIA'));"
+                  "pm.test(\"tipo ganancia\", () => pm.expect(body.datos.tipo).to.eql(\"ganancia\"));",
+                  "pm.test(\"trae los tres canales\", () => { pm.expect(body.datos.ingresosVentanilla).to.exist; pm.expect(body.datos.ingresosRural).to.exist; pm.expect(body.datos.ingresosComerciantes).to.exist; });"
                 ]
               }
             }
@@ -389,14 +389,14 @@
                 }
               }
             },
-            "description": "{{token}} debe ser de un ADMINISTRADOR. Consulta de solo lectura: con confianza >= 0.70 responde de una vez, sin pedir confirmación. datos.ganancia = ingresos - costos de ventanilla hoy (hora Colombia), igual que GET /api/reportes/por-canal."
+            "description": "{{token}} debe ser de un ADMINISTRADOR. Consulta de solo lectura: con confianza >= 0.70 responde de una vez, sin pedir confirmación. Mencionar 'ventanilla' no filtra: datos siempre trae los tres canales (ingresos* y, por ser tipo 'ganancia', la lista datos.canales con totalIngresos/totalCostos/margen de cada uno, igual que GET /api/reportes/por-canal). datos.periodo es texto para mostrar (hora Colombia)."
           },
           "response": [
             {
-              "name": "200 OK - Ganancia de ventanilla",
+              "name": "200 OK - Ganancia (tres canales)",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"comandoId\": \"44444444-4444-4444-4444-444444444444\",\n  \"ok\": true,\n  \"intencion\": \"CONSULTAR_FINANZAS\",\n  \"requiereConfirmacion\": false,\n  \"expiraEnSegundos\": null,\n  \"textoRespuesta\": \"Ganancia de ventanilla hoy: $ 60.000,00.\",\n  \"datos\": {\n    \"periodo\": \"hoy\",\n    \"canal\": \"VENTANILLA\",\n    \"tipo\": \"GANANCIA\",\n    \"ingresos\": 150000,\n    \"costos\": 90000,\n    \"ganancia\": 60000\n  }\n}"
+              "body": "{\n  \"comandoId\": \"44444444-4444-4444-4444-444444444444\",\n  \"ok\": true,\n  \"intencion\": \"CONSULTAR_FINANZAS\",\n  \"requiereConfirmacion\": false,\n  \"expiraEnSegundos\": null,\n  \"textoRespuesta\": \"La utilidad neta hoy fue de $ 430.000,00 con un margen de ganancia del 430.00 %.\",\n  \"datos\": {\n    \"tipo\": \"ganancia\",\n    \"periodo\": \"Hoy · 24 de septiembre de 2026\",\n    \"ingresosVentanilla\": 150000,\n    \"ingresosRural\": 80000,\n    \"ingresosComerciantes\": 300000,\n    \"ingresosTotales\": 530000,\n    \"utilidadNeta\": 430000,\n    \"margenGanancia\": 430.00,\n    \"canales\": [\n      { \"canal\": \"Ventanilla\", \"totalIngresos\": 150000, \"totalCostos\": 90000, \"margen\": 66.67 },\n      { \"canal\": \"Rural\", \"totalIngresos\": 80000, \"totalCostos\": 50000, \"margen\": 60.00 },\n      { \"canal\": \"Comerciantes\", \"totalIngresos\": 300000, \"totalCostos\": 200000, \"margen\": 50.00 }\n    ]\n  }\n}"
             }
           ]
         },
@@ -473,7 +473,8 @@
                   "const body = pm.response.json();",
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "pm.test('ok=true', () => pm.expect(body.ok).to.eql(true));",
-                  "pm.test('trae conciliación', () => pm.expect(body.datos.conciliacion).to.exist);",
+                  "pm.test(\"tipo cierre\", () => pm.expect(body.datos.tipo).to.eql(\"cierre\"));",
+                  "pm.test('conciliación ausente (pendiente) o completa', () => { const c = body.datos.conciliacion; if (c !== undefined) { pm.expect(c).to.have.all.keys('montoCalculadoTotal', 'montoFisicoTotal', 'diferenciaTotal', 'tieneDiferencias'); } });",
                   "pm.collectionVariables.set('fechaCierre', body.datos.fecha);",
                   "pm.collectionVariables.set('totalIngresosVoz', body.datos.totalIngresos);"
                 ]
@@ -512,14 +513,14 @@
                 }
               }
             },
-            "description": "{{token}} debe ser de un ADMINISTRADOR. Solo lectura: narra los ingresos de hoy (hora Colombia) por canal y el estado de la conciliación. Si aún no se registró el dinero físico (CierreCaja.jsx), datos.conciliacion.registrado=false y el texto dice 'conciliación pendiente'. Guarda fechaCierre y totalIngresosVoz para el request 02."
+            "description": "{{token}} debe ser de un ADMINISTRADOR. Solo lectura: narra los ingresos de hoy (hora Colombia) por canal y el estado de la conciliación. datos.tipo = 'cierre'. Si aún no se registró el dinero físico (CierreCaja.jsx), la clave datos.conciliacion no viene (el frontend pinta 'Pendiente') y el texto dice 'la conciliación está pendiente'. Guarda fechaCierre y totalIngresosVoz para el request 02."
           },
           "response": [
             {
               "name": "200 OK - Resumen del cierre",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"comandoId\": \"55555555-5555-5555-5555-555555555555\",\n  \"ok\": true,\n  \"intencion\": \"CONSULTAR_FINANZAS\",\n  \"requiereConfirmacion\": false,\n  \"expiraEnSegundos\": null,\n  \"textoRespuesta\": \"Cierre de hoy: ventanilla $ 150.000,00, rural $ 80.000,00, comerciantes $ 300.000,00; total $ 530.000,00 en 15 transacciones. Conciliación: sin diferencias.\",\n  \"datos\": {\n    \"fecha\": \"2026-09-24\",\n    \"ingresoVentanilla\": 150000,\n    \"ingresoRural\": 80000,\n    \"ingresoComerciantes\": 300000,\n    \"totalIngresos\": 530000,\n    \"totalTransacciones\": 15,\n    \"conciliacion\": {\n      \"registrado\": true,\n      \"tieneDiferencias\": false,\n      \"diferenciaTotal\": 0\n    }\n  }\n}"
+              "body": "{\n  \"comandoId\": \"55555555-5555-5555-5555-555555555555\",\n  \"ok\": true,\n  \"intencion\": \"CONSULTAR_FINANZAS\",\n  \"requiereConfirmacion\": false,\n  \"expiraEnSegundos\": null,\n  \"textoRespuesta\": \"El cierre de hoy suma $ 530.000,00 en 15 transacciones, sin diferencias en caja.\",\n  \"datos\": {\n    \"tipo\": \"cierre\",\n    \"fecha\": \"2026-09-24\",\n    \"periodo\": \"Hoy · 24 de septiembre de 2026\",\n    \"ingresosVentanilla\": 150000,\n    \"ingresosRural\": 80000,\n    \"ingresosComerciantes\": 300000,\n    \"totalIngresos\": 530000,\n    \"totalTransacciones\": 15,\n    \"variacionVentanilla\": 12.50,\n    \"variacionRural\": -4.00,\n    \"variacionComerciantes\": 0.00,\n    \"conciliacion\": {\n      \"montoCalculadoTotal\": 530000,\n      \"montoFisicoTotal\": 530000,\n      \"diferenciaTotal\": 0,\n      \"tieneDiferencias\": false\n    }\n  }\n}"
             }
           ]
         },

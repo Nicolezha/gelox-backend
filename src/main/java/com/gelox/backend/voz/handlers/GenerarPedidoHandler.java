@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 public class GenerarPedidoHandler implements IntencionHandler {
 
     private static final Pattern ITEM_PATTERN =
-            Pattern.compile("(\\d+)\\s*(cajas?|unidades?)?\\s*de\\s+(.+?)(?:\\s+y\\s+|,|$)");
+            Pattern.compile("(\\d+)\\s*(cajas?|unidad(?:es)?)?\\s*de\\s+(.+?)(?:\\s+y\\s+|,|$)");
 
     private static final String UNIDAD_DEFECTO = "cajas";
 
@@ -58,7 +58,7 @@ public class GenerarPedidoHandler implements IntencionHandler {
 
         if (extraidos.isEmpty()) {
             return new VozResultado(false,
-                    "No entendí las cantidades. Di algo como 'genera un pedido con 20 cajas de Solo Lack y 15 de Festival'.",
+                    "No entendí las cantidades. Di algo como 'genera un pedido con 20 cajas de Aloha Mango Biche y 15 de Aloha Paleta Limón'.",
                     Map.of(), null);
         }
 
