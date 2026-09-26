@@ -1,7 +1,6 @@
 package com.gelox.backend.voz.handlers;
 
 import com.gelox.backend.dto.PeriodoFiltroDTO;
-import com.gelox.backend.dto.RentabilidadCanalDTO;
 import com.gelox.backend.dto.ReporteFinancieroDTO;
 import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
@@ -15,10 +14,10 @@ import com.gelox.backend.voz.VozResultado;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -27,8 +26,10 @@ import java.util.regex.Pattern;
 
 /**
  * RF50 — "¿cuánto ganamos en ventanilla hoy?". Narra ventas o ganancia de un
- * período y, opcionalmente, de un canal, a partir de {@link ReporteFinancieroService}.
- * "Hoy" sale de {@link VozContexto#hoy()}, ya resuelto en America/Bogota.
+ * período a partir de {@link ReporteFinancieroService}. Siempre devuelve el
+ * desglose de los tres canales: el canal mencionado no filtra (así lo espera
+ * VistaFinanzas.jsx). "Hoy" sale de {@link VozContexto#hoy()}, ya resuelto en
+ * America/Bogota.
  */
 @Component
 @RequiredArgsConstructor
@@ -37,11 +38,16 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
     /** "año" queda como "ano" tras normalizar. */
     private static final Pattern ANIO_PATTERN = Pattern.compile("\\bano\\b");
 
+    private static final DateTimeFormatter FORMATO_FECHA_LARGA =
+            DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", Locale.of("es", "CO"));
+    private static final DateTimeFormatter FORMATO_MES_LARGO =
+            DateTimeFormatter.ofPattern("MMMM 'de' yyyy", Locale.of("es", "CO"));
+
     private final ReporteFinancieroService reporteFinancieroService;
     private final CierreDiaResumen cierreDiaResumen;
 
-    /** {@code canal} null = todos los canales; {@code tipoConsulta} es "VENTAS" o "GANANCIA". */
-    private record Payload(PeriodoFiltroDTO periodo, String etiquetaPeriodo, String canal, String tipoConsulta) {}
+    /** {@code tipoConsulta} es "ventas" o "ganancia" (en minúsculas, como lo lee el frontend). */
+    private record Payload(PeriodoFiltroDTO periodo, Periodo periodoEnum, String tipoConsulta) {}
 
     private enum Periodo { HOY, AYER, SEMANA, MES, ANIO }
 
@@ -66,7 +72,10 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
         }
 
         Periodo p = detectarPeriodo(texto);
-        return construirRespuesta(periodoFiltro(p, ctx.hoy()), etiqueta(p), detectarCanal(texto), detectarTipo(texto));
+        PeriodoFiltroDTO periodo = periodoFiltro(p, ctx.hoy());
+        String tipoConsulta = detectarTipo(texto);
+
+        return construirRespuesta(periodo, p, tipoConsulta);
     }
 
     /**
@@ -80,63 +89,49 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
             return cierreDiaResumen.generarResumen(cierrePayload.hoy());
         }
         Payload payload = (Payload) pendiente.payload();
-        return construirRespuesta(payload.periodo(), payload.etiquetaPeriodo(), payload.canal(), payload.tipoConsulta());
+        return construirRespuesta(payload.periodo(), payload.periodoEnum(), payload.tipoConsulta());
     }
 
-    private VozResultado construirRespuesta(PeriodoFiltroDTO periodo, String etiquetaPeriodo,
-                                            String canal, String tipoConsulta) {
+    private VozResultado construirRespuesta(PeriodoFiltroDTO periodo, Periodo p, String tipoConsulta) {
+        ReporteFinancieroDTO reporte = reporteFinancieroService.generarReporte(periodo);
         NumberFormat moneda = NumberFormat.getCurrencyInstance(Locale.of("es", "CO"));
-        // LinkedHashMap y no Map.of: canal puede ser null.
-        Map<String, Object> datos = new LinkedHashMap<>();
-        datos.put("periodo", etiquetaPeriodo);
-        datos.put("canal", canal);
-        datos.put("tipo", tipoConsulta);
-        String texto;
+        String etiquetaLarga = etiqueta(p, periodo);
+        String etiquetaCorta = etiquetaCorta(p);
 
-        if ("GANANCIA".equals(tipoConsulta)) {
-            if (canal != null) {
-                List<RentabilidadCanalDTO> canales = reporteFinancieroService.getRentabilidadPorCanal(periodo).canales();
-                RentabilidadCanalDTO delCanal = canales.stream()
-                        .filter(c -> c.canal().equals(canal))
-                        .findFirst()
-                        // getRentabilidadPorCanal siempre trae los 3 canales.
-                        .orElseThrow(() -> new IllegalStateException("Canal no encontrado en rentabilidad: " + canal));
-                BigDecimal ganancia = delCanal.totalIngresos().subtract(delCanal.totalCostos());
-                datos.put("ingresos", delCanal.totalIngresos());
-                datos.put("costos", delCanal.totalCostos());
-                datos.put("ganancia", ganancia);
-                texto = "Ganancia de " + canal.toLowerCase(Locale.ROOT) + " " + etiquetaPeriodo + ": "
-                        + moneda.format(ganancia) + ".";
-            } else {
-                ReporteFinancieroDTO reporte = reporteFinancieroService.generarReporte(periodo);
-                datos.put("utilidadNeta", reporte.utilidadNeta());
-                datos.put("margenGanancia", reporte.margenGanancia());
-                texto = "Ganancia " + etiquetaPeriodo + ": " + moneda.format(reporte.utilidadNeta()) + ".";
-            }
+        // LinkedHashMap y no Map.of: margenGanancia puede ser null.
+        Map<String, Object> datos = new LinkedHashMap<>();
+        datos.put("tipo", tipoConsulta);
+        datos.put("periodo", etiquetaLarga);
+        datos.put("ingresosVentanilla", reporte.ingresosVentanilla());
+        datos.put("ingresosRural", reporte.ingresosRural());
+        datos.put("ingresosComerciantes", reporte.ingresosComerciantes());
+        datos.put("ingresosTotales", reporte.ingresosTotales());
+        datos.put("utilidadNeta", reporte.utilidadNeta());
+        datos.put("margenGanancia", reporte.margenGanancia());
+
+        String texto;
+        if ("ganancia".equals(tipoConsulta)) {
+            List<Map<String, Object>> canalesVista = reporteFinancieroService.getRentabilidadPorCanal(periodo)
+                    .canales().stream()
+                    .map(c -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("canal", nombreVisible(c.canal()));
+                        m.put("totalIngresos", c.totalIngresos());
+                        m.put("totalCostos", c.totalCostos());
+                        m.put("margen", c.margen());
+                        return m;
+                    })
+                    .toList();
+            datos.put("canales", canalesVista);
+            texto = "La utilidad neta " + etiquetaCorta + " fue de " + moneda.format(reporte.utilidadNeta())
+                    + (reporte.margenGanancia() != null
+                        ? " con un margen de ganancia del " + reporte.margenGanancia() + " %."
+                        : ".");
         } else {
-            ReporteFinancieroDTO reporte = reporteFinancieroService.generarReporte(periodo);
-            BigDecimal ingresos = switch (canal) {
-                case "VENTANILLA" -> reporte.ingresosVentanilla();
-                case "RURAL" -> reporte.ingresosRural();
-                case "COMERCIANTES" -> reporte.ingresosComerciantes();
-                case null, default -> reporte.ingresosTotales();
-            };
-            datos.put("ingresos", ingresos);
-            if (canal == null) {
-                datos.put("ingresosVentanilla", reporte.ingresosVentanilla());
-                datos.put("ingresosRural", reporte.ingresosRural());
-                datos.put("ingresosComerciantes", reporte.ingresosComerciantes());
-                texto = "Ventas totales " + etiquetaPeriodo + ": " + moneda.format(ingresos) + " (ventanilla "
-                        + moneda.format(reporte.ingresosVentanilla()) + ", rural "
-                        + moneda.format(reporte.ingresosRural()) + ", comerciantes "
-                        + moneda.format(reporte.ingresosComerciantes()) + ").";
-            } else {
-                texto = "Ventas de " + canal.toLowerCase(Locale.ROOT) + " " + etiquetaPeriodo + ": "
-                        + moneda.format(ingresos) + ".";
-            }
+            texto = "Las ventas " + etiquetaCorta + " suman " + moneda.format(reporte.ingresosTotales()) + ".";
         }
 
-        return new VozResultado(true, texto, datos, new Payload(periodo, etiquetaPeriodo, canal, tipoConsulta));
+        return new VozResultado(true, texto, datos, new Payload(periodo, p, tipoConsulta));
     }
 
     private Periodo detectarPeriodo(String texto) {
@@ -158,7 +153,20 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
         };
     }
 
-    private String etiqueta(Periodo p) {
+    /** Para datos.periodo: se muestra tal cual en pantalla ("Hoy · 21 de septiembre de 2026"). */
+    private String etiqueta(Periodo p, PeriodoFiltroDTO periodo) {
+        return switch (p) {
+            case HOY -> "Hoy · " + periodo.fechaFin().format(FORMATO_FECHA_LARGA);
+            case AYER -> "Ayer · " + periodo.fechaFin().format(FORMATO_FECHA_LARGA);
+            case SEMANA -> "Esta semana · " + periodo.fechaInicio().getDayOfMonth() + " al "
+                    + periodo.fechaFin().format(FORMATO_FECHA_LARGA);
+            case MES -> "Este mes · " + periodo.fechaInicio().format(FORMATO_MES_LARGO);
+            case ANIO -> "Este año · " + periodo.fechaInicio().getYear();
+        };
+    }
+
+    /** Para el texto narrado por voz: corto, en minúscula y sin fecha. */
+    private String etiquetaCorta(Periodo p) {
         return switch (p) {
             case HOY -> "hoy";
             case AYER -> "ayer";
@@ -168,16 +176,17 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
         };
     }
 
-    /** null si no se menciona ningún canal (= todos). */
-    private String detectarCanal(String texto) {
-        if (texto.contains("ventanilla")) return "VENTANILLA";
-        if (texto.contains("rural")) return "RURAL";
-        if (texto.contains("comerciantes")) return "COMERCIANTES";
-        return null;
+    private String nombreVisible(String canal) {
+        return switch (canal) {
+            case "VENTANILLA" -> "Ventanilla";
+            case "RURAL" -> "Rural";
+            case "COMERCIANTES" -> "Comerciantes";
+            default -> canal;
+        };
     }
 
-    /** "vendimos" o "ingresos" caen en VENTAS. */
+    /** "vendimos" o "ingresos" caen en "ventas". */
     private String detectarTipo(String texto) {
-        return (texto.contains("ganamos") || texto.contains("ganancia")) ? "GANANCIA" : "VENTAS";
+        return (texto.contains("ganamos") || texto.contains("ganancia")) ? "ganancia" : "ventas";
     }
 }

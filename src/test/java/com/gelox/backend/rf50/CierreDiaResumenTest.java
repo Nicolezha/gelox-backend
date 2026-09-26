@@ -54,7 +54,7 @@ class CierreDiaResumenTest {
     /** Total con escala 2 a propósito: el test de totales compara con isEqualByComparingTo. */
     private static ReporteDiarioDTO reporte() {
         return new ReporteDiarioDTO(HOY, bd("150000"), bd("80000"), bd("300000"), bd("530000.00"),
-                10, 3, 2, 15, null, null, null);
+                10, 3, 2, 15, bd("12.50"), bd("-4.00"), bd("0.00"));
     }
 
     private static CierreCajaResponseDTO cierre(BigDecimal diferenciaTotal) {
@@ -80,7 +80,13 @@ class CierreDiaResumenTest {
         VozResultado r = resumen.generarResumen(HOY);
 
         assertThat(r.ok()).isTrue();
-        assertThat(conciliacion(r)).containsEntry("registrado", true).containsEntry("tieneDiferencias", false);
+        assertThat(r.datos().get("tipo")).isEqualTo("cierre");
+        assertThat(r.datos().get("periodo")).isEqualTo("Hoy · 24 de septiembre de 2026");
+        assertThat(conciliacion(r))
+                .containsOnlyKeys("montoCalculadoTotal", "montoFisicoTotal", "diferenciaTotal", "tieneDiferencias")
+                .containsEntry("tieneDiferencias", false)
+                .containsEntry("montoCalculadoTotal", bd("530000"))
+                .containsEntry("montoFisicoTotal", bd("530000"));
         assertThat(r.textoRespuesta()).contains("sin diferencias");
         assertThat(r.payload()).isEqualTo(new CierreDiaResumen.Payload(HOY));
     }
@@ -95,8 +101,11 @@ class CierreDiaResumenTest {
 
         assertThat(r.ok()).isTrue();
         assertThat(r.textoRespuesta()).contains("diferencia de").doesNotContain("-");
+        assertThat(r.datos().get("tipo")).isEqualTo("cierre");
         assertThat(conciliacion(r)).containsEntry("tieneDiferencias", true);
         assertThat((BigDecimal) conciliacion(r).get("diferenciaTotal")).isEqualByComparingTo("-5000");
+        assertThat((BigDecimal) conciliacion(r).get("montoCalculadoTotal")).isEqualByComparingTo("530000");
+        assertThat((BigDecimal) conciliacion(r).get("montoFisicoTotal")).isEqualByComparingTo("525000");
     }
 
     @Test
@@ -109,8 +118,11 @@ class CierreDiaResumenTest {
         VozResultado r = resumen.generarResumen(HOY);
 
         assertThat(r.ok()).isTrue();
-        assertThat(conciliacion(r)).containsEntry("registrado", false);
-        assertThat(r.textoRespuesta()).contains("conciliación pendiente");
+        assertThat(r.datos().get("tipo")).isEqualTo("cierre");
+        // La clave no se agrega: VistaCierreDia.jsx hace `!conciliacion` para pintar "Pendiente".
+        assertThat(r.datos().get("conciliacion")).isNull();
+        assertThat(r.datos()).doesNotContainKey("conciliacion");
+        assertThat(r.textoRespuesta()).contains("conciliación está pendiente");
     }
 
     @Test
@@ -125,6 +137,27 @@ class CierreDiaResumenTest {
         assertThat((BigDecimal) r.datos().get("totalIngresos")).isEqualByComparingTo(reporte.totalIngresos());
         assertThat((BigDecimal) r.datos().get("totalIngresos")).isEqualByComparingTo("530000");
         assertThat(r.datos()).containsEntry("totalTransacciones", 15L).containsEntry("fecha", HOY);
+        assertThat(r.datos())
+                .containsEntry("ingresosVentanilla", reporte.ingresoVentanilla())
+                .containsEntry("ingresosRural", reporte.ingresoRural())
+                .containsEntry("ingresosComerciantes", reporte.ingresoComerciantes())
+                .doesNotContainKeys("ingresoVentanilla", "ingresoRural", "ingresoComerciantes");
+    }
+
+    @Test
+    @DisplayName("Variaciones por canal tal cual vienen de ReporteDiarioDTO")
+    void variacionesDelReporteDiario() {
+        ReporteDiarioDTO reporte = reporte();
+        when(reporteDiarioService.generarReporteDiario(HOY)).thenReturn(reporte);
+        when(cierreCajaService.obtenerPorFecha(HOY)).thenReturn(cierre(BigDecimal.ZERO));
+
+        VozResultado r = resumen.generarResumen(HOY);
+
+        assertThat(r.datos())
+                .containsEntry("variacionVentanilla", reporte.variacionVentanilla())
+                .containsEntry("variacionRural", reporte.variacionRural())
+                .containsEntry("variacionComerciantes", reporte.variacionComerciantes());
+        assertThat(r.datos().get("variacionRural")).isEqualTo(bd("-4.00"));
     }
 
     @Test
