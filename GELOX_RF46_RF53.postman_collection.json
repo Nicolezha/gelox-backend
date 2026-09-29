@@ -56,6 +56,262 @@
   ],
   "item": [
     {
+      "name": "RF46",
+      "item": [
+        {
+          "name": "01 - Interpretar: consulta directa con confianza alta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok=true', () => pm.expect(body.ok).to.eql(true));",
+                  "pm.test('sin confirmación', () => pm.expect(body.requiereConfirmacion).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"¿Cuántas cajas de Festival quedan?\",\n  \"confianza\": 0.95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "{{token}} puede ser de cualquiera de los 3 roles operativos (RF46 no restringe rol). Con confianza >= 0.70 responde directo, sin pedir confirmación."
+          },
+          "response": []
+        },
+        {
+          "name": "02 - Interpretar: confianza baja fuerza confirmación (RNF-5)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('requiere confirmación por baja confianza', () => pm.expect(body.requiereConfirmacion).to.eql(true));",
+                  "pm.test('expira en 15 segundos', () => pm.expect(body.expiraEnSegundos).to.eql(15));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"¿Cuántas cajas de Festival quedan?\",\n  \"confianza\": 0.55\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Con confianza < 0.70 (UMBRAL_CONFIANZA), VozService pide confirmación aunque el handler no la exija por sí mismo (RNF-5)."
+          },
+          "response": []
+        },
+        {
+          "name": "03 - Interpretar: texto vacío (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 BAD REQUEST', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"\",\n  \"confianza\": 0.9\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Validación Jakarta (@NotBlank) sobre VozInterpretarRequest.texto."
+          },
+          "response": []
+        },
+        {
+          "name": "04 - Interpretar: sin Authorization (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 UNAUTHORIZED', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"¿Cuántas cajas de Festival quedan?\",\n  \"confianza\": 0.9\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Sin header Authorization: SecurityConfig exige estar autenticado para /api/voz/**."
+          },
+          "response": []
+        },
+        {
+          "name": "05 - Interpretar: frase sin sentido (intención no reconocida)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok=false', () => pm.expect(body.ok).to.eql(false));",
+                  "pm.test('intencion es null', () => pm.expect(body.intencion).to.be.null);",
+                  "pm.test('trae un ejemplo de cómo hablar', () => pm.expect(body.textoRespuesta).to.exist);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/voz/interpretar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "voz",
+                "interpretar"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"blablabla esto no significa nada\",\n  \"confianza\": 0.9\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "ClasificadorIntencion no reconoce ningún patrón: VozService guarda el comando como ERROR y responde con un ejemplo de frase."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "RF53",
       "item": [
         {

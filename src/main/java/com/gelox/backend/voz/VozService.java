@@ -5,6 +5,7 @@ import com.gelox.backend.entities.EstadoComandoVoz;
 import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.ComandoVozRepository;
+import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.voz.dto.VozConfirmarRequest;
 import com.gelox.backend.voz.handlers.PendienteAclaracion;
 import com.gelox.backend.voz.dto.VozConfirmarResponse;
@@ -72,6 +73,7 @@ public class VozService {
     /** Lo que hace falta recordar entre interpretar() y confirmar(): el payload es del handler, tal cual. */
     private record DatosPendientes(String texto, Double confianza, Object payloadHandler) {}
 
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS", "ENCARGADO_INVENTARIO"})
     public VozInterpretarResponse interpretar(VozInterpretarRequest request, Usuario usuario) {
         ClasificadorIntencion.ResultadoClasificacion resultado = clasificador.clasificar(request.texto());
 
@@ -158,6 +160,7 @@ public class VozService {
                 && datos.payloadHandler() instanceof PendienteAclaracion;
     }
 
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS", "ENCARGADO_INVENTARIO"})
     public VozConfirmarResponse confirmar(VozConfirmarRequest request, Usuario usuario) {
         VozPendiente pendiente = pendienteStore.take(request.comandoId(), usuario.getId());
         DatosPendientes datos = (DatosPendientes) pendiente.payload();
