@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
@@ -68,6 +69,14 @@ public class CatalogoService {
 
         // Validar categoría
         CategoriaProducto categoria = parsearCategoria(req.getCategoria());
+
+        // RF19 — precio de venta obligatorio y > 0 (también aplica al endpoint multipart)
+        validarPrecioVenta(req.getPrecioVenta(), true);
+        // Utilidades reales — sin costo no se puede calcular la ganancia neta
+        if (req.getPrecioCosto() == null || req.getPrecioCosto().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El precio de costo es obligatorio y debe ser mayor a 0");
+        }
 
         // Verificar código duplicado entre productos activos
         if (catalogoRepository.existsByCodigoTecnicoAndActivoTrue(req.getCodigoTecnico())) {
@@ -120,6 +129,11 @@ public class CatalogoService {
 
         if (req.getNombre() != null)        producto.setNombre(req.getNombre());
         if (req.getCategoria() != null)     producto.setCategoria(parsearCategoria(req.getCategoria()));
+        validarPrecioVenta(req.getPrecioVenta(), false);   // RF20
+        if (req.getPrecioCosto() != null && req.getPrecioCosto().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El precio de costo debe ser mayor a 0");
+        }
         if (req.getPrecioVenta() != null)   producto.setPrecioVenta(req.getPrecioVenta());
         if (req.getPrecioCosto() != null)   producto.setPrecioCosto(req.getPrecioCosto());
         if (req.getDescripcion() != null)   producto.setDescripcion(req.getDescripcion());
@@ -163,6 +177,21 @@ public class CatalogoService {
     }
 
     // ─────────────────────────── Helpers ─────────────────────────
+
+    /** RF19/RF20 — el precio de venta debe ser > 0. En edición solo se valida si se envía. */
+    private void validarPrecioVenta(BigDecimal precioVenta, boolean obligatorio) {
+        if (precioVenta == null) {
+            if (obligatorio) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El precio de venta es obligatorio");
+            }
+            return;
+        }
+        if (precioVenta.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El precio de venta debe ser mayor a 0");
+        }
+    }
 
     private CategoriaProducto parsearCategoria(String categoria) {
         try {

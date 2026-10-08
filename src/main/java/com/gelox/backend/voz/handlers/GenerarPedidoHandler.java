@@ -32,7 +32,9 @@ import java.util.regex.Pattern;
 public class GenerarPedidoHandler implements IntencionHandler {
 
     private static final Pattern ITEM_PATTERN =
-            Pattern.compile("(\\d+)\\s*(cajas?|unidad(?:es)?)?\\s*de\\s+(.+?)(?:\\s+y\\s+|,|$)");
+            Pattern.compile("(\\d+)\\s*(cajas?|unidad(?:es)?)?\\s*de\\s+(.+?)"
+                    // "pide 2 cajas de X a nutresa": el destinatario no es parte del producto
+                    + "(?:\\s+y\\s+|,|\\s+(?:a|al|para)\\s+(?:nutresa|proveedor)\\b|$)");
 
     private static final String UNIDAD_DEFECTO = "cajas";
 

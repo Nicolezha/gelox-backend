@@ -55,6 +55,8 @@ public class VentaService {
     public List<CatalogoVentaDTO> getCatalogo() {
         return productoRepository.findByActivoTrueOrderByNombreAsc()
                 .stream()
+                // RF29 — no se ofrecen productos sin precio de venta
+                .filter(p -> p.getPrecioVenta() != null && p.getPrecioVenta().compareTo(BigDecimal.ZERO) > 0)
                 .map(p -> new CatalogoVentaDTO(
                         p.getId(),
                         p.getCodigoTecnico(),
@@ -120,6 +122,21 @@ public class VentaService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Producto no disponible: " + id);
             }
+            // RF29/RF31 — no se permite vender productos sin precio
+            if (p.getPrecioVenta() == null || p.getPrecioVenta().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        String.format("El producto '%s' no tiene un precio de venta válido.", p.getNombre()));
+            }
+        }
+
+        // 2b. Validar cantidades: cada ítem debe sumar al menos una unidad
+        for (ItemVentaRequest item : req.items()) {
+            Producto p = productosMap.get(item.productoId());
+            int upC = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
+            if (item.cajas() * upC + item.unidades() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        String.format("El ítem '%s' debe tener al menos una unidad.", p.getNombre()));
+            }
         }
 
         // 3. Validar stock suficiente para todos antes de modificar cualquiera
@@ -173,24 +190,12 @@ public class VentaService {
                     .subtotal(subtotal)
                     .build());
 
-            // Capturar stock antes para detectar transición a bajo stock (RF11)
-            int stockAntes = p.getStockActual();
-
             // RF26 — descuento centralizado: actualiza stock + crea movimiento_inventario
             String descripcion = String.format("Venta %s — %d uds.",
                     venta.getId().toString().substring(0, 8).toUpperCase(), totalUnidades);
+            // RF11 — la alerta de stock mínimo la registra descontarStock
             inventarioService.descontarStock(
                     p.getId(), totalUnidades, TipoMovimiento.SALIDA_VENTA, descripcion, usuario);
-
-            // RF11 — alerta si el producto transiciona a bajo stock en esta venta
-            // (después de descontarStock, p.stockActual ya está actualizado en la sesión JPA)
-            if (stockAntes > p.getStockMinimo() && p.getStockActual() <= p.getStockMinimo()) {
-                eventoSistemaService.registrarEvento(
-                        TipoEvento.ALERTA_STOCK,
-                        String.format("La referencia %s (%s) alcanzó el stock mínimo configurado (%d uds.).",
-                                p.getNombre(), p.getCodigoTecnico(), p.getStockMinimo()),
-                        usuario.getId());
-            }
 
             itemsResponse.add(new ItemVentaResponseDTO(
                     p.getId(), p.getNombre(), item.cajas(), item.unidades(), precio, subtotal));

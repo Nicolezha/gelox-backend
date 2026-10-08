@@ -19,7 +19,7 @@ public class CrearProductoRequest {
     private String categoria;   // PALETAS | CONOS | FAMILIARES
 
     @NotNull(message = "El precio de venta es obligatorio")
-    @DecimalMin(value = "0", message = "El precio de venta debe ser >= 0")
+    @DecimalMin(value = "0", inclusive = false, message = "El precio de venta debe ser mayor a 0")
     private BigDecimal precioVenta;
 
     @DecimalMin(value = "0", message = "El precio de costo debe ser >= 0")

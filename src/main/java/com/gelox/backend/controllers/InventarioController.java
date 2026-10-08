@@ -61,6 +61,19 @@ public class InventarioController {
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // GET /api/inventario/muerto?dias=30 — productos con stock sin salidas
+    // ──────────────────────────────────────────────────────────────────────
+
+    /** Roles: ADMINISTRADOR, ENCARGADO_INVENTARIO. valorInmovilizado solo para ADMINISTRADOR. */
+    @GetMapping("/muerto")
+    public ResponseEntity<List<InventarioMuertoDTO>> listarInventarioMuerto(
+            @RequestParam(defaultValue = "30") int dias,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(
+                inventarioService.listarInventarioMuerto(dias, usuario.getRol().name()));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // RF21 — POST /api/inventario/pedidos
     // Crear pedido al proveedor + descargar Excel Nutresa
     // ──────────────────────────────────────────────────────────────────────

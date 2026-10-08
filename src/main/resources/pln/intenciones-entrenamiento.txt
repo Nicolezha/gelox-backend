@@ -1,0 +1,266 @@
+REGISTRAR_VENTA registra 3 cajas de festival a 2500 canal ventanilla
+REGISTRAR_VENTA vendame 2 de solo lac
+REGISTRAR_VENTA vendame 5 paletas de aloha
+REGISTRAR_VENTA apunteme 3 cajas de festival
+REGISTRAR_VENTA apunteme 1 venta de 2 aloha mango biche
+REGISTRAR_VENTA anota 1 venta rural para dona marta
+REGISTRAR_VENTA anota 1 venta de 4 festival
+REGISTRAR_VENTA registra 1 venta de 6 bocatto
+REGISTRAR_VENTA registra la venta de 2 cajas de dracula
+REGISTRAR_VENTA vende 4 cajas de solo lack
+REGISTRAR_VENTA vende 2 chococono por ventanilla
+REGISTRAR_VENTA vendi 3 paletas de aloha limon
+REGISTRAR_VENTA vendimos 10 festival en ventanilla
+REGISTRAR_VENTA hazme 1 venta de 3 festival
+REGISTRAR_VENTA haz 1 venta de 2 solo lac
+REGISTRAR_VENTA quiero vender 5 cajas de aloha
+REGISTRAR_VENTA quiero registrar 1 venta rural
+REGISTRAR_VENTA necesito registrar 1 venta de festival
+REGISTRAR_VENTA registrame 2 cajas de bocatto cono fresa
+REGISTRAR_VENTA cobra 2 festival en ventanilla
+REGISTRAR_VENTA cobrale 3 aloha mango biche al cliente
+REGISTRAR_VENTA factura 4 cajas de solo lac
+REGISTRAR_VENTA facturame 1 venta de 2 dracula barra
+REGISTRAR_VENTA salio 1 venta de 3 festival
+REGISTRAR_VENTA se vendieron 2 cajas de aloha
+REGISTRAR_VENTA me compraron 5 festival
+REGISTRAR_VENTA el cliente se lleva 3 cajas de solo lac
+REGISTRAR_VENTA despacha 1 venta rural de 2 cajas de festival
+REGISTRAR_VENTA venta rural de 3 cajas de aloha para san faustino
+REGISTRAR_VENTA venta por ventanilla de 2 festival
+REGISTRAR_VENTA mete 1 venta de 4 solo lac
+REGISTRAR_VENTA pon 1 venta de 2 cajas de festival
+REGISTRAR_VENTA registra venta rural con envio de 5000
+REGISTRAR_VENTA anota 1 venta rural de 2 cajas y 3 unidades de bocatto
+REGISTRAR_VENTA vende 1 caja y 2 unidades de aloha mango biche
+REGISTRAR_VENTA venta de 6 unidades de chocolisto
+REGISTRAR_VENTA registra 2 jet paleta cookies a 2000
+REGISTRAR_VENTA vendele a dona rosa 3 cajas de festival
+REGISTRAR_VENTA apunta 1 venta de 2 tosh paleta fresa
+REGISTRAR_VENTA lleva la venta de 3 polet paleta baileys
+REGISTRAR_VENTA registra 1 venta rural para el senor pedro de 3 festival
+REGISTRAR_VENTA cobra 1 caja de solo lac por transferencia
+REGISTRAR_VENTA vende 3 festival en efectivo
+REGISTRAR_VENTA vende 2 bolsas de festival
+REGISTRAR_VENTA anota 1 venta rural de 3 festival
+REGISTRAR_VENTA vendi 5 de solo lack
+REGISTRAR_VENTA vende 15 festival
+REGISTRAR_VENTA vendi festival por 2500 pesos
+CONSULTAR_INVENTARIO que tanto hay de aloha
+CONSULTAR_INVENTARIO que se esta acabando
+CONSULTAR_INVENTARIO cuantas cajas de festival me quedan
+CONSULTAR_INVENTARIO cuantas paletas de aloha quedan
+CONSULTAR_INVENTARIO cuanto queda de solo lac
+CONSULTAR_INVENTARIO cuantas unidades hay de bocatto
+CONSULTAR_INVENTARIO como esta el stock de festival
+CONSULTAR_INVENTARIO revisa el inventario
+CONSULTAR_INVENTARIO muestrame el inventario
+CONSULTAR_INVENTARIO como va el inventario de aloha
+CONSULTAR_INVENTARIO hay festival disponible
+CONSULTAR_INVENTARIO todavia hay solo lac
+CONSULTAR_INVENTARIO quedan cajas de dracula barra
+CONSULTAR_INVENTARIO que productos estan por debajo del minimo
+CONSULTAR_INVENTARIO que productos estan bajos
+CONSULTAR_INVENTARIO que referencias se estan agotando
+CONSULTAR_INVENTARIO que se nos esta acabando
+CONSULTAR_INVENTARIO dime las existencias de festival
+CONSULTAR_INVENTARIO existencias de aloha mango biche
+CONSULTAR_INVENTARIO cuanto tenemos de chococono
+CONSULTAR_INVENTARIO tenemos chocolisto en bodega
+CONSULTAR_INVENTARIO cuantos tosh hay en bodega
+CONSULTAR_INVENTARIO que hay en bodega
+CONSULTAR_INVENTARIO que tanto queda de polet
+CONSULTAR_INVENTARIO consulta el stock de solo lack
+CONSULTAR_INVENTARIO dame el stock de aloha paleta limon
+CONSULTAR_INVENTARIO cuantas cajas quedan de bocatto cono fresa
+CONSULTAR_INVENTARIO nos queda jet paleta cookies
+CONSULTAR_INVENTARIO que productos estan agotados
+CONSULTAR_INVENTARIO cuales productos no tienen stock
+CONSULTAR_INVENTARIO que productos hay que reponer
+CONSULTAR_INVENTARIO cuantas unidades quedan de dracula
+CONSULTAR_INVENTARIO dime cuanto hay de festival
+CONSULTAR_INVENTARIO cuantas cajas tenemos de aloha
+CONSULTAR_INVENTARIO como estamos de solo lac
+CONSULTAR_INVENTARIO como estamos de inventario
+CONSULTAR_INVENTARIO alerta de stock bajo
+CONSULTAR_INVENTARIO productos en stock minimo
+CONSULTAR_INVENTARIO que tanto stock hay de chococono
+CONSULTAR_INVENTARIO cuanto inventario hay de tosh
+CONSULTAR_INVENTARIO hay existencias de minions paleta
+CONSULTAR_INVENTARIO cuantas paletas de festival quedan
+CONSULTAR_INVENTARIO cuantas cajas de solo lack hay
+CONSULTAR_INVENTARIO se esta acabando el festival
+CONSULTAR_FINANZAS cuanto ganamos hoy
+CONSULTAR_FINANZAS cuanto ganamos ayer
+CONSULTAR_FINANZAS como vamos en ventanilla esta semana
+CONSULTAR_FINANZAS cierra el dia
+CONSULTAR_FINANZAS cuanto vendimos este ano
+CONSULTAR_FINANZAS cuanto vendimos hoy
+CONSULTAR_FINANZAS cuanto vendimos esta semana
+CONSULTAR_FINANZAS dime la ganancia de esta semana
+CONSULTAR_FINANZAS dame los ingresos del mes
+CONSULTAR_FINANZAS como van las ventas de hoy
+CONSULTAR_FINANZAS como vamos hoy
+CONSULTAR_FINANZAS como vamos este mes
+CONSULTAR_FINANZAS cuanta plata entro hoy
+CONSULTAR_FINANZAS cuanto dinero hicimos ayer
+CONSULTAR_FINANZAS cuales son los ingresos de hoy
+CONSULTAR_FINANZAS cual es la ganancia del mes
+CONSULTAR_FINANZAS cuanto se gano en rural esta semana
+CONSULTAR_FINANZAS cuanto vendieron los comerciantes hoy
+CONSULTAR_FINANZAS como va el canal rural este mes
+CONSULTAR_FINANZAS resumen del dia
+CONSULTAR_FINANZAS cierre del dia
+CONSULTAR_FINANZAS haz el cierre del dia
+CONSULTAR_FINANZAS dame el resumen financiero del mes
+CONSULTAR_FINANZAS cual fue la utilidad de la semana
+CONSULTAR_FINANZAS cual es el margen de ganancia del mes
+CONSULTAR_FINANZAS cuanto llevamos vendido hoy
+CONSULTAR_FINANZAS cuanto facturamos ayer
+CONSULTAR_FINANZAS ventas de ventanilla de ayer
+CONSULTAR_FINANZAS ingresos por canal de esta semana
+CONSULTAR_FINANZAS cuanto entro por ventanilla hoy
+CONSULTAR_FINANZAS cuanto ganamos en el ano
+CONSULTAR_FINANZAS cual fue la utilidad neta de ayer
+CONSULTAR_FINANZAS como cerramos ayer
+CONSULTAR_FINANZAS dame las cifras de hoy
+CONSULTAR_FINANZAS cuanto se vendio el mes pasado
+CONSULTAR_FINANZAS cuales fueron las ganancias de la semana
+CONSULTAR_FINANZAS como van las finanzas
+CONSULTAR_FINANZAS reporte de ventas del dia
+CONSULTAR_FINANZAS cuanto deja el canal de comerciantes este mes
+CONSULTAR_FINANZAS cuanto llevamos en ganancias esta semana
+CONSULTAR_FINANZAS balance del dia
+CONSULTAR_FINANZAS cuanto plata hicimos hoy
+GENERAR_PEDIDO genera 1 pedido con 20 cajas de solo lack y 15 de festival
+GENERAR_PEDIDO pide 15 de solo lac a nutresa
+GENERAR_PEDIDO arma 1 pedido con 20 cajas de festival
+GENERAR_PEDIDO genera 1 pedido a nutresa
+GENERAR_PEDIDO crea el pedido de 10 cajas de festival
+GENERAR_PEDIDO haz el pedido de 5 cajas de solo lack
+GENERAR_PEDIDO arma el pedido de la semana
+GENERAR_PEDIDO haz 1 pedido nuevo a nutresa
+GENERAR_PEDIDO crea 1 pedido para nutresa con 8 cajas de aloha
+GENERAR_PEDIDO genera el pedido del proveedor
+GENERAR_PEDIDO necesito hacer 1 pedido a nutresa
+GENERAR_PEDIDO quiero pedir 12 cajas de bocatto a nutresa
+GENERAR_PEDIDO pidele a nutresa 30 cajas de festival
+GENERAR_PEDIDO encarga 10 cajas de solo lac al proveedor
+GENERAR_PEDIDO solicita a nutresa 6 cajas de dracula barra
+GENERAR_PEDIDO monta 1 pedido con 4 cajas de chococono
+GENERAR_PEDIDO prepara 1 pedido de 10 cajas de aloha mango biche
+GENERAR_PEDIDO hazme 1 pedido de reposicion
+GENERAR_PEDIDO genera el pedido de reposicion de la semana
+GENERAR_PEDIDO arma 1 pedido nuevo con festival y solo lac
+GENERAR_PEDIDO pide al proveedor 20 cajas de aloha
+GENERAR_PEDIDO crea 1 pedido de 15 cajas de polet
+GENERAR_PEDIDO nuevo pedido a nutresa de 8 cajas de tosh
+GENERAR_PEDIDO haz el pedido a nutresa de lo que falta
+GENERAR_PEDIDO pide lo que esta por debajo del minimo
+GENERAR_PEDIDO encarga a nutresa 5 cajas de chocolisto
+GENERAR_PEDIDO genera 1 pedido con lo que se esta acabando
+GENERAR_PEDIDO haz 1 pedido para reponer festival
+GENERAR_PEDIDO quiero hacer 1 pedido de 25 cajas de festival
+GENERAR_PEDIDO toca pedirle a nutresa 10 cajas de solo lac
+GENERAR_PEDIDO genera la orden de compra a nutresa
+GENERAR_PEDIDO haz la orden de compra de 12 cajas de aloha
+GENERAR_PEDIDO pide 3 cajas de jet a nutresa
+GENERAR_PEDIDO arma la orden para el proveedor
+GENERAR_PEDIDO crea 1 pedido nuevo de 6 cajas de bocatto
+GENERAR_PEDIDO pide 40 cajas de festival al proveedor
+GENERAR_PEDIDO genera el excel del pedido para nutresa
+GENERAR_PEDIDO haz 1 pedido de helados a nutresa
+GENERAR_PEDIDO pedido nuevo de 10 cajas de dracula
+GENERAR_PEDIDO necesitamos pedir 20 cajas de solo lac
+GENERAR_PEDIDO pide 2 cajas de aloha mango biche a nutresa
+GENERAR_PEDIDO pide 4 cajas de bocatto a nutresa
+GENERAR_PEDIDO pide 6 cajas de aloha paleta limon a nutresa
+GENERAR_PEDIDO pide 10 cajas de dracula barra a nutresa
+GENERAR_PEDIDO pidele a nutresa 2 cajas de aloha mango biche
+GENERAR_PEDIDO pide a nutresa 8 cajas de chococono
+GENERAR_PEDIDO pide 5 cajas de polet al proveedor
+GENERAR_PEDIDO pide 3 cajas de tosh a nutresa
+MODIFICAR_PEDIDO al pedido pendiente agregale 10 de festival
+MODIFICAR_PEDIDO quitale el aloha al pedido
+MODIFICAR_PEDIDO agregale 3 cajas de solo lack al pedido pendiente
+MODIFICAR_PEDIDO quita el festival del pedido
+MODIFICAR_PEDIDO elimina 5 cajas de solo lack del pedido pendiente
+MODIFICAR_PEDIDO actualiza el pedido pendiente con 8 de festival
+MODIFICAR_PEDIDO cambia el pedido pendiente a 20 cajas de festival
+MODIFICAR_PEDIDO al pedido sumale 4 cajas de aloha
+MODIFICAR_PEDIDO sumale 6 cajas de bocatto al pedido
+MODIFICAR_PEDIDO saca el solo lac del pedido pendiente
+MODIFICAR_PEDIDO borra el dracula del pedido
+MODIFICAR_PEDIDO en el pedido pendiente cambia festival a 12 cajas
+MODIFICAR_PEDIDO modifica el pedido pendiente
+MODIFICAR_PEDIDO modifica el pedido y ponle 10 de aloha
+MODIFICAR_PEDIDO corrige el pedido pendiente con 5 de solo lac
+MODIFICAR_PEDIDO al pedido de nutresa agregale 3 cajas de chococono
+MODIFICAR_PEDIDO ponle 2 cajas mas de festival al pedido
+MODIFICAR_PEDIDO al pedido quitale 4 cajas de solo lac
+MODIFICAR_PEDIDO baja a 6 cajas el festival del pedido pendiente
+MODIFICAR_PEDIDO sube a 15 cajas el aloha del pedido
+MODIFICAR_PEDIDO reduce el pedido pendiente de solo lac a 8
+MODIFICAR_PEDIDO aumenta el pedido de festival a 30 cajas
+MODIFICAR_PEDIDO mete 5 cajas de tosh al pedido pendiente
+MODIFICAR_PEDIDO incluye polet en el pedido pendiente
+MODIFICAR_PEDIDO excluye el chocolisto del pedido
+MODIFICAR_PEDIDO retira el jet del pedido pendiente
+MODIFICAR_PEDIDO cambiale la cantidad de festival al pedido
+MODIFICAR_PEDIDO en el pedido deja solo 10 cajas de aloha
+MODIFICAR_PEDIDO el pedido pendiente ya no lleva dracula
+MODIFICAR_PEDIDO al pedido que esta pendiente agregale bocatto
+MODIFICAR_PEDIDO actualiza las cantidades del pedido pendiente
+MODIFICAR_PEDIDO edita el pedido pendiente
+MODIFICAR_PEDIDO edita el pedido de nutresa y quita festival
+MODIFICAR_PEDIDO quita del pedido pendiente las 3 cajas de solo lac
+MODIFICAR_PEDIDO agregale al pedido 7 cajas de aloha mango biche
+MODIFICAR_PEDIDO cambia el festival por solo lac en el pedido
+MODIFICAR_PEDIDO al pedido pendiente ponle 4 de chococono
+MODIFICAR_PEDIDO sacale 2 cajas de festival al pedido
+MODIFICAR_PEDIDO reemplaza en el pedido el aloha por festival
+MODIFICAR_PEDIDO anade 8 cajas de festival al pedido pendiente
+MODIFICAR_PEDIDO quita el festival del pedido pendiente
+FUERA_DE_DOMINIO hola buenos dias
+FUERA_DE_DOMINIO buenas tardes
+FUERA_DE_DOMINIO buenas noches
+FUERA_DE_DOMINIO hola
+FUERA_DE_DOMINIO gracias
+FUERA_DE_DOMINIO muchas gracias
+FUERA_DE_DOMINIO que hora es
+FUERA_DE_DOMINIO que dia es hoy
+FUERA_DE_DOMINIO que clima hace hoy
+FUERA_DE_DOMINIO como estas
+FUERA_DE_DOMINIO dona marta
+FUERA_DE_DOMINIO don pedro
+FUERA_DE_DOMINIO nicole hernandez
+FUERA_DE_DOMINIO senora rosa
+FUERA_DE_DOMINIO maria bautista
+FUERA_DE_DOMINIO pilar
+FUERA_DE_DOMINIO fresa
+FUERA_DE_DOMINIO limon
+FUERA_DE_DOMINIO mango biche
+FUERA_DE_DOMINIO festival
+FUERA_DE_DOMINIO solo lac
+FUERA_DE_DOMINIO aloha
+FUERA_DE_DOMINIO cuentame 1 chiste
+FUERA_DE_DOMINIO pon musica
+FUERA_DE_DOMINIO abre el navegador
+FUERA_DE_DOMINIO apaga la luz
+FUERA_DE_DOMINIO quien eres
+FUERA_DE_DOMINIO como te llamas
+FUERA_DE_DOMINIO adios
+FUERA_DE_DOMINIO hasta luego
+FUERA_DE_DOMINIO listo
+FUERA_DE_DOMINIO ok
+FUERA_DE_DOMINIO dale
+FUERA_DE_DOMINIO perfecto
+FUERA_DE_DOMINIO si
+FUERA_DE_DOMINIO no
+FUERA_DE_DOMINIO cancelar
+FUERA_DE_DOMINIO espera 1 momento
+FUERA_DE_DOMINIO repite por favor
+FUERA_DE_DOMINIO no entendi
+FUERA_DE_DOMINIO que tal
+FUERA_DE_DOMINIO san faustino
+FUERA_DE_DOMINIO vereda el carmen

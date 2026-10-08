@@ -1,23 +1,42 @@
 package com.gelox.backend.voz;
 
+import com.gelox.backend.entities.MetodoClasificacion;
 import com.gelox.backend.entities.TipoIntencionVoz;
+import com.gelox.backend.voz.pln.ModeloIntencion;
+import com.gelox.backend.voz.pln.PrediccionIntencion;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Clasifica el texto transcrito en una {@link TipoIntencionVoz} y extrae los
- * slots relevantes (producto, cantidad, canal, período…) por coincidencia de
- * patrones. No usa ningún servicio externo.
+ * Clasifica el texto transcrito en una {@link TipoIntencionVoz} en dos niveles
+ * (FP-15 §2.4, §2.5): primero el modelo de PLN de OpenNLP y, si su probabilidad
+ * es menor a {@link #UMBRAL_INTENCION} o la frase es FUERA_DE_DOMINIO, las reglas
+ * de patrones. Después extrae los slots (producto, cantidad, canal, período…).
  */
 @Component
 public class ClasificadorIntencion {
 
-    public record ResultadoClasificacion(TipoIntencionVoz intencion, Map<String, String> slots) {
+    /** FP-15 §2.5 — probabilidad mínima del modelo; es independiente del 0,70 de confianza de la transcripción. */
+    public static final double UMBRAL_INTENCION = 0.60;
+
+    /**
+     * @param probabilidadIntencion probabilidad del modelo cuando hubo predicción, aunque al final se usen las reglas
+     * @param metodo                MODELO, REGLAS o null si ninguna de las dos reconoció la frase
+     */
+    public record ResultadoClasificacion(TipoIntencionVoz intencion, Map<String, String> slots,
+                                         Double probabilidadIntencion, MetodoClasificacion metodo) {
+    }
+
+    private final ModeloIntencion modelo;
+
+    public ClasificadorIntencion(ModeloIntencion modelo) {
+        this.modelo = modelo;
     }
 
     private record Regla(TipoIntencionVoz intencion, Pattern patron) {
@@ -49,12 +68,34 @@ public class ClasificadorIntencion {
     public ResultadoClasificacion clasificar(String texto) {
         String normalizado = NormalizadorVoz.normalizar(texto);
 
+        // Nivel 1 — modelo de PLN
+        Optional<PrediccionIntencion> prediccion = modelo.predecir(normalizado);
+        Double probabilidad = prediccion.map(PrediccionIntencion::probabilidad).orElse(null);
+        if (prediccion.isPresent()
+                && !prediccion.get().esFueraDeDominio()
+                && prediccion.get().probabilidad() >= UMBRAL_INTENCION) {
+            TipoIntencionVoz intencion = TipoIntencionVoz.valueOf(prediccion.get().intencion());
+            return new ResultadoClasificacion(intencion, extraerSlots(intencion, normalizado),
+                    probabilidad, MetodoClasificacion.MODELO);
+        }
+
+        // Nivel 2 — reglas de patrones
         for (Regla regla : REGLAS) {
             if (regla.patron().matcher(normalizado).find()) {
-                return new ResultadoClasificacion(regla.intencion(), extraerSlots(regla.intencion(), normalizado));
+                return new ResultadoClasificacion(regla.intencion(), extraerSlots(regla.intencion(), normalizado),
+                        probabilidad, MetodoClasificacion.REGLAS);
             }
         }
-        return new ResultadoClasificacion(null, Map.of());
+        return new ResultadoClasificacion(null, Map.of(), probabilidad, null);
+    }
+
+    /** Intención según las reglas de patrones, sin consultar el modelo (texto sin normalizar). */
+    public TipoIntencionVoz intencionPorReglas(String texto) {
+        String normalizado = NormalizadorVoz.normalizar(texto);
+        for (Regla regla : REGLAS) {
+            if (regla.patron().matcher(normalizado).find()) return regla.intencion();
+        }
+        return null;
     }
 
     private Map<String, String> extraerSlots(TipoIntencionVoz intencion, String texto) {

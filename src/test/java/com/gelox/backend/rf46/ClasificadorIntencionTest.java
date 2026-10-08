@@ -1,25 +1,119 @@
 package com.gelox.backend.rf46;
 
+import com.gelox.backend.entities.MetodoClasificacion;
 import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.voz.ClasificadorIntencion;
+import com.gelox.backend.voz.pln.ModeloIntencion;
+import com.gelox.backend.voz.pln.PrediccionIntencion;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
- * RF46 / FP-15 §2.4 — el clasificador resuelve la intención y los slots por
- * coincidencia de patrones, sin Spring ni servicios externos: 5 frases por
- * intención (25 en total), incluidos los ejemplos del FP-15.
+ * RF46 / FP-15 §2.4–2.5 — el clasificador resuelve la intención en dos niveles
+ * (modelo de OpenNLP con umbral 0,60 y, si no alcanza, reglas de patrones) y
+ * extrae los slots. Sin Spring ni servicios externos: el modelo se carga del
+ * classpath. Incluye 5 frases por intención (25 en total) con los ejemplos del FP-15.
  * <p>
  * Los slots se comparan sobre el texto normalizado: "tres" llega como "3" y
  * "un/una" como "1".
  */
 class ClasificadorIntencionTest {
 
-    private final ClasificadorIntencion clasificador = new ClasificadorIntencion();
+    private static ModeloIntencion modelo;
+    private static ClasificadorIntencion clasificador;
+
+    @BeforeAll
+    static void cargarModelo() {
+        modelo = new ModeloIntencion();
+        modelo.cargar();
+        assertThat(modelo.disponible()).isTrue();
+        clasificador = new ClasificadorIntencion(modelo);
+    }
+
+    // ---- Combinación modelo + reglas (FP-15 §2.5) ----
+
+    @Test
+    @DisplayName("PLN — frase que solo entiende el modelo: 'vendame 2 de solo lac' → MODELO")
+    void modelo_fraseQueLasReglasNoCubren() {
+        assertThat(new ClasificadorIntencion(modeloQueDevuelve(Optional.empty()))
+                .clasificar("vendame 2 de solo lac").intencion())
+                .as("las reglas solas no la reconocen").isNull();
+
+        var r = clasificador.clasificar("vendame 2 de solo lac");
+
+        assertThat(r.intencion()).isEqualTo(TipoIntencionVoz.REGISTRAR_VENTA);
+        assertThat(r.metodo()).isEqualTo(MetodoClasificacion.MODELO);
+        assertThat(r.probabilidadIntencion()).isGreaterThanOrEqualTo(ClasificadorIntencion.UMBRAL_INTENCION);
+        assertThat(r.slots()).containsEntry("cantidad", "2").containsEntry("producto", "solo lac");
+    }
+
+    @Test
+    @DisplayName("PLN — probabilidad < 0,60 → se usan las reglas y se conserva la probabilidad del modelo")
+    void modelo_probabilidadBajaUsaReglas() {
+        var c = new ClasificadorIntencion(modeloQueDevuelve(
+                Optional.of(new PrediccionIntencion("GENERAR_PEDIDO", 0.45))));
+
+        var r = c.clasificar("vende dos festival");
+
+        assertThat(r.intencion()).isEqualTo(TipoIntencionVoz.REGISTRAR_VENTA);
+        assertThat(r.metodo()).isEqualTo(MetodoClasificacion.REGLAS);
+        assertThat(r.probabilidadIntencion()).isEqualTo(0.45);
+    }
+
+    @Test
+    @DisplayName("PLN — FUERA_DE_DOMINIO ('hola buenos dias') → intención null")
+    void modelo_fueraDeDominio() {
+        var r = clasificador.clasificar("hola buenos dias");
+
+        assertThat(r.intencion()).isNull();
+        assertThat(r.metodo()).isNull();
+        assertThat(r.probabilidadIntencion()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("PLN — FUERA_DE_DOMINIO con probabilidad alta igual pasa a las reglas")
+    void modelo_fueraDeDominioPasaAReglas() {
+        var c = new ClasificadorIntencion(modeloQueDevuelve(
+                Optional.of(new PrediccionIntencion(PrediccionIntencion.FUERA_DE_DOMINIO, 0.95))));
+
+        var r = c.clasificar("vende dos festival");
+
+        assertThat(r.intencion()).isEqualTo(TipoIntencionVoz.REGISTRAR_VENTA);
+        assertThat(r.metodo()).isEqualTo(MetodoClasificacion.REGLAS);
+    }
+
+    @Test
+    @DisplayName("PLN — modelo no disponible (Optional.empty) → REGLAS, sin probabilidad")
+    void modelo_noDisponibleUsaReglas() {
+        var r = new ClasificadorIntencion(modeloQueDevuelve(Optional.empty())).clasificar("cuanto ganamos hoy");
+
+        assertThat(r.intencion()).isEqualTo(TipoIntencionVoz.CONSULTAR_FINANZAS);
+        assertThat(r.metodo()).isEqualTo(MetodoClasificacion.REGLAS);
+        assertThat(r.probabilidadIntencion()).isNull();
+    }
+
+    @Test
+    @DisplayName("PLN — modelo que no carga (no está en el classpath) no lanza excepción y devuelve vacío")
+    void modelo_sinCargarDevuelveVacio() {
+        ModeloIntencion sinCargar = new ModeloIntencion();   // sin llamar a cargar()
+        assertThat(sinCargar.disponible()).isFalse();
+        assertThat(sinCargar.predecir("vende 2 festival")).isEmpty();
+    }
+
+    private static ModeloIntencion modeloQueDevuelve(Optional<PrediccionIntencion> prediccion) {
+        ModeloIntencion m = mock(ModeloIntencion.class);
+        when(m.predecir(anyString())).thenReturn(prediccion);
+        return m;
+    }
 
     private void verifica(String frase, TipoIntencionVoz intencion, Map<String, String> slotsEsperados) {
         var resultado = clasificador.clasificar(frase);

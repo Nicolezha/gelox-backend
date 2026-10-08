@@ -1,0 +1,60 @@
+REGISTRAR_VENTA vendame 3 cajas de aloha mango biche
+REGISTRAR_VENTA apunteme 2 festival por ventanilla
+REGISTRAR_VENTA anota 1 venta rural de 4 solo lac
+REGISTRAR_VENTA registra 2 cajas de chococono a 3000
+REGISTRAR_VENTA vende 5 paletas de tosh
+REGISTRAR_VENTA cobrale al cliente 2 cajas de festival
+REGISTRAR_VENTA haz 1 venta rural de 3 bocatto
+REGISTRAR_VENTA se vendio 1 caja de dracula barra
+REGISTRAR_VENTA registra 1 venta de 3 solo lac por transferencia
+REGISTRAR_VENTA vendele 2 polet a dona marta
+CONSULTAR_INVENTARIO que tanto queda de festival
+CONSULTAR_INVENTARIO cuantas cajas hay de chococono
+CONSULTAR_INVENTARIO que productos se estan acabando
+CONSULTAR_INVENTARIO como esta el inventario de solo lac
+CONSULTAR_INVENTARIO hay aloha mango biche en bodega
+CONSULTAR_INVENTARIO cuanto stock queda de bocatto
+CONSULTAR_INVENTARIO dime que referencias estan bajas
+CONSULTAR_INVENTARIO quedan paletas de tosh
+CONSULTAR_INVENTARIO consulta las existencias de dracula
+CONSULTAR_INVENTARIO cuantas unidades tenemos de polet
+CONSULTAR_FINANZAS cuanto ganamos esta semana
+CONSULTAR_FINANZAS como vamos en rural hoy
+CONSULTAR_FINANZAS cuanto vendimos ayer
+CONSULTAR_FINANZAS dame la utilidad del mes
+CONSULTAR_FINANZAS cierra el dia por favor
+CONSULTAR_FINANZAS cual fue el ingreso de ventanilla ayer
+CONSULTAR_FINANZAS como van las ganancias este ano
+CONSULTAR_FINANZAS dame el resumen del dia
+CONSULTAR_FINANZAS cuanta plata hicimos esta semana
+CONSULTAR_FINANZAS cuanto dejaron los comerciantes ayer
+GENERAR_PEDIDO genera 1 pedido de 10 cajas de aloha
+GENERAR_PEDIDO pide 8 cajas de festival a nutresa
+GENERAR_PEDIDO arma 1 pedido para nutresa
+GENERAR_PEDIDO crea 1 pedido con 5 cajas de bocatto
+GENERAR_PEDIDO haz 1 pedido de 20 cajas de solo lac
+GENERAR_PEDIDO necesito pedirle a nutresa 6 cajas de tosh
+GENERAR_PEDIDO prepara el pedido de reposicion
+GENERAR_PEDIDO quiero 1 pedido nuevo de chococono
+GENERAR_PEDIDO solicita al proveedor 12 cajas de dracula
+GENERAR_PEDIDO genera la orden de compra de festival
+MODIFICAR_PEDIDO al pedido pendiente quitale el festival
+MODIFICAR_PEDIDO agregale 5 cajas de aloha al pedido
+MODIFICAR_PEDIDO cambia la cantidad de solo lac en el pedido pendiente
+MODIFICAR_PEDIDO elimina el chococono del pedido
+MODIFICAR_PEDIDO al pedido sumale 3 cajas de tosh
+MODIFICAR_PEDIDO modifica el pedido pendiente y quita bocatto
+MODIFICAR_PEDIDO ponle 10 cajas de dracula al pedido pendiente
+MODIFICAR_PEDIDO saca el aloha del pedido de nutresa
+MODIFICAR_PEDIDO actualiza el pedido con 15 de festival
+MODIFICAR_PEDIDO baja el solo lac del pedido a 4 cajas
+FUERA_DE_DOMINIO buenos dias
+FUERA_DE_DOMINIO hola como estas
+FUERA_DE_DOMINIO gracias por todo
+FUERA_DE_DOMINIO que hora tienes
+FUERA_DE_DOMINIO dona rosa
+FUERA_DE_DOMINIO don carlos
+FUERA_DE_DOMINIO chococono
+FUERA_DE_DOMINIO mango
+FUERA_DE_DOMINIO como esta el clima
+FUERA_DE_DOMINIO nos vemos

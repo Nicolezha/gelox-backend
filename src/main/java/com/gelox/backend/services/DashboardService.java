@@ -131,21 +131,15 @@ public class DashboardService {
         // Caso base: ayer sin datos (null) → sin comparación
         if (anterior == null) return null;
 
-        boolean ayerFueCero = anterior.compareTo(BigDecimal.ZERO) == 0;
-        boolean hoyEsCero   = actual  == null || actual.compareTo(BigDecimal.ZERO) == 0;
-
-        if (ayerFueCero) {
-            // Ayer = $0, hoy = $0 → sin comparación
-            if (hoyEsCero) return null;
-            // Ayer = $0, hoy negativo → sin comparación significativa
-            if (actual.compareTo(BigDecimal.ZERO) < 0) return null;
-            // Ayer = $0, hoy > $0 → actividad nueva desde cero
-            return new BigDecimal("100.00");
+        if (actual == null || anterior.compareTo(BigDecimal.ZERO) == 0) {
+            // Ayer = $0 → no hay base de comparación (no se inventa un +100 %)
+            return null;
         }
 
-        // Caso normal: (actual - anterior) / anterior × 100
+        // (actual - anterior) / |anterior| × 100 — el valor absoluto mantiene el signo
+        // correcto cuando ayer la ganancia fue negativa
         return actual.subtract(anterior)
-                .divide(anterior, 4, RoundingMode.HALF_UP)
+                .divide(anterior.abs(), 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100))
                 .setScale(2, RoundingMode.HALF_UP);
     }
