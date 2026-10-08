@@ -41,6 +41,15 @@ public class ComandoVoz {
     @Column(name = "respuesta", columnDefinition = "TEXT")
     private String respuesta;
 
+    /** FP-15 §2.1 — probabilidad del modelo de PLN (null si el modelo no predijo). */
+    @Column(name = "probabilidad_intencion", precision = 4, scale = 3)
+    private BigDecimal probabilidadIntencion;
+
+    /** FP-15 §2.1 — MODELO o REGLAS (null si la frase no se reconoció). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metodo_clasificacion", length = 10)
+    private MetodoClasificacion metodoClasificacion;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

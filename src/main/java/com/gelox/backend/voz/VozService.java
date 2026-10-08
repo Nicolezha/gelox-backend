@@ -2,6 +2,7 @@ package com.gelox.backend.voz;
 
 import com.gelox.backend.entities.ComandoVoz;
 import com.gelox.backend.entities.EstadoComandoVoz;
+import com.gelox.backend.entities.MetodoClasificacion;
 import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.ComandoVozRepository;
@@ -70,8 +71,12 @@ public class VozService {
                 .collect(Collectors.toMap(IntencionHandler::tipo, h -> h));
     }
 
-    /** Lo que hace falta recordar entre interpretar() y confirmar(): el payload es del handler, tal cual. */
-    private record DatosPendientes(String texto, Double confianza, Object payloadHandler) {}
+    /**
+     * Lo que hace falta recordar entre interpretar() y confirmar(): el payload es del handler, tal cual.
+     * probabilidadIntencion y metodo son los de la interpretación original (FP-15 §2.1).
+     */
+    private record DatosPendientes(String texto, Double confianza, Object payloadHandler,
+                                   Double probabilidadIntencion, MetodoClasificacion metodo) {}
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS", "ENCARGADO_INVENTARIO"})
     public VozInterpretarResponse interpretar(VozInterpretarRequest request, Usuario usuario) {
@@ -79,6 +84,14 @@ public class VozService {
 
         // T41-BE5 — "agrega/añade/también ..." continúa la venta que espera confirmación.
         TipoIntencionVoz intencion = resultado.intencion();
+        // PLN — un agregado sin la palabra "pedido" no lo reinterpreta el modelo (podría tomarlo como
+        // MODIFICAR_PEDIDO o como una venta nueva): se decide con las reglas, como antes del modelo.
+        String normalizadoAgregado = NormalizadorVoz.normalizar(request.texto());
+        if (resultado.metodo() == MetodoClasificacion.MODELO
+                && ES_AGREGADO.matcher(normalizadoAgregado).find()
+                && !normalizadoAgregado.contains("pedido")) {
+            intencion = clasificador.intencionPorReglas(request.texto());
+        }
         VozPendiente ventaEnCurso = null;
         boolean agregado = false;
         // Si la venta quedó esperando una aclaración (destinatario o producto), cualquier frase sin
@@ -97,14 +110,16 @@ public class VozService {
         if (intencion == null) {
             String mensaje = agregado ? MENSAJE_AGREGADO_SIN_VENTA : MENSAJE_NO_ENTENDIDO;
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
-                    null, EstadoComandoVoz.ERROR, mensaje);
+                    null, EstadoComandoVoz.ERROR, mensaje,
+                    resultado.probabilidadIntencion(), resultado.metodo());
             return new VozInterpretarResponse(comando.getId(), false, null, false, null, mensaje, Map.of());
         }
 
         IntencionHandler handler = handlersPorTipo.get(intencion);
         if (handler == null) {
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
-                    intencion, EstadoComandoVoz.ERROR, MENSAJE_SIN_HANDLER);
+                    intencion, EstadoComandoVoz.ERROR, MENSAJE_SIN_HANDLER,
+                    resultado.probabilidadIntencion(), resultado.metodo());
             return new VozInterpretarResponse(
                     comando.getId(), false, intencion.name(), false, null, MENSAJE_SIN_HANDLER, Map.of());
         }
@@ -124,7 +139,8 @@ public class VozService {
 
         if (!interpretado.ok()) {
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
-                    intencion, EstadoComandoVoz.ERROR, interpretado.textoRespuesta());
+                    intencion, EstadoComandoVoz.ERROR, interpretado.textoRespuesta(),
+                    resultado.probabilidadIntencion(), resultado.metodo());
             return new VozInterpretarResponse(comando.getId(), false, intencion.name(), false, null,
                     interpretado.textoRespuesta(), interpretado.datos());
         }
@@ -138,10 +154,12 @@ public class VozService {
                 // Mismo id: put sobrescribe la entrada y reinicia el plazo.
                 comandoId = ventaEnCurso.comandoId();
                 datos = new DatosPendientes(datosPrevios.texto() + "; " + request.texto(),
-                        Math.min(datosPrevios.confianza(), request.confianza()), interpretado.payload());
+                        Math.min(datosPrevios.confianza(), request.confianza()), interpretado.payload(),
+                        datosPrevios.probabilidadIntencion(), datosPrevios.metodo());
             } else {
                 comandoId = UUID.randomUUID();
-                datos = new DatosPendientes(request.texto(), request.confianza(), interpretado.payload());
+                datos = new DatosPendientes(request.texto(), request.confianza(), interpretado.payload(),
+                        resultado.probabilidadIntencion(), resultado.metodo());
             }
             pendienteStore.put(comandoId, usuario.getId(), intencion, datos);
 
@@ -150,7 +168,8 @@ public class VozService {
         }
 
         ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
-                intencion, EstadoComandoVoz.PROCESADO, interpretado.textoRespuesta());
+                intencion, EstadoComandoVoz.PROCESADO, interpretado.textoRespuesta(),
+                    resultado.probabilidadIntencion(), resultado.metodo());
         return new VozInterpretarResponse(comando.getId(), true, intencion.name(), false, null,
                 interpretado.textoRespuesta(), interpretado.datos());
     }
@@ -167,7 +186,8 @@ public class VozService {
 
         if (!request.confirmar()) {
             guardarComando(usuario, datos.texto(), datos.confianza(), pendiente.intencion(),
-                    EstadoComandoVoz.CANCELADO, MENSAJE_CANCELADO);
+                    EstadoComandoVoz.CANCELADO, MENSAJE_CANCELADO,
+                    datos.probabilidadIntencion(), datos.metodo());
             return new VozConfirmarResponse(EstadoComandoVoz.CANCELADO.name(), MENSAJE_CANCELADO, Map.of());
         }
 
@@ -179,17 +199,20 @@ public class VozService {
         try {
             VozResultado resultado = handler.ejecutar(paraHandler, usuario);
             guardarComando(usuario, datos.texto(), datos.confianza(), pendiente.intencion(),
-                    EstadoComandoVoz.PROCESADO, resultado.textoRespuesta());
+                    EstadoComandoVoz.PROCESADO, resultado.textoRespuesta(),
+                    datos.probabilidadIntencion(), datos.metodo());
             return new VozConfirmarResponse(EstadoComandoVoz.PROCESADO.name(), resultado.textoRespuesta(), resultado.datos());
         } catch (RuntimeException e) {
             guardarComando(usuario, datos.texto(), datos.confianza(), pendiente.intencion(),
-                    EstadoComandoVoz.ERROR, e.getMessage());
+                    EstadoComandoVoz.ERROR, e.getMessage(),
+                    datos.probabilidadIntencion(), datos.metodo());
             throw e;
         }
     }
 
     private ComandoVoz guardarComando(Usuario usuario, String texto, double confianza, TipoIntencionVoz intencion,
-                                       EstadoComandoVoz estado, String respuesta) {
+                                       EstadoComandoVoz estado, String respuesta,
+                                       Double probabilidadIntencion, MetodoClasificacion metodo) {
         ComandoVoz comando = ComandoVoz.builder()
                 .usuario(usuario)
                 .textoTranscrito(texto)
@@ -197,6 +220,9 @@ public class VozService {
                 .intencion(intencion)
                 .estado(estado)
                 .respuesta(respuesta)
+                .probabilidadIntencion(probabilidadIntencion == null ? null
+                        : BigDecimal.valueOf(probabilidadIntencion).setScale(3, RoundingMode.HALF_UP))
+                .metodoClasificacion(metodo)
                 .build();
         return comandoVozRepository.save(comando);
     }

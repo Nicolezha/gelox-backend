@@ -150,7 +150,10 @@ public class ReporteDiarioRepository {
                 SELECT
                     v.id::text,
                     'RURAL'      AS tipo,
-                    NULL::text   AS cliente,
+                    COALESCE(NULLIF(cr.nombre, ''),
+                             CASE WHEN pr.datos_destinatario LIKE '{%'
+                                  THEN pr.datos_destinatario::json->>'nombre'
+                                  ELSE pr.datos_destinatario END) AS cliente,
                     COALESCE(
                         (SELECT JSON_AGG(d)
                          FROM (
@@ -168,6 +171,8 @@ public class ReporteDiarioRepository {
                     v.fecha      AS hora,
                     'TRANSFERENCIA' AS metodo_pago
                 FROM venta v
+                LEFT JOIN cliente_rural cr ON cr.id = v.cliente_rural_id
+                LEFT JOIN pedido_rural  pr ON pr.venta_id = v.id
                 WHERE v.fecha::date = :fecha
                   AND v.canal = 'RURAL'
                 ORDER BY v.fecha DESC
@@ -241,7 +246,10 @@ public class ReporteDiarioRepository {
                     (SELECT
                         v.id::text,
                         'RURAL'      AS tipo,
-                        NULL::text   AS cliente,
+                        COALESCE(NULLIF(cr.nombre, ''),
+                             CASE WHEN pr.datos_destinatario LIKE '{%'
+                                  THEN pr.datos_destinatario::json->>'nombre'
+                                  ELSE pr.datos_destinatario END) AS cliente,
                         COALESCE(
                             (SELECT JSON_AGG(d)
                              FROM (
@@ -259,6 +267,8 @@ public class ReporteDiarioRepository {
                         v.fecha      AS hora,
                         'TRANSFERENCIA' AS metodo_pago
                     FROM venta v
+                    LEFT JOIN cliente_rural cr ON cr.id = v.cliente_rural_id
+                    LEFT JOIN pedido_rural  pr ON pr.venta_id = v.id
                     WHERE v.fecha::date = :fecha
                       AND v.canal = 'RURAL')
                     UNION ALL

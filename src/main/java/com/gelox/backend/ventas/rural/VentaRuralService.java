@@ -8,6 +8,7 @@ import com.gelox.backend.repositories.ItemVentaRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.repositories.VentaRepository;
 import com.gelox.backend.security.RequiereRol;
+import com.gelox.backend.services.EventoSistemaService;
 import com.gelox.backend.services.InventarioService;
 import com.gelox.backend.ventas.rural.dto.ConfirmarPedidoRuralRequest;
 import com.gelox.backend.ventas.rural.dto.ItemPedidoRuralRequest;
@@ -39,6 +40,7 @@ public class VentaRuralService {
     private final ItemVentaRepository    itemVentaRepository;
     private final ProductoRepository     productoRepository;
     private final InventarioService      inventarioService;   // RF26
+    private final EventoSistemaService   eventoSistemaService; // RF11
     private final ObjectMapper           objectMapper;
 
     // ─────────────────────────── RF32 — GET ──────────────────────────
@@ -91,6 +93,11 @@ public class VentaRuralService {
             if (p == null || !p.getActivo()) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Producto no encontrado: " + id);
+            }
+            // RF32 — no se permite vender productos sin precio
+            if (p.getPrecioVenta() == null || p.getPrecioVenta().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        String.format("El producto '%s' no tiene un precio de venta válido.", p.getNombre()));
             }
         }
 
@@ -214,6 +221,13 @@ public class VentaRuralService {
                 .datosDestinatario(datosDestinatarioJson)
                 .build();
         pedidoRural = pedidoRuralRepository.save(pedidoRural);
+
+        eventoSistemaService.registrarEvento(
+                TipoEvento.CONFIRMAR_VENTA,
+                String.format("Pedido rural %s para %s confirmado. Total: $%s.",
+                        venta.getId().toString().substring(0, 8).toUpperCase(),
+                        nombreDestinatario, totalVenta.toPlainString()),
+                usuario.getId());
 
         // ── 9. Construir respuesta ────────────────────────────────────────
         Map<String, String> destinatarioMap = new LinkedHashMap<>();

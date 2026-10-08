@@ -46,6 +46,107 @@ public class EmailService {
         }
     }
 
+    /**
+     * RF03 — Notifica al usuario que su cuenta fue creada para trabajar en GELOX.
+     */
+    public void enviarCorreoCuentaCreada(String destinatario, String nombre, String rol,
+                                         String enlaceDefinirContrasena) {
+        String boton = (enlaceDefinirContrasena == null || enlaceDefinirContrasena.isBlank()) ? "" : """
+                <p style="text-align:center; margin:0 0 20px;">
+                  <a href="%s" style="display:inline-block; background:#9E2016; color:#fff; padding:12px 28px;
+                                      border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px;">
+                    Definir mi contraseña
+                  </a>
+                </p>
+                """.formatted(escapar(enlaceDefinirContrasena));
+        String cuerpo = """
+                <p style="margin:0 0 12px; color:#555; line-height:1.6;">
+                  Hola <strong>%s</strong>, el Gerente creó tu cuenta para trabajar en <strong>GELOX</strong>
+                  con el rol <strong>%s</strong>.
+                </p>
+                <p style="margin:0 0 20px; color:#555; line-height:1.6;">
+                  Tu usuario es <strong>%s</strong>. Ingresa con la contraseña temporal que te entregó el Gerente
+                  o define una nueva con el siguiente botón (el enlace vence en 1 hora).
+                </p>
+                %s
+                <p style="margin:0; color:#999; font-size:13px; line-height:1.5;">
+                  Si el enlace venció, usa la opción <em>Olvidé mi contraseña</em> en la pantalla de inicio de sesión.
+                </p>
+                """.formatted(escapar(nombre), etiquetaRol(rol), escapar(destinatario), boton);
+        enviar(destinatario, "Tu cuenta en GELOX fue creada", "Bienvenido a GELOX", cuerpo);
+    }
+
+    /**
+     * RF03 — Notifica al usuario que su cuenta fue deshabilitada (retirado del sistema).
+     */
+    public void enviarCorreoCuentaDeshabilitada(String destinatario, String nombre) {
+        String cuerpo = """
+                <p style="margin:0 0 12px; color:#555; line-height:1.6;">
+                  Hola <strong>%s</strong>, te informamos que tu cuenta en <strong>GELOX</strong>
+                  fue deshabilitada por el Gerente y ya no podrás iniciar sesión en el sistema.
+                </p>
+                <p style="margin:0; color:#999; font-size:13px; line-height:1.5;">
+                  Si crees que se trata de un error, comunícate con la administración.
+                </p>
+                """.formatted(escapar(nombre));
+        enviar(destinatario, "Tu cuenta en GELOX fue deshabilitada", "Cuenta deshabilitada", cuerpo);
+    }
+
+    private void enviar(String destinatario, String asunto, String titulo, String contenidoHtml) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(new InternetAddress(fromEmail, fromName));
+            helper.setTo(destinatario);
+            helper.setSubject(asunto);
+            helper.setText(plantilla(titulo, contenidoHtml), true);
+
+            mailSender.send(message);
+            log.info("Correo '{}' enviado a {}", asunto, destinatario);
+        } catch (Exception e) {
+            log.error("Error al enviar correo '{}' a {}: {}", asunto, destinatario, e.getMessage());
+            throw new RuntimeException("Error al enviar correo", e);
+        }
+    }
+
+    private String plantilla(String titulo, String contenidoHtml) {
+        return """
+                <html>
+                  <body style="font-family: Arial, sans-serif; color: #333; margin: 0; padding: 0;">
+                    <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f5f5f5; padding: 40px 0;">
+                      <tr><td align="center">
+                        <table width="480" cellpadding="0" cellspacing="0"
+                               style="background:#fff; border-radius:10px; overflow:hidden;">
+                          <tr><td align="center" style="background:#9E2016; padding: 32px 40px;">
+                            <span style="font-size:28px; font-weight:900; color:#fff; letter-spacing:-1px;">GELOX</span>
+                          </td></tr>
+                          <tr><td style="padding: 40px;">
+                            <h2 style="margin:0 0 16px; color:#1a1a1a; font-size:20px;">%s</h2>
+                            %s
+                          </td></tr>
+                          <tr><td style="background:#f9f9f9; padding:20px 40px; border-top:1px solid #eee;">
+                            <p style="margin:0; color:#bbb; font-size:12px; text-align:center;">GELOX — Gestión de pedidos</p>
+                          </td></tr>
+                        </table>
+                      </td></tr>
+                    </table>
+                  </body>
+                </html>
+                """.formatted(titulo, contenidoHtml);
+    }
+
+    private String etiquetaRol(String rol) {
+        if ("ENCARGADO_INVENTARIO".equals(rol)) return "Encargado de Inventarios";
+        if ("ENCARGADO_VENTAS".equals(rol))     return "Encargado de Ventas";
+        return escapar(rol);
+    }
+
+    private String escapar(String texto) {
+        if (texto == null) return "";
+        return texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
     private String construirCuerpo(String enlace) {
         return """
                 <html>

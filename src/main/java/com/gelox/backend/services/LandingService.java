@@ -29,6 +29,7 @@ public class LandingService {
     public Map<String, List<CatalogoProductoPublicoDTO>> obtenerCatalogo() {
         List<Producto> productos = productoRepository.findByActivoTrue();
         return productos.stream()
+                .filter(this::tienePrecio)
                 .map(this::toDTO)
                 .filter(dto -> dto.categoria() != null)
                 .collect(Collectors.groupingBy(CatalogoProductoPublicoDTO::categoria));
@@ -50,17 +51,22 @@ public class LandingService {
 
     public List<CatalogoProductoPublicoDTO> obtenerPaletas() {
         return productoRepository.findByActivoTrueAndCategoria(CategoriaProducto.PALETAS)
-                .stream().map(this::toDTO).toList();
+                .stream().filter(this::tienePrecio).map(this::toDTO).toList();
     }
 
     public List<CatalogoProductoPublicoDTO> obtenerConos() {
         return productoRepository.findByActivoTrueAndCategoria(CategoriaProducto.CONOS)
-                .stream().map(this::toDTO).toList();
+                .stream().filter(this::tienePrecio).map(this::toDTO).toList();
     }
 
     public List<CatalogoProductoPublicoDTO> obtenerFamiliares() {
         return productoRepository.findByActivoTrueAndCategoria(CategoriaProducto.FAMILIARES)
-                .stream().map(this::toDTO).toList();
+                .stream().filter(this::tienePrecio).map(this::toDTO).toList();
+    }
+
+    /** RF43 — la landing no muestra productos con precio de venta ≤ 0. */
+    private boolean tienePrecio(Producto p) {
+        return p.getPrecioVenta() != null && p.getPrecioVenta().compareTo(java.math.BigDecimal.ZERO) > 0;
     }
 
     private CatalogoProductoPublicoDTO toDTO(Producto p) {

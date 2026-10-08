@@ -6,6 +6,7 @@ import com.gelox.backend.dto.LiquidacionRequestDTO;
 import com.gelox.backend.dto.LiquidacionResponseDTO;
 import com.gelox.backend.entities.ItemPlanilla;
 import com.gelox.backend.entities.PlanillaComerciante;
+import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.TipoMovimiento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.exceptions.DevolucionInvalidaException;
@@ -32,6 +33,7 @@ public class LiquidacionService {
     private final PlanillaComercianteRepository planillaRepository;
     private final ItemPlanillaRepository        itemPlanillaRepository;
     private final InventarioService             inventarioService;
+    private final EventoSistemaService          eventoSistemaService;   // RF11
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public LiquidacionResponseDTO liquidarPlanilla(UUID planillaId, LiquidacionRequestDTO request, Usuario usuario) {
@@ -98,6 +100,13 @@ public class LiquidacionService {
         planilla.setTimestampCierre(ahora);
         planilla.setTotalGanancia(gananciaTotal);
         planillaRepository.save(planilla);
+
+        // RF11 — el cierre (liquidación) del comerciante aparece en el feed del dashboard
+        eventoSistemaService.registrarEvento(
+                TipoEvento.CIERRE_CAJA,
+                String.format("Cierre de planilla de %s. Total liquidado: $%s.",
+                        planilla.getComerciante().getNombre(), gananciaTotal.toPlainString()),
+                usuario != null ? usuario.getId() : null);
 
         // 7. Retornar respuesta
         return new LiquidacionResponseDTO(planilla.getId(), ahora, detalles, gananciaTotal);

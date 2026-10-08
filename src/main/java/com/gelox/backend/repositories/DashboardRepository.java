@@ -57,7 +57,8 @@ public class DashboardRepository {
     public BigDecimal getCostosPlanilasDia(LocalDate fecha) {
         Object result = em.createNativeQuery("""
                 SELECT COALESCE(SUM(
-                    ip.unidades_despachadas * pr.precio_costo
+                    -- RF37: costo solo de lo vendido (despachadas − devueltas); precio_costo es por caja
+                    (ip.unidades_despachadas - ip.unidades_devueltas) * pr.precio_costo
                         / COALESCE(pr.unidades_por_caja, 1)::numeric
                 ), 0)
                 FROM item_planilla ip

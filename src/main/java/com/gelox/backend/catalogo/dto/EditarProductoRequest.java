@@ -17,7 +17,7 @@ public class EditarProductoRequest {
 
     private String categoria;   // PALETAS | CONOS | FAMILIARES
 
-    @DecimalMin(value = "0", message = "El precio de venta debe ser >= 0")
+    @DecimalMin(value = "0", inclusive = false, message = "El precio de venta debe ser mayor a 0")
     private BigDecimal precioVenta;
 
     @DecimalMin(value = "0", message = "El precio de costo debe ser >= 0")

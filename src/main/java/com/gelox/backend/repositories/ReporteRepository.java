@@ -335,13 +335,14 @@ public class ReporteRepository {
     }
 
     /**
-     * Costos del canal COMERCIANTES: precio_costo * cantidad_despachada por producto en planillas cerradas.
+     * Costos del canal COMERCIANTES: precio_costo × (despachadas − devueltas) por producto en planillas cerradas.
      * NOTA: Ajustar nombre de columna 'cantidad_despachada' si difiere en el esquema real de item_planilla.
      */
     public BigDecimal getCostosComerciantesEnPeriodo(PeriodoFiltroDTO periodo) {
         Object result = em.createNativeQuery("""
                 SELECT COALESCE(SUM(
-                    ip.unidades_despachadas * pr.precio_costo
+                    -- RF37: costo solo de lo vendido (despachadas − devueltas); precio_costo es por caja
+                    (ip.unidades_despachadas - ip.unidades_devueltas) * pr.precio_costo
                         / COALESCE(pr.unidades_por_caja, 1)::numeric
                 ), 0)
                 FROM item_planilla ip

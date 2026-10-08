@@ -1,9 +1,11 @@
 package com.gelox.backend.services;
 
 import com.gelox.backend.dto.AlertaStockDTO;
+import com.gelox.backend.dto.InventarioMuertoDTO;
 import com.gelox.backend.dto.InventarioProductoDTO;
 import com.gelox.backend.entities.MovimientoInventario;
 import com.gelox.backend.entities.Producto;
+import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.TipoMovimiento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.exceptions.StockInsuficienteException;
@@ -14,6 +16,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -25,6 +33,7 @@ public class InventarioService {
 
     private final ProductoRepository            productoRepository;
     private final MovimientoInventarioRepository movimientoRepository;
+    private final EventoSistemaService           eventoSistemaService;   // RF11
 
     // ──────────────────────────────────────────────────────────────────────
     // RF17 + RF27 — GET /api/inventario/productos  (con filtros opcionales)
@@ -56,10 +65,51 @@ public class InventarioService {
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     public List<AlertaStockDTO> listarAlertas() {
+        // Más urgentes primero: nivel → % del mínimo cubierto → nombre
         return productoRepository.findProductosBajoStock()
                 .stream()
                 .map(this::toAlertaDTO)
+                .sorted(Comparator
+                        .comparingInt((AlertaStockDTO a) -> AlertaStockDTO.pesoNivel(a.getNivel()))
+                        .thenComparingDouble(a -> a.getStockMinimo() != null && a.getStockMinimo() > 0
+                                ? (double) a.getStockActual() / a.getStockMinimo() : 0d)
+                        .thenComparing(AlertaStockDTO::getNombre, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .toList();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Inventario muerto — productos sin salidas en los últimos N días
+    // ──────────────────────────────────────────────────────────────────────
+
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
+    public List<InventarioMuertoDTO> listarInventarioMuerto(int dias, String rolUsuario) {
+        int diasSeguros = Math.max(1, Math.min(dias, 365));
+        LocalDateTime ahora = LocalDateTime.now();
+        boolean esAdmin = "ADMINISTRADOR".equals(rolUsuario);   // costos solo para el Gerente
+
+        return productoRepository.findInventarioMuerto(ahora.minusDays(diasSeguros))
+                .stream()
+                .map(r -> {
+                    LocalDateTime ultimaSalida = toLocalDateTime(r[4]);
+                    LocalDateTime referencia   = ultimaSalida != null ? ultimaSalida : toLocalDateTime(r[5]);
+                    Long diasSinMov = referencia != null ? ChronoUnit.DAYS.between(referencia, ahora) : null;
+                    BigDecimal valor = r[6] == null ? BigDecimal.ZERO : new BigDecimal(r[6].toString());
+                    return new InventarioMuertoDTO(
+                            (String) r[0], (String) r[1], (String) r[2],
+                            ((Number) r[3]).intValue(),
+                            ultimaSalida,
+                            diasSinMov,
+                            esAdmin ? valor.setScale(0, RoundingMode.HALF_UP) : null);
+                })
+                .toList();
+    }
+
+    private LocalDateTime toLocalDateTime(Object valor) {
+        if (valor == null) return null;
+        if (valor instanceof Timestamp ts)       return ts.toLocalDateTime();
+        if (valor instanceof LocalDateTime ldt)  return ldt;
+        if (valor instanceof java.time.Instant i) return LocalDateTime.ofInstant(i, java.time.ZoneId.systemDefault());
+        return LocalDateTime.parse(valor.toString().replace(' ', 'T'));
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -97,7 +147,8 @@ public class InventarioService {
         }
 
         // 3. Descontar stock
-        int stockDespues = p.getStockActual() - cantidad;
+        int stockAntes   = p.getStockActual();
+        int stockDespues = stockAntes - cantidad;
         p.setStockActual(stockDespues);
         productoRepository.save(p);
 
@@ -110,6 +161,16 @@ public class InventarioService {
                 .stockResultante(stockDespues)
                 .descripcion(descripcion)
                 .build());
+
+        // 5. RF11/RF24 — evento de alerta si esta salida deja el producto en o bajo su mínimo
+        //    (aplica a ventanilla, rural y despachos por igual)
+        if (stockAntes > p.getStockMinimo() && stockDespues <= p.getStockMinimo()) {
+            eventoSistemaService.registrarEvento(
+                    TipoEvento.ALERTA_STOCK,
+                    String.format("La referencia %s (%s) alcanzó el stock mínimo configurado (%d uds.). Quedan %d uds.",
+                            p.getNombre(), p.getCodigoTecnico(), p.getStockMinimo(), stockDespues),
+                    usuario != null ? usuario.getId() : null);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────

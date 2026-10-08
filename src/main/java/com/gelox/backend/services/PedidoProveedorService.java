@@ -140,9 +140,11 @@ public class PedidoProveedorService {
             productoRepo.save(producto);
 
             // RF23 — registrar movimiento
+            // precio_costo del catálogo es por caja: se convierte a costo por unidad, porque la
+            // inversión se calcula como precio_unitario × cantidad_recibida (en unidades)
             BigDecimal precio = (ir.precioUnitario() != null && ir.precioUnitario().compareTo(BigDecimal.ZERO) > 0)
                     ? ir.precioUnitario()
-                    : producto.getPrecioCosto();
+                    : producto.getPrecioCosto().divide(BigDecimal.valueOf(upC), 2, java.math.RoundingMode.HALF_UP);
 
             movimientoRepo.save(MovimientoInventario.builder()
                     .producto(producto)

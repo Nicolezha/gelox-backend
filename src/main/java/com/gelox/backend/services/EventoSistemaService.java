@@ -23,6 +23,11 @@ public class EventoSistemaService {
     private final EventoSistemaRepository repository;
 
     public void registrarEvento(TipoEvento tipo, String descripcion, UUID usuarioId) {
+        // RF11 — el feed guarda solo 10 eventos; los inicios/cierres de sesión no forman parte
+        // del registro de operaciones (despachos, cierres, alertas, registros) y lo desplazaban.
+        if (tipo == TipoEvento.INICIO_SESION || tipo == TipoEvento.CIERRE_SESION) {
+            return;
+        }
         EventoSistema evento = EventoSistema.builder()
                 .tipo(tipo)
                 .descripcion(descripcion)

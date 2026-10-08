@@ -1,5 +1,6 @@
 package com.gelox.backend.rf03;
 
+import com.gelox.backend.services.EmailService;
 import com.gelox.backend.services.EventoSistemaService;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.dto.CrearUsuarioDTO;
@@ -55,6 +56,9 @@ class GestionUsuariosTest {
 
     @Mock
     EventoSistemaService eventoSistemaService;
+
+    @Mock
+    EmailService emailService;
 
     @InjectMocks
     UsuarioService usuarioService;

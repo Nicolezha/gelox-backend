@@ -3,6 +3,7 @@ package com.gelox.backend.voz;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.entities.ComandoVoz;
 import com.gelox.backend.entities.EstadoComandoVoz;
+import com.gelox.backend.entities.MetodoClasificacion;
 import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
@@ -11,6 +12,10 @@ import com.gelox.backend.voz.dto.VozConfirmarRequest;
 import com.gelox.backend.voz.dto.VozConfirmarResponse;
 import com.gelox.backend.voz.dto.VozInterpretarRequest;
 import com.gelox.backend.voz.dto.VozInterpretarResponse;
+import com.gelox.backend.voz.handlers.PendienteAclaracion;
+import com.gelox.backend.voz.pln.ModeloIntencion;
+import org.assertj.core.data.Offset;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +48,17 @@ class VozServiceTest {
     VozService vozService;
     VozPendienteStore pendienteStore;
 
+    /** Modelo de PLN real (src/main/resources/pln): los casos de regresión dependen de él. */
+    static ModeloIntencion modelo;
+    ClasificadorIntencion clasificador;
+
+    @BeforeAll
+    static void cargarModelo() {
+        modelo = new ModeloIntencion();
+        modelo.cargar();
+        assertThat(modelo.disponible()).as("el modelo de intención debe cargar desde el classpath").isTrue();
+    }
+
     HandlerDePrueba handlerVenta;
     HandlerDePrueba handlerInventario;
     Usuario usuario;
@@ -53,9 +69,10 @@ class VozServiceTest {
         handlerVenta = new HandlerDePrueba(TipoIntencionVoz.REGISTRAR_VENTA, true);
         handlerInventario = new HandlerDePrueba(TipoIntencionVoz.CONSULTAR_INVENTARIO, false);
 
+        clasificador = new ClasificadorIntencion(modelo);
         vozService = new VozService(
                 List.of(handlerVenta, handlerInventario),
-                new ClasificadorIntencion(),
+                clasificador,
                 comandoVozRepository,
                 pendienteStore);
         vozService.indexarHandlers();
@@ -252,6 +269,113 @@ class VozServiceTest {
                         e -> assertThat(e.getStatusCode().value()).isEqualTo(404));
     }
 
+    // ---- PLN (FP-15 §2.1, §2.5) y regresiones de la sección 6 ----
+
+    /** Payload de una venta que preguntó "¿para quién?" y espera la respuesta. */
+    private record AclaracionDePrueba(String pregunta) implements PendienteAclaracion {}
+
+    @Test
+    @DisplayName("PLN — al confirmar se guardan la probabilidad y el método de la interpretación original")
+    void confirmar_guardaProbabilidadYMetodoOriginales() {
+        stubGuardarComando();
+        var clasificacion = clasificador.clasificar("vendame 2 de solo lac");
+
+        VozInterpretarResponse interpretado = vozService.interpretar(
+                new VozInterpretarRequest("vendame 2 de solo lac", 0.95), usuario);
+        vozService.confirmar(new VozConfirmarRequest(interpretado.comandoId(), true), usuario);
+
+        ArgumentCaptor<ComandoVoz> captor = ArgumentCaptor.forClass(ComandoVoz.class);
+        verify(comandoVozRepository).save(captor.capture());
+        ComandoVoz guardado = captor.getValue();
+        assertThat(guardado.getMetodoClasificacion()).isEqualTo(MetodoClasificacion.MODELO);
+        assertThat(guardado.getProbabilidadIntencion()).isNotNull();
+        assertThat(guardado.getProbabilidadIntencion().doubleValue())
+                .isCloseTo(clasificacion.probabilidadIntencion(), Offset.offset(0.001));
+    }
+
+    @Test
+    @DisplayName("PLN — CANCELADO también guarda probabilidad y método")
+    void cancelar_guardaProbabilidadYMetodo() {
+        stubGuardarComando();
+        VozInterpretarResponse interpretado = vozService.interpretar(
+                new VozInterpretarRequest("vende dos festival", 0.95), usuario);
+        vozService.confirmar(new VozConfirmarRequest(interpretado.comandoId(), false), usuario);
+
+        ArgumentCaptor<ComandoVoz> captor = ArgumentCaptor.forClass(ComandoVoz.class);
+        verify(comandoVozRepository).save(captor.capture());
+        assertThat(captor.getValue().getEstado()).isEqualTo(EstadoComandoVoz.CANCELADO);
+        assertThat(captor.getValue().getMetodoClasificacion()).isNotNull();
+        assertThat(captor.getValue().getProbabilidadIntencion()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("PLN — frase fuera de dominio: ERROR con la probabilidad del modelo y método null")
+    void fueraDeDominio_guardaErrorConProbabilidad() {
+        stubGuardarComando();
+        vozService.interpretar(new VozInterpretarRequest("hola buenos dias", 0.9), usuario);
+
+        ArgumentCaptor<ComandoVoz> captor = ArgumentCaptor.forClass(ComandoVoz.class);
+        verify(comandoVozRepository).save(captor.capture());
+        assertThat(captor.getValue().getEstado()).isEqualTo(EstadoComandoVoz.ERROR);
+        assertThat(captor.getValue().getIntencion()).isNull();
+        assertThat(captor.getValue().getMetodoClasificacion()).isNull();
+        assertThat(captor.getValue().getProbabilidadIntencion()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Regresión §6 — 'agrega 2 cajas de festival' se suma a la venta en curso (mismo comandoId), no es MODIFICAR_PEDIDO")
+    void agregadoSecuencial_continuaLaVentaEnCurso() {
+        VozInterpretarResponse venta = vozService.interpretar(
+                new VozInterpretarRequest("vende dos festival", 0.95), usuario);
+
+        VozInterpretarResponse agregado = vozService.interpretar(
+                new VozInterpretarRequest("agrega 2 cajas de festival", 0.95), usuario);
+
+        assertThat(agregado.comandoId()).isEqualTo(venta.comandoId());
+        assertThat(agregado.intencion()).isEqualTo(TipoIntencionVoz.REGISTRAR_VENTA.name());
+        assertThat(handlerVenta.ultimoContexto.pendiente()).as("el handler recibe la venta en curso").isNotNull();
+        verifyNoInteractions(comandoVozRepository);
+    }
+
+    @Test
+    @DisplayName("Regresión §6 — 'agrega ...' sin venta en curso sigue explicando que primero hay que decir la venta")
+    void agregadoSinVenta_noEsVentaNueva() {
+        stubGuardarComando();
+        VozInterpretarResponse r = vozService.interpretar(
+                new VozInterpretarRequest("agrega 2 cajas de festival", 0.9), usuario);
+
+        assertThat(r.ok()).isFalse();
+        assertThat(r.intencion()).isNull();
+        assertThat(r.textoRespuesta()).contains("No hay una venta en curso");
+    }
+
+    @Test
+    @DisplayName("Regresión §6 — 'doña marta' y 'fresa' completan la venta que espera aclaración")
+    void aclaracion_fraseSueltaCompletaLaVenta() {
+        handlerVenta.payloadInterpretar = new AclaracionDePrueba("¿Para quién es la venta rural?");
+        VozInterpretarResponse venta = vozService.interpretar(
+                new VozInterpretarRequest("anota una venta rural de tres festival", 0.95), usuario);
+
+        for (String respuesta : List.of("doña marta", "fresa")) {
+            VozInterpretarResponse aclaracion = vozService.interpretar(
+                    new VozInterpretarRequest(respuesta, 0.95), usuario);
+            assertThat(aclaracion.comandoId()).as("'%s' continúa la misma venta", respuesta)
+                    .isEqualTo(venta.comandoId());
+            assertThat(aclaracion.intencion()).isEqualTo(TipoIntencionVoz.REGISTRAR_VENTA.name());
+            assertThat(handlerVenta.ultimoContexto.texto()).isEqualTo(respuesta);
+            assertThat(handlerVenta.ultimoContexto.pendiente()).isNotNull();
+        }
+    }
+
+    @Test
+    @DisplayName("Regresión §6 — el modelo no clasifica aclaraciones sueltas como otra intención con ≥ 0,60")
+    void aclaracion_modeloNoLasReconoceComoIntencion() {
+        for (String frase : List.of("dona marta", "doña marta", "fresa", "don pedro", "nicole hernandez")) {
+            var r = clasificador.clasificar(frase);
+            assertThat(r.intencion()).as("intención de '%s' (p=%s)", frase, r.probabilidadIntencion()).isNull();
+        }
+    }
+
     private static class HandlerDePrueba implements IntencionHandler {
 
         private final TipoIntencionVoz tipo;
@@ -260,6 +384,9 @@ class VozServiceTest {
         boolean fallarAlEjecutar = false;
         boolean interpretarSinExito = false;
         Object payloadRecibidoEnEjecutar;
+        /** Si no es null, interpretar() devuelve este payload (p. ej. una venta que espera aclaración). */
+        Object payloadInterpretar;
+        VozContexto ultimoContexto;
 
         HandlerDePrueba(TipoIntencionVoz tipo, boolean requiereConfirmacion) {
             this.tipo = tipo;
@@ -281,8 +408,10 @@ class VozServiceTest {
             if (interpretarSinExito) {
                 return new VozResultado(false, "No hay pedidos pendientes.", Map.of(), null);
             }
+            ultimoContexto = ctx;
             String payload = tipo == TipoIntencionVoz.REGISTRAR_VENTA ? "payload-interno-venta" : null;
-            return new VozResultado(true, "¿Confirmas? " + ctx.texto(), Map.of(), payload);
+            return new VozResultado(true, "¿Confirmas? " + ctx.texto(), Map.of(),
+                    payloadInterpretar != null ? payloadInterpretar : payload);
         }
 
         @Override
