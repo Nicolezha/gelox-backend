@@ -163,6 +163,9 @@ class VozServiceTest {
                 new VozInterpretarRequest("cuantas paletas de festival quedan", 0.5), usuario);
 
         assertThat(interpretado.requiereConfirmacion()).isTrue();
+        // CP-04: la respuesta de la consulta no se entrega antes de confirmar.
+        assertThat(interpretado.textoRespuesta()).isEqualTo("Entendí: \"cuantas paletas de festival quedan\". ¿Confirmas?");
+        assertThat(interpretado.datos()).isEmpty();
     }
 
     @Test

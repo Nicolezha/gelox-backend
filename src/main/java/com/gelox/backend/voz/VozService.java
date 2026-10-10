@@ -163,6 +163,12 @@ public class VozService {
             }
             pendienteStore.put(comandoId, usuario.getId(), intencion, datos);
 
+            if (!handler.requiereConfirmacion()) {
+                // Consulta pendiente solo por baja confianza (RNF-5): se confirma lo entendido
+                // y la respuesta llega con la confirmación, no antes.
+                return new VozInterpretarResponse(comandoId, true, intencion.name(), true,
+                        VozPendienteStore.TTL_SEGUNDOS, "Entendí: \"" + request.texto() + "\". ¿Confirmas?", Map.of());
+            }
             return new VozInterpretarResponse(comandoId, true, intencion.name(), true,
                     VozPendienteStore.TTL_SEGUNDOS, interpretado.textoRespuesta(), interpretado.datos());
         }
