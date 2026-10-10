@@ -6,6 +6,7 @@ import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.ReporteFinancieroService;
+import com.gelox.backend.voz.ClasificadorIntencion;
 import com.gelox.backend.voz.IntencionHandler;
 import com.gelox.backend.voz.NormalizadorVoz;
 import com.gelox.backend.voz.VozContexto;
@@ -36,6 +37,8 @@ import java.util.regex.Pattern;
 public class ConsultaFinancieraHandler implements IntencionHandler {
 
     /** "año" queda como "ano" tras normalizar. */
+    private static final Pattern GANANCIA = Pattern.compile("\\b(ganamos|ganado|ganancias?|utilidad\\w*|margen|rentabilidad)\\b");
+
     private static final Pattern ANIO_PATTERN = Pattern.compile("\\bano\\b");
 
     private static final DateTimeFormatter FORMATO_FECHA_LARGA =
@@ -67,7 +70,7 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
         String texto = NormalizadorVoz.normalizar(ctx.texto());
 
         // RF51: el cierre del día lo narra CierreDiaResumen.
-        if (texto.contains("cierra el dia") || texto.contains("cierre del dia") || texto.contains("resumen del dia")) {
+        if (ClasificadorIntencion.esCierre(texto)) {
             return cierreDiaResumen.generarResumen(ctx.hoy());
         }
 
@@ -187,6 +190,6 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
 
     /** "vendimos" o "ingresos" caen en "ventas". */
     private String detectarTipo(String texto) {
-        return (texto.contains("ganamos") || texto.contains("ganancia")) ? "ganancia" : "ventas";
+        return GANANCIA.matcher(texto).find() ? "ganancia" : "ventas";
     }
 }

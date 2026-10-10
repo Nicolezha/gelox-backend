@@ -44,14 +44,19 @@ import java.util.stream.Collectors;
 public class RegistrarVentaHandler implements IntencionHandler {
 
     private static final Pattern ITEM_PATTERN = ItemVozParser.patron(
-            "\\s*,|\\s+y\\s+|\\s+canal\\b|\\s+por\\b|\\s+con\\b|\\s+en\\b");
+            "\\s*,|\\s+y\\s+|\\s+canal\\b|\\s+por\\b|\\s+con\\b|\\s+en\\b|\\s+para\\b"
+                    + "|\\s+pag\\w*|\\s+efectivo\\b|\\s+transferencia\\b");
 
     private static final String MENSAJE_FALTA_PRODUCTO = "Falta aclarar cuál producto es.";
 
     private static final String EJEMPLO = "Di algo como 'registra tres cajas de Aloha Mango Biche a 2.500, canal ventanilla'.";
 
-    /** "envío" también marca canal rural: el costo de envío solo existe en pedidos rurales. */
-    private static final Pattern ES_RURAL = Pattern.compile("\\b(rural|envio)\\b");
+    /**
+     * "envío" también marca canal rural: el costo de envío solo existe en pedidos rurales.
+     * Igual "para doña Marta": en ventanilla no hay destinatario.
+     */
+    private static final Pattern ES_RURAL = Pattern.compile(
+            "\\b(rural|envio|domicilio)\\b|\\bpara\\s+(don|dona|senor|senora|sr|sra)\\b");
 
     private final ResolvedorProducto resolvedorProducto;
     private final VentaService ventaService;
