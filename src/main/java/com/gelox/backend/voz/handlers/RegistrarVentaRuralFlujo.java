@@ -219,13 +219,15 @@ public class RegistrarVentaRuralFlujo {
                 + String.join(" y ", descripciones) + ". Envío $" + sinCeros(costoEnvio)
                 + ". Total $" + sinCeros(total) + "." + String.join("", avisosPrecio) + " ¿Confirmas?";
 
-        Map<String, Object> datos = Map.of(
+        Map<String, Object> datos = new LinkedHashMap<>(Map.of(
                 "canal", "RURAL",
                 "destinatario", nombreDestinatario,
                 "items", datosItems,
                 "costoEnvio", costoEnvio,
                 "totalProductos", totalProductos,
-                "total", total);
+                "total", total));
+        // Para que "Editar en Pedido rural" preseleccione al cliente guardado.
+        if (clienteRuralId != null) datos.put("clienteRuralId", clienteRuralId);
 
         return new VozResultado(true, textoRespuesta, datos,
                 new Payload(clienteRuralId, nombreDestinatario, costoEnvio, items));

@@ -313,18 +313,18 @@ public class PedidoProveedorService {
      */
     private byte[] generarExcelDesdeTemplate(PedidoProveedor pedido) {
 
-        // Clave compuesta "SKU|CJ" y "SKU|UN" para llenar la fila correcta en la plantilla
-        Map<String, Integer> cantidades = new HashMap<>();
+        // Por SKU, lo que falta escribir: {cajas, unidades}. La plantilla se sube a
+        // Nutresa tal cual: solo se llena la columna Cantidad, nunca se agregan filas.
+        Map<String, int[]> pendientes = new HashMap<>();
+        Map<String, Producto> productos = new HashMap<>();
         for (ItemPedidoProveedor item : pedido.getItems()) {
             String raw = item.getProducto().getCodigoTecnico();
             if (raw == null || raw.isBlank()) continue; // sin SKU no se puede mapear al Excel
             String sku = raw.trim();
-            if (item.getCantidadCajas() != null && item.getCantidadCajas() > 0) {
-                cantidades.put(sku + "|CJ", item.getCantidadCajas());
-            }
-            if (item.getCantidadUnidades() != null && item.getCantidadUnidades() > 0) {
-                cantidades.put(sku + "|UN", item.getCantidadUnidades());
-            }
+            int[] cant = pendientes.computeIfAbsent(sku, k -> new int[2]);
+            cant[0] += valorOrCero(item.getCantidadCajas());
+            cant[1] += valorOrCero(item.getCantidadUnidades());
+            productos.put(sku, item.getProducto());
         }
 
         try (InputStream tplStream = plantillaExcel.getInputStream();
@@ -335,15 +335,14 @@ public class PedidoProveedorService {
 
             // Buscar fila de encabezados y los índices de columna
             int colSku = -1, colUm = -1, colCantidad = -1, headerRow = -1;
-            outer:
             for (Row row : sheet) {
                 for (Cell cell : row) {
                     String val = cellText(cell).trim();
                     if (val.equalsIgnoreCase("Producto/SKU"))      { colSku      = cell.getColumnIndex(); headerRow = row.getRowNum(); }
                     if (val.equalsIgnoreCase("Unidad de Medida"))  { colUm       = cell.getColumnIndex(); }
                     if (val.equalsIgnoreCase("Cantidad"))          { colCantidad = cell.getColumnIndex(); }
-                    if (colSku >= 0 && colUm >= 0 && colCantidad >= 0) break outer;
                 }
+                if (headerRow >= 0) break;
             }
 
             if (colSku < 0 || colCantidad < 0) {
@@ -360,36 +359,13 @@ public class PedidoProveedorService {
                 if (sku.isBlank()) continue;
 
                 String rawUm = (colUm >= 0) ? cellText(row.getCell(colUm)).trim().toUpperCase() : "";
-
-                Integer qty = null;
-                if (!rawUm.isBlank()) {
-                    // UM presente → normalizar y buscar primero por clave compuesta SKU|UM
-                    String um;
-                    if (rawUm.startsWith("CAJ") || rawUm.equals("CJ")) {
-                        um = "CJ";
-                    } else if (rawUm.startsWith("UN") || rawUm.equals("UDS")) {
-                        um = "UN";
-                    } else {
-                        um = rawUm;
-                    }
-                    qty = cantidades.get(sku + "|" + um);
-                }
-                // Fallback: si la UM estaba vacía O el lookup por UM no encontró cantidad,
-                // buscar por SKU solo (aplica a productos con unidad_medida null o UM no reconocida)
-                if (qty == null || qty == 0) {
-                    final String skuPrefix = sku + "|";
-                    qty = cantidades.entrySet().stream()
-                            .filter(e -> e.getKey().startsWith(skuPrefix)
-                                    && e.getValue() != null && e.getValue() > 0)
-                            .map(Map.Entry::getValue)
-                            .findFirst()
-                            .orElse(null);
-                }
+                int qty = tomarCantidad(pendientes.get(sku), productos.get(sku),
+                        rawUm.startsWith("CAJ") || rawUm.equals("CJ"));
 
                 Cell cantCell = row.getCell(colCantidad);
                 if (cantCell == null) cantCell = row.createCell(colCantidad, CellType.NUMERIC);
 
-                if (qty != null && qty > 0) {
+                if (qty > 0) {
                     cantCell.setCellValue(qty);
                 } else {
                     cantCell.setBlank();
@@ -402,6 +378,34 @@ public class PedidoProveedorService {
         } catch (IOException e) {
             throw new RuntimeException("Error al generar Excel desde plantilla: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Saca de {@code cant} lo que cabe en una fila de la plantilla, convertido a su
+     * unidad: en una fila CJ van las cajas (y las sueltas solo si completan cajas);
+     * en una fila UN va todo en unidades.
+     */
+    private static int tomarCantidad(int[] cant, Producto producto, boolean filaEnCajas) {
+        if (cant == null) return 0;
+        Integer upc = producto.getUnidadesPorCaja();
+        boolean conCaja = upc != null && upc > 0;
+        int qty;
+        if (filaEnCajas) {
+            qty = cant[0];
+            cant[0] = 0;
+            if (conCaja && cant[1] % upc == 0) {
+                qty += cant[1] / upc;
+                cant[1] = 0;
+            }
+        } else {
+            qty = cant[1];
+            cant[1] = 0;
+            if (conCaja) {
+                qty += cant[0] * upc;
+                cant[0] = 0;
+            }
+        }
+        return qty;
     }
 
     private String cellText(Cell cell) {
