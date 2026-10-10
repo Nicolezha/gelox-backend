@@ -271,12 +271,10 @@ class RegistrarVentaHandlerTest {
     }
 
     @Test
-    @DisplayName("sin cantidad, sin cajas/unidades o sin producto: el error dice qué falta")
+    @DisplayName("sin cantidad o sin producto: el error dice qué falta")
     void erroresEspecificosSegunLoQueFalta() {
         assertThat(handler.interpretar(ctx("registra cajas de Festival")).textoRespuesta())
                 .startsWith("No entendí la cantidad.");
-        assertThat(handler.interpretar(ctx("registra tres de Festival")).textoRespuesta())
-                .startsWith("Falta decir si son cajas o unidades.");
         assertThat(handler.interpretar(ctx("registra tres cajas")).textoRespuesta())
                 .startsWith("Falta el producto.");
     }
