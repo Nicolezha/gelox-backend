@@ -43,17 +43,19 @@ public class ClasificadorIntencion {
     }
 
     /**
-     * modificar_pedido se evalúa antes que generar_pedido: frases como
+     * consultar_finanzas va primero: "cuánto vendimos" contiene "vendi" y no es
+     * una venta. modificar_pedido se evalúa antes que generar_pedido: frases como
      * "al pedido pendiente agrégale…" contienen la palabra "pedido" y deben
      * resolver a MODIFICAR_PEDIDO, no a GENERAR_PEDIDO.
      */
     private static final List<Regla> REGLAS = List.of(
-            new Regla(TipoIntencionVoz.REGISTRAR_VENTA,
-                    Pattern.compile("registra|vende|vendi|anota")),
-            new Regla(TipoIntencionVoz.CONSULTAR_INVENTARIO,
-                    Pattern.compile("cuantas?.*(quedan|hay)|stock|inventario|se esta acabando")),
             new Regla(TipoIntencionVoz.CONSULTAR_FINANZAS,
-                    Pattern.compile("cuanto (ganamos|vendimos)|ganancia|ingresos|cierra el dia|cierre del dia|resumen del dia")),
+                    Pattern.compile("cuant[oa]s?\\b.*\\b(ganamos|vendimos|vendio|hemos vendido)"
+                            + "|ganancia|ingresos|cierra el dia|cierre del dia|resumen del dia")),
+            new Regla(TipoIntencionVoz.REGISTRAR_VENTA,
+                    Pattern.compile("registr|vende|vendi|anota")),
+            new Regla(TipoIntencionVoz.CONSULTAR_INVENTARIO,
+                    Pattern.compile("cuant[oa]s?\\b.*\\b(quedan?|hay|tenemos|tengo)\\b|stock|inventario|se esta acabando")),
             new Regla(TipoIntencionVoz.MODIFICAR_PEDIDO,
                     Pattern.compile("(agrega|agregale|quita|elimina|cambia|actualiza).*pedido"
                             + "|pedido.*(agrega|agregale|quita|elimina|cambia|actualiza)")),
