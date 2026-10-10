@@ -205,7 +205,7 @@ public class ModificarPedidoHandler implements IntencionHandler {
                     + (productos.isEmpty() ? "" : " con " + productos));
         }
         return "Hay " + pendientes.size() + " pedidos pendientes: " + String.join("; ", descripciones)
-                + ". ¿A cuál? Di por ejemplo 'al pedido 1 agrégale 10 cajas de Festival'.";
+                + ". ¿A cuál? Di por ejemplo 'al pedido 1 agrégale 10 cajas de Minions'.";
     }
 
     private VozResultado sinCambios(String mensaje) {

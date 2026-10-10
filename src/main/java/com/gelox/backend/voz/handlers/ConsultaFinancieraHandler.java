@@ -128,7 +128,9 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
             datos.put("canales", canalesVista);
             texto = "La utilidad neta " + etiquetaCorta + " fue de " + moneda.format(reporte.utilidadNeta())
                     + (reporte.margenGanancia() != null
-                        ? " con un margen de ganancia del " + reporte.margenGanancia() + " %."
+                        // "369.0000" se narraría con todos los ceros: máximo un decimal.
+                        ? " con un margen de ganancia del " + reporte.margenGanancia()
+                                .setScale(1, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + " %."
                         : ".");
         } else {
             texto = "Las ventas " + etiquetaCorta + " suman " + moneda.format(reporte.ingresosTotales()) + ".";
