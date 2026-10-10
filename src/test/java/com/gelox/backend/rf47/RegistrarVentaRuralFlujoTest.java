@@ -235,12 +235,23 @@ class RegistrarVentaRuralFlujoTest {
     }
 
     @Test
-    @DisplayName("sin la palabra cajas/unidades: el error dice qué falta")
-    void sinCajasNiUnidades_errorEspecifico() {
-        VozResultado resultado = flujo.interpretar(ctx("vende dos de Festival para doña Marta"));
+    @DisplayName("sin la palabra cajas/unidades se entienden unidades, y el envío no se toma como ítem")
+    void sinCajasNiUnidades_sonUnidades() {
+        when(resolvedorProducto.resolver("aloha mango biche")).thenReturn(List.of(
+                new ResolvedorProducto.ProductoCandidato(idFestival, "Aloha Mango Biche", 1.0, 12)));
+        when(ventaService.getCatalogo()).thenReturn(List.of(new CatalogoVentaDTO(
+                idFestival, "AMB-001", "Aloha Mango Biche", null, new BigDecimal("625.00"), 100, true, 12)));
+        when(ventaService.calcularVenta(any())).thenReturn(new CalcularVentaResponse(
+                List.of(new ItemCalculoResultado(idFestival, 0, 2, new BigDecimal("625.00"), new BigDecimal("1250.00"))),
+                new BigDecimal("1250.00")));
+        when(clienteRuralService.listarClientes("Nicole Hernandez")).thenReturn(List.of());
 
-        assertThat(resultado.ok()).isFalse();
-        assertThat(resultado.textoRespuesta()).startsWith("Falta decir si son cajas o unidades.");
+        VozResultado resultado = flujo.interpretar(ctx("vende dos de aloha mango biche para Nicole Hernandez, envío 8 mil"));
+
+        assertThat(resultado.ok()).isTrue();
+        RegistrarVentaRuralFlujo.Payload payload = (RegistrarVentaRuralFlujo.Payload) resultado.payload();
+        assertThat(payload.items()).containsExactly(new ItemPedidoRuralRequest(idFestival, 0, 2));
+        assertThat((BigDecimal) resultado.datos().get("costoEnvio")).isEqualByComparingTo("8000");
     }
 
     @Test

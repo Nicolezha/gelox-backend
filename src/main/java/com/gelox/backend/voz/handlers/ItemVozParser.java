@@ -15,8 +15,6 @@ final class ItemVozParser {
 
     private static final Pattern HAY_DIGITO = Pattern.compile("\\d");
     private static final String TIPO = "(cajas?|cajitas?|unidad(?:es)?|unidaditas?)";
-    private static final Pattern HAY_TIPO = Pattern.compile("\\b" + TIPO + "\\b");
-    private static final Pattern HAY_PRODUCTO = Pattern.compile("\\b" + TIPO + "\\s+(?:mas\\s+)?(?:de\\s+)?\\S");
 
     record ItemExtraido(int cajas, int unidades, String fragmentoProducto, BigDecimal precioDicho) {}
 
@@ -27,11 +25,13 @@ final class ItemVozParser {
      * Grupos: 1 cantidad, 2 caja(s)/unidad(es), 3 producto, 4 precio dicho (opcional).
      * El precio admite "a 3500", "por 3500", "de 3500" y "$3500". Tolera "más"
      * entre el tipo y "de" ("agrega 2 unidades más de ..."), "cajita(s)" y que
-     * no se diga el "de" ("dos cajas Festival").
+     * no se diga el "de" ("dos cajas Festival"). Sin "cajas" ni "unidades" ("una paleta de
+     * Aloha Mango Biche", "dos Minions") se entienden unidades y "paleta de" no entra al nombre; ahí el producto debe empezar por letra y no
+     * ser "mil"/"pesos" ni la cantidad pasar de 999, para no tomar el envío ("envío 8 mil") como un ítem.
      */
     static Pattern patron(String terminadores) {
         return Pattern.compile(
-                "(\\d+)\\s*" + TIPO + "\\s+(?:mas\\s+)?(?:de\\s+)?(.+?)"
+                "(\\d+)\\s*(?:" + TIPO + "\\s+(?:mas\\s+)?(?:de\\s+)?|\\s(?:(?:paletas?|helados?)\\s+de\\s+|de\\s+)?(?=[a-z])(?!caj|unidad|(?:mil|pesos)\\b))(.+?)"
                         // "de 90 gramos" es el tamaño del producto, no el precio.
                         + "(?:\\s+(?:(?:a|por|de)\\s+\\$?|\\$)(\\d+)(?!\\s*(?:gramos?|gr|g|litros?|ml)\\b))?"
                         + "(?=" + terminadores + "|$)");
@@ -43,7 +43,9 @@ final class ItemVozParser {
 
         while (matcher.find()) {
             int cantidad = Integer.parseInt(matcher.group(1));
-            boolean esCaja = matcher.group(2).startsWith("caj");
+            // Sin cajas/unidades, un número de 4+ cifras es plata ("doña 5000"), no cantidad.
+            if (matcher.group(2) == null && cantidad >= 1000) continue;
+            boolean esCaja = matcher.group(2) != null && matcher.group(2).startsWith("caj");
             BigDecimal precioDicho = matcher.group(4) == null ? null : new BigDecimal(matcher.group(4));
             int cajas = esCaja ? cantidad : 0;
             int unidades = esCaja ? 0 : cantidad;
@@ -66,17 +68,11 @@ final class ItemVozParser {
     private static final Pattern OTRA_CANTIDAD =
             Pattern.compile("y\\s+(\\d+)\\s*" + TIPO + "\\s+(?:mas\\s+)?(?:de\\s+)?(.+)");
 
-    /** Mensaje según qué parte de la frase falta (cantidad, cajas/unidades o producto). */
+    /** Mensaje según qué parte de la frase falta (cantidad o producto). */
     static String explicarFalta(String textoNormalizado, String ejemplo) {
         if (!HAY_DIGITO.matcher(textoNormalizado).find()) {
             return "No entendí la cantidad. " + ejemplo;
         }
-        if (!HAY_TIPO.matcher(textoNormalizado).find()) {
-            return "Falta decir si son cajas o unidades. " + ejemplo;
-        }
-        if (!HAY_PRODUCTO.matcher(textoNormalizado).find()) {
-            return "Falta el producto. " + ejemplo;
-        }
-        return "No entendí las cantidades. " + ejemplo;
+        return "Falta el producto. " + ejemplo;
     }
 }
