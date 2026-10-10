@@ -26,12 +26,22 @@ public final class NormalizadorVoz {
             Map.entry("veintiseis", "26"), Map.entry("veintisiete", "27"), Map.entry("veintiocho", "28"),
             Map.entry("veintinueve", "29"), Map.entry("treinta", "30"), Map.entry("cuarenta", "40"),
             Map.entry("cincuenta", "50"), Map.entry("sesenta", "60"), Map.entry("setenta", "70"),
-            Map.entry("ochenta", "80"), Map.entry("noventa", "90"), Map.entry("cien", "100")
+            Map.entry("ochenta", "80"), Map.entry("noventa", "90"), Map.entry("cien", "100"),
+            Map.entry("veintiun", "21"), Map.entry("ciento", "100"), Map.entry("doscientos", "200"),
+            Map.entry("trescientos", "300"), Map.entry("cuatrocientos", "400"), Map.entry("quinientos", "500"),
+            Map.entry("seiscientos", "600"), Map.entry("setecientos", "700"), Map.entry("ochocientos", "800"),
+            Map.entry("novecientos", "900")
     );
 
     // "treinta y dos" -> tokens quedan como "30 y 2" tras el mapeo palabra-a-palabra; aquí se suman.
     private static final Pattern DECENA_Y_UNIDAD = Pattern.compile("\\b([1-9]0)\\s+y\\s+([1-9])\\b");
-    private static final Pattern MONTO_MILES = Pattern.compile("(?<=\\d)\\.(?=\\d{3}\\b)");
+    private static final Pattern CENTENA_Y_RESTO = Pattern.compile("\\b([1-9]00)\\s+([1-9]\\d?)\\b");
+    /** "3 mil 500" -> 3500, "10 mil" -> 10000, "mil 200" -> 1200. */
+    private static final Pattern MILES = Pattern.compile("\\b(?:(\\d{1,3})\\s+)?mil\\b(?:\\s+(\\d{1,3})\\b)?");
+    /** Chrome escribe los montos como "2.500" o "2,500". */
+    private static final Pattern MONTO_MILES = Pattern.compile("(?<=\\d)[.,](?=\\d{3}\\b)");
+    /** Puntuación que agrega el reconocedor; la coma se conserva porque separa ítems. */
+    private static final Pattern PUNTUACION = Pattern.compile("[¿?¡!.;:\"“”()]");
     private static final Pattern ESPACIOS = Pattern.compile("\\s+");
 
     public static String normalizar(String texto) {
@@ -39,6 +49,9 @@ public final class NormalizadorVoz {
 
         String t = texto.toLowerCase();
         t = Normalizer.normalize(t, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        t = MONTO_MILES.matcher(t).replaceAll("");
+        t = PUNTUACION.matcher(t).replaceAll(" ").replace(",", " , ").trim();
+        if (t.isEmpty()) return "";
 
         StringBuilder sb = new StringBuilder();
         for (String palabra : t.split("\\s+")) {
@@ -49,8 +62,14 @@ public final class NormalizadorVoz {
         t = DECENA_Y_UNIDAD.matcher(t).replaceAll(mr ->
                 String.valueOf(Integer.parseInt(mr.group(1)) + Integer.parseInt(mr.group(2))));
 
-        t = MONTO_MILES.matcher(t).replaceAll("");
+        t = CENTENA_Y_RESTO.matcher(t).replaceAll(mr ->
+                String.valueOf(Integer.parseInt(mr.group(1)) + Integer.parseInt(mr.group(2))));
+        t = MILES.matcher(t).replaceAll(mr -> {
+            int miles = mr.group(1) == null ? 1 : Integer.parseInt(mr.group(1));
+            int resto = mr.group(2) == null ? 0 : Integer.parseInt(mr.group(2));
+            return String.valueOf(miles * 1000 + resto);
+        });
 
-        return ESPACIOS.matcher(t).replaceAll(" ").trim();
+        return ESPACIOS.matcher(t).replaceAll(" ").replace(" ,", ",").trim();
     }
 }
