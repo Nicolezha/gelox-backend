@@ -19,11 +19,16 @@ import com.gelox.backend.voz.VozResultado;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * RF53 — "al pedido pendiente agrégale 10 de Festival". Opera siempre sobre
@@ -36,7 +41,20 @@ public class ModificarPedidoHandler implements IntencionHandler {
     /** "de <producto>", tolerando un "del/al pedido..." pegado al final. */
     private static final Pattern PRODUCTO_PATTERN =
             Pattern.compile("\\bde\\s+(.+?)(?:\\s+(?:del|al)\\s+pedido\\b.*)?$");
+    private static final Pattern AGREGAR = Pattern.compile("\\b(agreg|anad|sum|mete|metele|incluye|pon)\\w*");
+    private static final Pattern ELIMINAR = Pattern.compile("\\b(quit|saca|elimin|borr)\\w*");
+    /** "deja Festival en 30", "cambia a 30": reemplaza la cantidad en vez de sumarla. */
+    private static final Pattern ACTUALIZAR = Pattern.compile("\\b(cambi|actualiz|modific|corrig|deja)\\w*");
+
     private static final Pattern CANTIDAD_PATTERN = Pattern.compile("\\b(\\d+)\\b");
+
+    private static final DateTimeFormatter FECHA_CORTA = DateTimeFormatter.ofPattern("d 'de' MMMM", Locale.of("es", "CO"));
+
+    /** Sin "de": "saca el Solo Lack del pedido", "deja Festival en 30 cajas" → lo que sobra es el producto. */
+    private static final Pattern RELLENO = Pattern.compile(
+            "\\b(agreg|anad|sum|mete|metele|incluye|pon|quit|saca|elimin|borr|cambi|actualiz|modific|corrig|deja)\\w*"
+                    + "|\\b(al|el|la|los|las|del|en|a|y|con|lo|pedido|pendiente|proveedor|ultimo|cajas?|cajitas?"
+                    + "|unidad(es)?|mas|por favor|gelox)\\b|\\d+");
 
     private final PedidoProveedorRepository pedidoRepository;
     private final ResolvedorProducto resolvedorProducto;
@@ -64,21 +82,37 @@ public class ModificarPedidoHandler implements IntencionHandler {
             return sinCambios("No entendí qué quieres hacer con el pedido.");
         }
 
-        List<PedidoProveedor> pendientes = pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE);
+        List<PedidoProveedor> pendientes = pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)
+                .stream()
+                .sorted(Comparator.comparing(PedidoProveedor::getFecha)
+                        .thenComparing(PedidoProveedor::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .reversed())
+                .toList();
         if (pendientes.isEmpty()) {
             return sinCambios("No hay pedidos pendientes.");
         }
+
+        // Con varios pendientes hay que decir a cuál: "al pedido 2…", "al del 8 de octubre…", "al de ayer…".
+        PedidoProveedor elegido = pendientes.get(0);
+        if (pendientes.size() > 1) {
+            SelectorPedido selector = SelectorPedido.de(texto, ctx.hoy());
+            elegido = selector.elegir(pendientes);
+            if (elegido == null) {
+                return sinCambios(listarPendientes(pendientes));
+            }
+            texto = selector.textoSinSelector();
+        }
+
         // Los ítems y productos son lazy y aquí no hay sesión: se cargan con JOIN FETCH.
-        PedidoProveedor pedido = pedidoRepository.findByIdWithItems(pendientes.get(0).getId()).orElse(null);
+        PedidoProveedor pedido = pedidoRepository.findByIdWithItems(elegido.getId()).orElse(null);
         if (pedido == null) {
             return sinCambios("No hay pedidos pendientes.");
         }
 
-        Matcher productoMatcher = PRODUCTO_PATTERN.matcher(texto);
-        if (!productoMatcher.find()) {
+        String fragmentoProducto = extraerProducto(texto);
+        if (fragmentoProducto.isEmpty()) {
             return sinCambios("No entendí de qué producto se trata.");
         }
-        String fragmentoProducto = productoMatcher.group(1).trim();
 
         List<ResolvedorProducto.ProductoCandidato> candidatos = resolvedorProducto.resolver(fragmentoProducto);
         if (candidatos.isEmpty()) {
@@ -159,6 +193,21 @@ public class ModificarPedidoHandler implements IntencionHandler {
         return new VozResultado(true, "Pedido modificado. Ya puedes descargar el archivo actualizado.", datos, null);
     }
 
+    /** "Hay 2 pedidos pendientes: 1) del 10 de octubre: 20 cajas de Solo Lack…; 2) …. ¿A cuál?" */
+    private String listarPendientes(List<PedidoProveedor> pendientes) {
+        List<String> descripciones = new ArrayList<>();
+        for (int i = 0; i < pendientes.size(); i++) {
+            PedidoProveedor p = pedidoRepository.findByIdWithItems(pendientes.get(i).getId()).orElse(pendientes.get(i));
+            String productos = p.getItems() == null ? "" : p.getItems().stream().limit(2)
+                    .map(item -> item.getProducto().getNombre())
+                    .collect(Collectors.joining(" y "));
+            descripciones.add((i + 1) + ") del " + p.getFecha().format(FECHA_CORTA)
+                    + (productos.isEmpty() ? "" : " con " + productos));
+        }
+        return "Hay " + pendientes.size() + " pedidos pendientes: " + String.join("; ", descripciones)
+                + ". ¿A cuál? Di por ejemplo 'al pedido 1 agrégale 10 cajas de Festival'.";
+    }
+
     private VozResultado sinCambios(String mensaje) {
         return new VozResultado(false, mensaje, Map.of(), null);
     }
@@ -177,10 +226,16 @@ public class ModificarPedidoHandler implements IntencionHandler {
         return candidatos.size() >= 2 && (candidatos.get(0).score() - candidatos.get(1).score()) < 0.10;
     }
 
+    private static String extraerProducto(String texto) {
+        Matcher m = PRODUCTO_PATTERN.matcher(texto);
+        String fragmento = m.find() ? m.group(1) : RELLENO.matcher(texto).replaceAll(" ");
+        return fragmento.replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
+    }
+
     private AccionPedido detectarAccion(String texto) {
-        if (texto.contains("agregale") || texto.contains("agrega") || texto.contains("suma")) return AccionPedido.AGREGAR;
-        if (texto.contains("quita") || texto.contains("elimina") || texto.contains("borra")) return AccionPedido.ELIMINAR;
-        if (texto.contains("cambia") || texto.contains("actualiza") || texto.contains("dejalo en")) return AccionPedido.ACTUALIZAR;
+        if (ELIMINAR.matcher(texto).find()) return AccionPedido.ELIMINAR;
+        if (ACTUALIZAR.matcher(texto).find()) return AccionPedido.ACTUALIZAR;
+        if (AGREGAR.matcher(texto).find()) return AccionPedido.AGREGAR;
         return null;
     }
 }

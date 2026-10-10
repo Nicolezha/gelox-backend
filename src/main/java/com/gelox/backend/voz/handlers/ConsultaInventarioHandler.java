@@ -34,7 +34,18 @@ public class ConsultaInventarioHandler implements IntencionHandler {
 
     private static final Pattern PRODUCTO_PATTERN = Pattern.compile("\\bde\\s+(.+)$");
     private static final Pattern RELLENO_PRODUCTO =
-            Pattern.compile("\\b(me|quedan|quedaron|hay|tengo|disponibles)\\b");
+            Pattern.compile("\\b(me|nos|quedan?|quedaron|hay|tengo|tenemos|sobran?|disponibles?|todavia|aun|ya)\\b");
+
+    /** "productos con stock bajo", "qué se está acabando", "cuáles están agotados": listar, no un producto. */
+    private static final Pattern LISTADO =
+            Pattern.compile("\\b(bajos?|minimo|acaba\\w*|agotad\\w*|reponer|faltan|alertas?)\\b");
+
+    /** Lo que sobra al quitarlo de "¿cuántas Aloha Paleta Limón quedan?" es el producto. */
+    private static final Pattern RELLENO_CONSULTA = Pattern.compile(
+            "\\b(gelox|oye|hola|dime|digame|muestrame|mostrar|ensename|ver|consulta|consultar|revisa|revisar|cuant[oa]s?"
+                    + "|cuales?|que|como|es|son|las?|los?|el|en|del?|cajas?|unidad(es)?|existencias?|stock|inventario"
+                    + "|productos?|helados?|me|nos|quedan?|quedaron|hay|tengo|tenemos|sobran?|disponibles?|todavia|aun|ya"
+                    + "|por favor|\\d+)\\b");
 
     private final ResolvedorProducto resolvedorProducto;
     private final ProductoRepository productoRepository;
@@ -180,11 +191,15 @@ public class ConsultaInventarioHandler implements IntencionHandler {
     /** "cuántas cajas de festival me quedan" → "festival" (se descartan los rellenos). */
     private Optional<String> extraerProducto(String textoNormalizado) {
         Matcher m = PRODUCTO_PATTERN.matcher(textoNormalizado);
-        if (!m.find()) return Optional.empty();
-
-        String fragmento = RELLENO_PRODUCTO.matcher(m.group(1)).replaceAll("")
-                .replaceAll("[^a-z0-9 ]", "")
-                .replaceAll("\\s+", " ").trim();
+        String fragmento;
+        if (m.find()) {
+            fragmento = RELLENO_PRODUCTO.matcher(m.group(1)).replaceAll("");
+        } else if (LISTADO.matcher(textoNormalizado).find()) {
+            return Optional.empty();
+        } else {
+            fragmento = RELLENO_CONSULTA.matcher(textoNormalizado).replaceAll("");
+        }
+        fragmento = fragmento.replaceAll("[^a-z0-9 ]", "").replaceAll("\\s+", " ").trim();
         return fragmento.isEmpty() ? Optional.empty() : Optional.of(fragmento);
     }
 }

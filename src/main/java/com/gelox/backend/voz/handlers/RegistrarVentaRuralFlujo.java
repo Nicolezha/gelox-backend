@@ -45,7 +45,7 @@ public class RegistrarVentaRuralFlujo {
 
     /** Sobre el texto original: conserva mayúsculas y tildes del nombre. */
     private static final Pattern DESTINATARIO_PATTERN = Pattern.compile(
-            "(?iu)\\bpara\\s+(.+?)(?=\\s*,|\\s+con\\s+|\\s+en\\s+|\\s+env[ií]o\\b|$)");
+            "(?iu)\\bpara\\s+(.+?)(?=\\s*,|\\s+para\\b|\\s+con\\s+|\\s+en\\s+|\\s+env[ií]o\\b|$)");
     private static final Pattern HONORIFICO_PATTERN = Pattern.compile(
             "(?iu)^(do[nñ]a|don|se[nñ]ora|se[nñ]or|sra?\\.?|sr\\.?)\\s+");
 
@@ -53,7 +53,12 @@ public class RegistrarVentaRuralFlujo {
     private static final Pattern ENVIO_PATTERN = Pattern.compile("envio\\s+(?:de\\s+)?\\$?(\\d+)(\\s+mil\\b)?");
 
     private static final Pattern ITEM_PATTERN = ItemVozParser.patron(
-            "\\s*,|\\s+y\\s+|\\s+canal\\b|\\s+para\\b|\\s+envio\\b|\\s+con\\b|\\s+en\\b|\\s+por\\b");
+            "\\s*,|\\s+y\\s+|\\s+canal\\b|\\s+para\\b|\\s+envio\\b|\\s+con\\b|\\s+en\\b|\\s+por\\b"
+                    + "|\\s+pag\\w*|\\s+efectivo\\b|\\s+transferencia\\b");
+
+    /** Sin la palabra "envío" (el reconocedor a veces se la come): "para doña Marta 5000". */
+    private static final Pattern ENVIO_AL_FINAL =
+            Pattern.compile("\\bpara\\b[^,\\d]*?\\$?(\\d{3,})\\b(\\s+mil\\b)?");
 
     private static final String EJEMPLO = "Di algo como 'vende dos cajas de Aloha Mango Biche para doña Marta, envío 8.000'.";
     private static final String PREGUNTA_DESTINATARIO = "¿Para quién es el pedido rural?";
@@ -274,18 +279,30 @@ public class RegistrarVentaRuralFlujo {
         return new VozResultado(false, texto, Map.of("clientes", clientes), null);
     }
 
-    /** "para doña Marta, envío 8.000" → "Marta"; vacío si no se dijo. */
+    /**
+     * "para doña Marta, envío 8.000" → "Marta"; vacío si no se dijo. Se queda con el último
+     * "para" que traiga un nombre: si se preguntó el destinatario, la respuesta va al final.
+     */
     private String extraerDestinatario(String original) {
         Matcher matcher = DESTINATARIO_PATTERN.matcher(original);
-        if (!matcher.find()) return "";
-        String nombre = HONORIFICO_PATTERN.matcher(matcher.group(1).trim()).replaceFirst("");
-        // El dictado suele cerrar con punto: "para doña Marta."
-        return nombre.replaceAll("[.!?]+$", "").trim();
+        String destinatario = "";
+        while (matcher.find()) {
+            String nombre = HONORIFICO_PATTERN.matcher(matcher.group(1).trim()).replaceFirst("");
+            // El dictado suele cerrar con punto ("para doña Marta.") y un monto pegado no es parte del nombre.
+            nombre = nombre.replaceAll("[.!?]+$", "")
+                    .replaceAll("(?iu)\\$?\\d[\\d.,]*(\\s+mil)?(\\s+pesos)?", " ")
+                    .replaceAll("\\s+", " ").trim();
+            if (!nombre.isEmpty()) destinatario = nombre;
+        }
+        return destinatario;
     }
 
     private BigDecimal extraerCostoEnvio(String texto) {
         Matcher matcher = ENVIO_PATTERN.matcher(texto);
-        if (!matcher.find()) return BigDecimal.ZERO;
+        if (!matcher.find()) {
+            matcher = ENVIO_AL_FINAL.matcher(texto);
+            if (!matcher.find()) return BigDecimal.ZERO;
+        }
         BigDecimal costo = new BigDecimal(matcher.group(1));
         return matcher.group(2) != null ? costo.multiply(BigDecimal.valueOf(1000)) : costo;
     }

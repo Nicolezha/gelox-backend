@@ -116,6 +116,25 @@ class RegistrarVentaRuralFlujoTest {
     }
 
     @Test
+    @DisplayName("el reconocedor se come el nombre y la palabra envío: pregunta para quién y conserva el envío")
+    void sinNombreNiPalabraEnvio_preguntaYLuegoCompleta() {
+        stubFestivalConStock();
+        when(clienteRuralService.listarClientes("Marta Rojas")).thenReturn(List.of());
+
+        VozResultado primero = flujo.interpretar(ctx("Vende dos cajas de festival para doña 5000."));
+        assertThat(primero.textoRespuesta()).isEqualTo("¿Para quién es el pedido rural?");
+
+        VozPendiente pendiente = new VozPendiente(UUID.randomUUID(), usuario.getId(),
+                TipoIntencionVoz.REGISTRAR_VENTA, primero.payload(), Instant.now().plusSeconds(45));
+        VozResultado segundo = flujo.interpretar(new VozContexto("para doña Marta Rojas", Map.of(), 0.9,
+                usuario, LocalDate.now(), pendiente));
+
+        RegistrarVentaRuralFlujo.Payload payload = (RegistrarVentaRuralFlujo.Payload) segundo.payload();
+        assertThat(payload.nombreDestinatario()).isEqualTo("Marta Rojas");
+        assertThat(payload.costoEnvio()).isEqualByComparingTo("5000");
+    }
+
+    @Test
     @DisplayName("destinatario nuevo (0 coincidencias): sin clienteRuralId y lo indica en el texto")
     void destinatarioNuevo_sinClienteRural() {
         stubFestivalConStock();

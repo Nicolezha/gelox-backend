@@ -42,26 +42,47 @@ public class ClasificadorIntencion {
     private record Regla(TipoIntencionVoz intencion, Pattern patron) {
     }
 
+    /** "cierra el día", "cerremos la caja", "cuadre de caja", "resumen del día". */
+    private static final Pattern CIERRE = Pattern.compile(
+            "\\b(cierra|cierre|cerrar|cerremos|cerramos|cuadre|cuadra|cuadrar|cuadremos)\\b.*\\b(dia|caja)\\b"
+                    + "|resumen del dia");
+
+    /** Verbos que cambian un pedido ya hecho. */
+    private static final String MODIFICAR = "\\b(agreg|anad|sum|mete|metele|incluye|quit|saca|elimin|borr|cambi|actualiz|modific|corrig|deja)\\w*";
+
     /**
-     * consultar_finanzas va primero: "cuánto vendimos" contiene "vendi" y no es
-     * una venta. modificar_pedido se evalúa antes que generar_pedido: frases como
-     * "al pedido pendiente agrégale…" contienen la palabra "pedido" y deben
-     * resolver a MODIFICAR_PEDIDO, no a GENERAR_PEDIDO.
+     * El orden importa:
+     * <ul>
+     *   <li>finanzas va primero: "cuánto vendimos" contiene "vendi" y no es una venta;</li>
+     *   <li>los pedidos a proveedor van antes que la venta, salvo que sea "rural"
+     *   (un "pedido rural" es una venta rural, RF48);</li>
+     *   <li>modificar va antes que generar: "al pedido pendiente agrégale…" también dice "pedido".</li>
+     * </ul>
      */
     private static final List<Regla> REGLAS = List.of(
-            new Regla(TipoIntencionVoz.CONSULTAR_FINANZAS,
-                    Pattern.compile("cuant[oa]s?\\b.*\\b(ganamos|vendimos|vendio|hemos vendido)"
-                            + "|ganancia|ingresos|cierra el dia|cierre del dia|resumen del dia")),
-            new Regla(TipoIntencionVoz.REGISTRAR_VENTA,
-                    Pattern.compile("registr|vende|vendi|anota")),
-            new Regla(TipoIntencionVoz.CONSULTAR_INVENTARIO,
-                    Pattern.compile("cuant[oa]s?\\b.*\\b(quedan?|hay|tenemos|tengo)\\b|stock|inventario|se esta acabando")),
-            new Regla(TipoIntencionVoz.MODIFICAR_PEDIDO,
-                    Pattern.compile("(agrega|agregale|quita|elimina|cambia|actualiza).*pedido"
-                            + "|pedido.*(agrega|agregale|quita|elimina|cambia|actualiza)")),
-            new Regla(TipoIntencionVoz.GENERAR_PEDIDO,
-                    Pattern.compile("(genera|crea|haz|arma).*pedido"))
+            new Regla(TipoIntencionVoz.CONSULTAR_FINANZAS, Pattern.compile(
+                    "cuant[oa]s?\\b.*\\b(ganamos|ganado|vendimos|vendido|vendio|vendieron|facturamos|hicimos|entro|entraron|llevamos)\\b"
+                            + "|cuant[oa]s? ventas|cuanta plata|cuanto dinero"
+                            + "|\\b(ganancias?|utilidad\\w*|ingresos|margen|rentabilidad|balance)\\b"
+                            + "|\\bventas (de |del |de la |de este |de esta )?(hoy|ayer|dia|semana|mes|ano)\\b"
+                            + "|\\bcomo (nos )?(fue|va|vamos|estamos)\\b"
+                            + "|" + CIERRE.pattern())),
+            new Regla(TipoIntencionVoz.MODIFICAR_PEDIDO, Pattern.compile(
+                    "^(?!.*\\brural).*(" + MODIFICAR + ".*\\bpedido|\\bpedido\\b.*" + MODIFICAR + ")")),
+            new Regla(TipoIntencionVoz.GENERAR_PEDIDO, Pattern.compile(
+                    "^(?!.*\\brural).*(\\b(genera|crea|haz|hace|hacer|hagamos|arma|realiza|monta|pide|pidele|pedir|encarga|necesito|quiero|nuevo)\\w*.*\\bpedido"
+                            + "|\\bpedido (nuevo|al proveedor|a proveedor)|\\bpidele\\b.*\\bproveedor|\\bproveedor\\b)")),
+            new Regla(TipoIntencionVoz.REGISTRAR_VENTA, Pattern.compile(
+                    "registr|\\bvend|anota|\\bcobr|factur|\\bventa\\b|\\brural\\b")),
+            new Regla(TipoIntencionVoz.CONSULTAR_INVENTARIO, Pattern.compile(
+                    "cuant[oa]s?\\b.*\\b(quedan?|hay|tenemos|tengo|sobran?|disponibles?)\\b"
+                            + "|\\bqueda(n)?\\b|stock|inventario|existencia|disponib|agotad|acaba|\\bhay\\b|minimo"))
     );
+
+    /** Lo usan el clasificador y ConsultaFinancieraHandler para saber si piden el cierre del día. */
+    public static boolean esCierre(String textoNormalizado) {
+        return CIERRE.matcher(textoNormalizado).find();
+    }
 
     private static final Pattern CANTIDAD = Pattern.compile("\\b(\\d+)\\b");
     private static final Pattern PRODUCTO = Pattern.compile("\\bde\\s+(.+)$");
@@ -116,7 +137,7 @@ public class ClasificadorIntencion {
         if (texto.contains("rural")) slots.put("canal", "RURAL");
 
         if (intencion == TipoIntencionVoz.CONSULTAR_FINANZAS) {
-            if (texto.contains("cierra el dia") || texto.contains("cierre del dia")) {
+            if (esCierre(texto)) {
                 slots.put("tipo", "CIERRE");
             }
             if (texto.contains("ayer")) slots.put("periodo", "AYER");

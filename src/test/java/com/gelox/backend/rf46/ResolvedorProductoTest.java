@@ -66,11 +66,11 @@ class ResolvedorProductoTest {
     }
 
     @Test
-    @DisplayName("letra cambiada (\"solo lak\", no contenida en el nombre) resuelve por Levenshtein")
+    @DisplayName("letra cambiada (\"solo lap\", no suena igual) resuelve por Levenshtein")
     void coincidenciaDifusaPorLevenshtein() {
         when(productoRepository.findByActivoTrue()).thenReturn(List.of(festival, soloLack));
 
-        List<ResolvedorProducto.ProductoCandidato> candidatos = resolvedor.resolver("solo lak");
+        List<ResolvedorProducto.ProductoCandidato> candidatos = resolvedor.resolver("solo lap");
 
         assertThat(candidatos).hasSize(1);
         assertThat(candidatos.get(0).nombre()).isEqualTo("Solo Lack");
