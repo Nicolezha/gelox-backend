@@ -238,4 +238,34 @@ class ConsultaFinancieraHandlerTest {
         assertThat(ejecutado.datos().get("ingresosComerciantes")).isEqualTo(bd("300000"));
         assertThat(ejecutado.datos()).isEqualTo(interpretado.datos());
     }
+
+    @Test
+    @DisplayName("CP-18: Cuánto vendimos el mes de septiembre de 2026 devuelve el período específico")
+    void consultaMesSeptiembre2026() {
+        when(reporteFinancieroService.generarReporte(any())).thenReturn(reporte("100000", "50000", "200000"));
+
+        VozResultado r = handler.interpretar(ctx("cuánto vendimos el mes de septiembre de 2026", HOY));
+
+        ArgumentCaptor<PeriodoFiltroDTO> captor = ArgumentCaptor.forClass(PeriodoFiltroDTO.class);
+        verify(reporteFinancieroService).generarReporte(captor.capture());
+        assertThat(captor.getValue()).isEqualTo(new PeriodoFiltroDTO(LocalDate.of(2026, 9, 1), HOY));
+        assertThat(r.ok()).isTrue();
+        assertThat(r.datos().get("periodo")).isEqualTo("Septiembre de 2026");
+        assertThat(r.textoRespuesta()).contains("en septiembre de 2026");
+    }
+
+    @Test
+    @DisplayName("Consulta de un mes pasado finalizado devuelve el mes completo")
+    void consultaMesPasadoCompleto() {
+        when(reporteFinancieroService.generarReporte(any())).thenReturn(reporte("100000", "50000", "200000"));
+
+        VozResultado r = handler.interpretar(ctx("cuánto vendimos en agosto de 2026", HOY));
+
+        ArgumentCaptor<PeriodoFiltroDTO> captor = ArgumentCaptor.forClass(PeriodoFiltroDTO.class);
+        verify(reporteFinancieroService).generarReporte(captor.capture());
+        assertThat(captor.getValue()).isEqualTo(new PeriodoFiltroDTO(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31)));
+        assertThat(r.ok()).isTrue();
+        assertThat(r.datos().get("periodo")).isEqualTo("Agosto de 2026");
+        assertThat(r.textoRespuesta()).contains("en agosto de 2026");
+    }
 }

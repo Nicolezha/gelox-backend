@@ -42,6 +42,14 @@ public final class NormalizadorVoz {
     private static final Pattern MONTO_MILES = Pattern.compile("(?<=\\d)[.,](?=\\d{3}\\b)");
     /** Puntuación que agrega el reconocedor; la coma se conserva porque separa ítems. */
     private static final Pattern PUNTUACION = Pattern.compile("[¿?¡!.;:\"“”()]");
+    /** Colombianismos y modismos cucuteños: lucas (miles de pesos), pacas (cajas), muletillas. */
+    private static final Pattern LUCAS_PATTERN = Pattern.compile("\\b(\\d+)\\s+lucas?\\b");
+    private static final Pattern MULETILLAS_COLOMBIANAS = Pattern.compile(
+            "\\b(mano|ole|parce|parcero|toche|pingo|marica|mi rey|mi reina|veci|vecino|porfa|por fa|haga el favor|hagame el favor)\\b");
+    private static final Pattern VERBOS_COLOQUIALES = Pattern.compile(
+            "\\b(regaleme|regalame|deme|despacheme|pongame|anoteme|apunteme|sirvame)\\b");
+    private static final Pattern PACAS_PATTERN = Pattern.compile("\\bpacas?\\b");
+
     private static final Pattern ESPACIOS = Pattern.compile("\\s+");
 
     public static String normalizar(String texto) {
@@ -49,6 +57,21 @@ public final class NormalizadorVoz {
 
         String t = texto.toLowerCase();
         t = Normalizer.normalize(t, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+
+        // Limpieza de muletillas cucuteñas/colombianas comunes
+        t = MULETILLAS_COLOMBIANAS.matcher(t).replaceAll(" ");
+
+        // Normalización de verbos de pedido ("regálame", "deme" -> "registra")
+        t = VERBOS_COLOQUIALES.matcher(t).replaceAll("registra");
+
+        // "pacas" -> "cajas" (término comercial muy usado en Cúcuta)
+        t = PACAS_PATTERN.matcher(t).replaceAll("cajas");
+
+        // Jerga de dinero: "media luca" -> 500, "una luca" -> 1000, "barras" -> pesos
+        t = t.replaceAll("\\bmedia luca\\b", "500")
+             .replaceAll("\\buna luca\\b", "1000")
+             .replaceAll("\\bbarras?\\b", "pesos");
+
         t = MONTO_MILES.matcher(t).replaceAll("");
         t = PUNTUACION.matcher(t).replaceAll(" ").replace(",", " , ").trim();
         if (t.isEmpty()) return "";
@@ -64,6 +87,11 @@ public final class NormalizadorVoz {
 
         t = CENTENA_Y_RESTO.matcher(t).replaceAll(mr ->
                 String.valueOf(Integer.parseInt(mr.group(1)) + Integer.parseInt(mr.group(2))));
+
+        // "3 lucas" -> 3000
+        t = LUCAS_PATTERN.matcher(t).replaceAll(mr ->
+                String.valueOf(Integer.parseInt(mr.group(1)) * 1000));
+
         t = MILES.matcher(t).replaceAll(mr -> {
             int miles = mr.group(1) == null ? 1 : Integer.parseInt(mr.group(1));
             int resto = mr.group(2) == null ? 0 : Integer.parseInt(mr.group(2));

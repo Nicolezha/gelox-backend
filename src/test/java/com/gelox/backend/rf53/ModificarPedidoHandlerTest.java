@@ -153,6 +153,24 @@ class ModificarPedidoHandlerTest {
     }
 
     @Test
+    @DisplayName("CP-26: quitar cantidad específica resta y conserva el producto restante")
+    void eliminar_conCantidadRestaEnVezDeBorrarTodo() {
+        PedidoProveedor pedido = pedidoPendienteConFestival(2);
+        when(pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)).thenReturn(List.of(pedido));
+        when(pedidoRepository.findByIdWithItems(pedido.getId())).thenReturn(Optional.of(pedido));
+        when(resolvedorProducto.resolver("festival")).thenReturn(List.of(
+                new ResolvedorProducto.ProductoCandidato(festival.getId(), "Festival", 1.0, 24)));
+
+        VozResultado resultado = handler.interpretar(ctx("al pedido pendiente quitale 1 caja de festival"));
+
+        assertThat(resultado.ok()).isTrue();
+        assertThat(resultado.textoRespuesta()).contains("se quitan 1 cajas de Festival").contains("quedarían 1");
+        assertThat(resultado.datos()).containsEntry("accion", "ELIMINAR");
+        assertThat(resultado.datos()).containsEntry("cantidadAnterior", 2);
+        assertThat(resultado.datos()).containsEntry("cantidadNueva", 1);
+    }
+
+    @Test
     @DisplayName("actualizar: fija el valor absoluto en el resumen")
     void actualizar_generaResumen() {
         PedidoProveedor pedido = pedidoPendienteConFestival(15);

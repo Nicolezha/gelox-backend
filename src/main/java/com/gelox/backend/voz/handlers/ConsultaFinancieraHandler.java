@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -46,11 +47,33 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
     private static final DateTimeFormatter FORMATO_MES_LARGO =
             DateTimeFormatter.ofPattern("MMMM 'de' yyyy", Locale.of("es", "CO"));
 
+    private static final Map<String, Integer> MESES = Map.ofEntries(
+            Map.entry("enero", 1),
+            Map.entry("febrero", 2),
+            Map.entry("marzo", 3),
+            Map.entry("abril", 4),
+            Map.entry("mayo", 5),
+            Map.entry("junio", 6),
+            Map.entry("julio", 7),
+            Map.entry("agosto", 8),
+            Map.entry("septiembre", 9),
+            Map.entry("setiembre", 9),
+            Map.entry("octubre", 10),
+            Map.entry("noviembre", 11),
+            Map.entry("diciembre", 12)
+    );
+    private static final Pattern PATRON_MESES = Pattern.compile(
+            "\\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\\b");
+    private static final Pattern ANIO_NUMERICO = Pattern.compile("\\b(20\\d\\d)\\b");
+
     private final ReporteFinancieroService reporteFinancieroService;
     private final CierreDiaResumen cierreDiaResumen;
 
     /** {@code tipoConsulta} es "ventas" o "ganancia" (en minúsculas, como lo lee el frontend). */
-    private record Payload(PeriodoFiltroDTO periodo, Periodo periodoEnum, String tipoConsulta) {}
+    private record Payload(PeriodoFiltroDTO periodo, Periodo periodoEnum, String tipoConsulta,
+                           String etiquetaLarga, String etiquetaCorta) {}
+
+    private record InfoPeriodo(PeriodoFiltroDTO filtro, Periodo tipo, String etiquetaLarga, String etiquetaCorta) {}
 
     private enum Periodo { HOY, AYER, SEMANA, MES, ANIO }
 
@@ -74,11 +97,10 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
             return cierreDiaResumen.generarResumen(ctx.hoy());
         }
 
-        Periodo p = detectarPeriodo(texto);
-        PeriodoFiltroDTO periodo = periodoFiltro(p, ctx.hoy());
+        InfoPeriodo info = resolverPeriodo(texto, ctx.hoy());
         String tipoConsulta = detectarTipo(texto);
 
-        return construirRespuesta(periodo, p, tipoConsulta);
+        return construirRespuesta(info.filtro(), info.tipo(), tipoConsulta, info.etiquetaLarga(), info.etiquetaCorta());
     }
 
     /**
@@ -92,14 +114,14 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
             return cierreDiaResumen.generarResumen(cierrePayload.hoy());
         }
         Payload payload = (Payload) pendiente.payload();
-        return construirRespuesta(payload.periodo(), payload.periodoEnum(), payload.tipoConsulta());
+        return construirRespuesta(payload.periodo(), payload.periodoEnum(), payload.tipoConsulta(),
+                payload.etiquetaLarga(), payload.etiquetaCorta());
     }
 
-    private VozResultado construirRespuesta(PeriodoFiltroDTO periodo, Periodo p, String tipoConsulta) {
+    private VozResultado construirRespuesta(PeriodoFiltroDTO periodo, Periodo p, String tipoConsulta,
+                                            String etiquetaLarga, String etiquetaCorta) {
         ReporteFinancieroDTO reporte = reporteFinancieroService.generarReporte(periodo);
         NumberFormat moneda = NumberFormat.getCurrencyInstance(Locale.of("es", "CO"));
-        String etiquetaLarga = etiqueta(p, periodo);
-        String etiquetaCorta = etiquetaCorta(p);
 
         // LinkedHashMap y no Map.of: margenGanancia puede ser null.
         Map<String, Object> datos = new LinkedHashMap<>();
@@ -136,7 +158,31 @@ public class ConsultaFinancieraHandler implements IntencionHandler {
             texto = "Las ventas " + etiquetaCorta + " suman " + moneda.format(reporte.ingresosTotales()) + ".";
         }
 
-        return new VozResultado(true, texto, datos, new Payload(periodo, p, tipoConsulta));
+        return new VozResultado(true, texto, datos, new Payload(periodo, p, tipoConsulta, etiquetaLarga, etiquetaCorta));
+    }
+
+    private InfoPeriodo resolverPeriodo(String texto, LocalDate hoy) {
+        Matcher mMes = PATRON_MESES.matcher(texto);
+        if (mMes.find()) {
+            String mesNombre = mMes.group(1);
+            int mesNumero = MESES.get(mesNombre);
+            Matcher mAnio = ANIO_NUMERICO.matcher(texto);
+            int anio = mAnio.find() ? Integer.parseInt(mAnio.group(1)) : hoy.getYear();
+
+            LocalDate inicio = LocalDate.of(anio, mesNumero, 1);
+            LocalDate finDeMes = inicio.withDayOfMonth(inicio.lengthOfMonth());
+            LocalDate fin = (anio == hoy.getYear() && mesNumero == hoy.getMonthValue() && hoy.isBefore(finDeMes)) ? hoy : finDeMes;
+
+            String mesCap = mesNombre.substring(0, 1).toUpperCase() + mesNombre.substring(1);
+            String etiquetaLarga = mesCap + " de " + anio;
+            String etiquetaCorta = "en " + mesNombre + " de " + anio;
+
+            return new InfoPeriodo(new PeriodoFiltroDTO(inicio, fin), Periodo.MES, etiquetaLarga, etiquetaCorta);
+        }
+
+        Periodo p = detectarPeriodo(texto);
+        PeriodoFiltroDTO filtro = periodoFiltro(p, hoy);
+        return new InfoPeriodo(filtro, p, etiqueta(p, filtro), etiquetaCorta(p));
     }
 
     private Periodo detectarPeriodo(String texto) {

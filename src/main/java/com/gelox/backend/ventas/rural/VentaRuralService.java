@@ -136,10 +136,26 @@ public class VentaRuralService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Debe indicar clienteRuralId o nombreDestinatario");
             }
-            nombreDestinatario       = req.nombreDestinatario();
-            telefonoDestinatario     = req.telefonoDestinatario();
-            direccionDestinatario    = req.direccionDestinatario();
-            corregimientoDestinatario = req.corregimiento();
+            nombreDestinatario       = req.nombreDestinatario().trim();
+            telefonoDestinatario     = req.telefonoDestinatario() != null ? req.telefonoDestinatario().trim() : null;
+            direccionDestinatario    = req.direccionDestinatario() != null ? req.direccionDestinatario().trim() : null;
+            corregimientoDestinatario = req.corregimiento() != null ? req.corregimiento().trim() : null;
+
+            // CP-10: Registrar la persona en la tabla cliente_rural si no existe previamente
+            List<ClienteRural> existentes = clienteRuralRepository.buscarPorNombreOTelefono(nombreDestinatario);
+            clienteRural = existentes.stream()
+                    .filter(c -> c.getNombre().trim().equalsIgnoreCase(nombreDestinatario))
+                    .findFirst()
+                    .orElseGet(() -> {
+                        ClienteRural nuevo = ClienteRural.builder()
+                                .nombre(nombreDestinatario)
+                                .telefono(telefonoDestinatario)
+                                .direccion(direccionDestinatario)
+                                .corregimiento(corregimientoDestinatario)
+                                .recurrente(false)
+                                .build();
+                        return clienteRuralRepository.save(nuevo);
+                    });
         }
 
         // Serializar datos_destinatario como JSON

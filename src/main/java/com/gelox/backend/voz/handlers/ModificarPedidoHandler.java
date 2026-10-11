@@ -134,30 +134,41 @@ public class ModificarPedidoHandler implements IntencionHandler {
 
         String pedidoCorto = pedido.getId().toString().substring(0, 8).toUpperCase();
 
-        if (accion == AccionPedido.ELIMINAR) {
-            int cantidadAnterior = itemActual.getCantidadCajas() > 0
-                    ? itemActual.getCantidadCajas() : itemActual.getCantidadUnidades();
-
-            ModificarPedidoRequest request = new ModificarPedidoRequest(AccionPedido.ELIMINAR, producto.id(), null, null);
-            String textoRespuesta = "Al pedido #" + pedidoCorto + " se elimina " + producto.nombre() + ". ¿Confirmas?";
-
-            return new VozResultado(true, textoRespuesta,
-                    datosResumen(pedido.getId(), accion, producto.nombre(), cantidadAnterior, 0),
-                    new Payload(pedido.getId(), request));
-        }
-
         Matcher cantidadMatcher = CANTIDAD_PATTERN.matcher(texto);
-        if (!cantidadMatcher.find()) {
-            return sinCambios("No entendí la cantidad.");
-        }
-        int cantidad = Integer.parseInt(cantidadMatcher.group(1));
+        boolean tieneCantidad = cantidadMatcher.find();
+        int cantidad = tieneCantidad ? Integer.parseInt(cantidadMatcher.group(1)) : 0;
         boolean esCaja = !texto.contains("unidad");
         String unidadTexto = esCaja ? "cajas" : "unidades";
-        int cajas = esCaja ? cantidad : 0;
-        int unidades = esCaja ? 0 : cantidad;
-
         int cantidadAnterior = itemActual == null ? 0
                 : (esCaja ? itemActual.getCantidadCajas() : itemActual.getCantidadUnidades());
+
+        if (accion == AccionPedido.ELIMINAR) {
+            if (tieneCantidad && cantidad > 0 && cantidad < cantidadAnterior) {
+                int cantidadNueva = cantidadAnterior - cantidad;
+                int cajas = esCaja ? cantidadNueva : 0;
+                int unidades = esCaja ? 0 : cantidadNueva;
+                ModificarPedidoRequest request = new ModificarPedidoRequest(AccionPedido.ACTUALIZAR, producto.id(), cajas, unidades);
+                String textoRespuesta = "Al pedido #" + pedidoCorto + " se quitan " + cantidad + " " + unidadTexto
+                        + " de " + producto.nombre() + " (quedarían " + cantidadNueva + "). ¿Confirmas?";
+
+                return new VozResultado(true, textoRespuesta,
+                        datosResumen(pedido.getId(), accion, producto.nombre(), cantidadAnterior, cantidadNueva),
+                        new Payload(pedido.getId(), request));
+            } else {
+                ModificarPedidoRequest request = new ModificarPedidoRequest(AccionPedido.ELIMINAR, producto.id(), null, null);
+                String textoRespuesta = "Al pedido #" + pedidoCorto + " se elimina " + producto.nombre() + ". ¿Confirmas?";
+
+                return new VozResultado(true, textoRespuesta,
+                        datosResumen(pedido.getId(), accion, producto.nombre(), cantidadAnterior, 0),
+                        new Payload(pedido.getId(), request));
+            }
+        }
+
+        if (!tieneCantidad) {
+            return sinCambios("No entendí la cantidad.");
+        }
+        int cajas = esCaja ? cantidad : 0;
+        int unidades = esCaja ? 0 : cantidad;
 
         String textoRespuesta;
         int cantidadNueva;
