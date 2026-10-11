@@ -1,5 +1,5 @@
 -- ============================================================================
--- V3__triggers_inventario_y_auditoria.sql
+-- V4__triggers_inventario_y_auditoria.sql
 -- Optimización de cómputo en base de datos mediante Triggers y Stored Procedures
 -- Dominio: Inventario y Auditoría de Eventos del Sistema
 -- ============================================================================
