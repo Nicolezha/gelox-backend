@@ -45,7 +45,7 @@ public class RegistrarVentaRuralFlujo {
 
     /** Sobre el texto original: conserva mayúsculas y tildes del nombre. */
     private static final Pattern DESTINATARIO_PATTERN = Pattern.compile(
-            "(?iu)\\bpara\\s+(.+?)(?=\\s*,|\\s+para\\b|\\s+con\\s+|\\s+en\\s+|\\s+env[ií]o\\b|$)");
+            "(?iu)\\b(?:para|a)\\s+(.+?)(?=\\s*,|\\s+para\\b|\\s+con\\s+|\\s+en\\s+|\\s+env[ií]o\\b|\\s+\\d+\\b|$)");
     private static final Pattern HONORIFICO_PATTERN = Pattern.compile(
             "(?iu)^(do[nñ]a|don|se[nñ]ora|se[nñ]or|sra?\\.?|sr\\.?)\\s+");
 

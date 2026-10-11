@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * patrones. No usa ningún servicio externo.
  */
 @Component
-public class ClasificadorIntencion {
+public class ClasificadorIntencion implements ProcesadorLenguaje {
 
     public record ResultadoClasificacion(TipoIntencionVoz intencion, Map<String, String> slots) {
     }
@@ -34,6 +34,7 @@ public class ClasificadorIntencion {
     /**
      * El orden importa:
      * <ul>
+     *   <li>navegación va antes para reconocer "ve a X pestaña", "abre la pantalla de X";</li>
      *   <li>finanzas va primero: "cuánto vendimos" contiene "vendi" y no es una venta;</li>
      *   <li>los pedidos a proveedor van antes que la venta, salvo que sea "rural"
      *   (un "pedido rural" es una venta rural, RF48);</li>
@@ -41,11 +42,15 @@ public class ClasificadorIntencion {
      * </ul>
      */
     private static final List<Regla> REGLAS = List.of(
+            new Regla(TipoIntencionVoz.NAVEGACION, Pattern.compile(
+                    "\\b(ve a|ir a|ve a la|abre|ir al|llevame a|llévame a|navega a|pasa a|muestrame|abre la|pantalla de|pestana de|modulo de)\\b.*"
+                            + "\\b(ventanilla|ventas|rural|comerciante|comerciantes|cliente|clientes|inventario|inventarios|catalogo|pedidos|pedido|reporte|reportes|cierre|cierres|usuario|usuarios|dashboard|inicio|ajustes|merma|entrada)\\b")),
             new Regla(TipoIntencionVoz.CONSULTAR_FINANZAS, Pattern.compile(
                     "cuant[oa]s?\\b.*\\b(ganamos|ganado|vendimos|vendido|vendio|vendieron|facturamos|hicimos|entro|entraron|llevamos)\\b"
                             + "|cuant[oa]s? ventas|cuanta plata|cuanto dinero"
                             + "|\\b(ganancias?|utilidad\\w*|ingresos|margen|rentabilidad|balance)\\b"
-                            + "|\\bventas (de |del |de la |de este |de esta )?(hoy|ayer|dia|semana|mes|ano)\\b"
+                            + "|\\bventas (de |del |de la |de este |de esta )?(hoy|ayer|dia|semana|mes|ano|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\\b"
+                            + "|\\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\\b.*\\b(20\\d\\d)?\\b"
                             + "|\\bcomo (nos )?(fue|va|vamos|estamos)\\b"
                             + "|" + CIERRE.pattern())),
             new Regla(TipoIntencionVoz.MODIFICAR_PEDIDO, Pattern.compile(
@@ -68,6 +73,11 @@ public class ClasificadorIntencion {
     private static final Pattern CANTIDAD = Pattern.compile("\\b(\\d+)\\b");
     private static final Pattern PRODUCTO = Pattern.compile("\\bde\\s+(.+)$");
     private static final Pattern RELLENO_PRODUCTO = Pattern.compile("\\b(quedan|hay|por favor|ya|pendiente)\\b");
+
+    @Override
+    public ResultadoClasificacion procesar(String texto) {
+        return clasificar(texto);
+    }
 
     public ResultadoClasificacion clasificar(String texto) {
         String normalizado = NormalizadorVoz.normalizar(texto);
@@ -94,6 +104,10 @@ public class ClasificadorIntencion {
         }
 
         if (texto.contains("rural")) slots.put("canal", "RURAL");
+
+        if (intencion == TipoIntencionVoz.NAVEGACION) {
+            slots.put("destino", texto);
+        }
 
         if (intencion == TipoIntencionVoz.CONSULTAR_FINANZAS) {
             if (esCierre(texto)) {
