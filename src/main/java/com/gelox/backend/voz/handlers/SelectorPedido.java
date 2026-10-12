@@ -22,6 +22,10 @@ import java.util.regex.Pattern;
  */
 record SelectorPedido(Integer posicion, LocalDate fecha, boolean masAntiguo, String textoSinSelector) {
 
+    boolean tieneCriterio() {
+        return posicion != null || fecha != null || masAntiguo;
+    }
+
     private static final Map<String, Integer> ORDINALES = Map.ofEntries(
             Map.entry("primer", 1), Map.entry("primero", 1), Map.entry("ultimo", 1),
             Map.entry("mas reciente", 1), Map.entry("mas nuevo", 1),
@@ -41,7 +45,7 @@ record SelectorPedido(Integer posicion, LocalDate fecha, boolean masAntiguo, Str
 
     /** "pedido 2", pero no "al pedido 10 cajas de Festival" (eso es la cantidad). */
     private static final Pattern POSICION = Pattern.compile(
-            "\\bpedido\\s+(?:numero\\s+)?(\\d{1,2})\\b(?!\\s*(?:cajas?|cajitas?|unidad\\w*|de)\\b)");
+            "\\bpedido\\s+(?:numero\\s+|#\\s*)?(\\d{1,2})\\b(?!\\s*(?:cajas?|cajitas?|unidad\\w*|de)\\b)");
     private static final Pattern ORDINAL = Pattern.compile(
             "\\b(primero|primer|ultimo|mas reciente|mas nuevo|segundo|penultimo|anterior|tercero|tercer|cuarto|quinto)\\b");
     private static final Pattern MAS_ANTIGUO = Pattern.compile("\\bmas (viejo|antiguo)\\b");

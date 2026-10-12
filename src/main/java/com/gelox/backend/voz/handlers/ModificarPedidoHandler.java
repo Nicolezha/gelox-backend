@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,7 +47,14 @@ public class ModificarPedidoHandler implements IntencionHandler {
     /** "deja Festival en 30", "cambia a 30": reemplaza la cantidad en vez de sumarla. */
     private static final Pattern ACTUALIZAR = Pattern.compile("\\b(cambi|actualiz|modific|corrig|deja)\\w*");
 
-    private static final Pattern CANTIDAD_PATTERN = Pattern.compile("\\b(\\d+)\\b");
+    private static final Pattern CANTIDAD_CON_UNIDAD =
+            Pattern.compile("\\b(\\d+)\\s*(?:cajas?|cajitas?|unidad(?:es)?|unidaditas?|pacas?)\\b");
+    private static final Pattern CANTIDAD_CON_VERBO =
+            Pattern.compile("\\b(?:agreg|anad|sum|mete|metele|incluye|pon|quit|saca|elimin|borr)\\w*\\s+(\\d+)\\b");
+    private static final Pattern CANTIDAD_ACTUALIZAR =
+            Pattern.compile("\\b(?:a|en)\\s+(\\d+)\\b");
+    private static final Pattern CANTIDAD_GENERICA =
+            Pattern.compile("\\b(\\d+)\\b");
 
     private static final DateTimeFormatter FECHA_CORTA = DateTimeFormatter.ofPattern("d 'de' MMMM", Locale.of("es", "CO"));
 
@@ -92,15 +100,24 @@ public class ModificarPedidoHandler implements IntencionHandler {
             return sinCambios("No hay pedidos pendientes.");
         }
 
-        // Con varios pendientes hay que decir a cuál: "al pedido 2…", "al del 8 de octubre…", "al de ayer…".
-        PedidoProveedor elegido = pendientes.get(0);
-        if (pendientes.size() > 1) {
-            SelectorPedido selector = SelectorPedido.de(texto, ctx.hoy());
+        // Con varios pendientes hay que decir a cuál; con uno solo se acepta o se asume el único
+        SelectorPedido selector = SelectorPedido.de(texto, ctx.hoy());
+        texto = selector.textoSinSelector();
+
+        PedidoProveedor elegido;
+        if (selector.tieneCriterio()) {
             elegido = selector.elegir(pendientes);
             if (elegido == null) {
+                if (pendientes.size() == 1) {
+                    return sinCambios("Solo hay 1 pedido pendiente. Di por ejemplo 'al pedido 1' o directamente 'agrégale 10 cajas'.");
+                }
                 return sinCambios(listarPendientes(pendientes));
             }
-            texto = selector.textoSinSelector();
+        } else {
+            if (pendientes.size() > 1) {
+                return sinCambios(listarPendientes(pendientes));
+            }
+            elegido = pendientes.get(0);
         }
 
         // Los ítems y productos son lazy y aquí no hay sesión: se cargan con JOIN FETCH.
@@ -134,9 +151,9 @@ public class ModificarPedidoHandler implements IntencionHandler {
 
         String pedidoCorto = pedido.getId().toString().substring(0, 8).toUpperCase();
 
-        Matcher cantidadMatcher = CANTIDAD_PATTERN.matcher(texto);
-        boolean tieneCantidad = cantidadMatcher.find();
-        int cantidad = tieneCantidad ? Integer.parseInt(cantidadMatcher.group(1)) : 0;
+        OptionalInt cantidadOpt = extraerCantidad(texto);
+        boolean tieneCantidad = cantidadOpt.isPresent();
+        int cantidad = tieneCantidad ? cantidadOpt.getAsInt() : 0;
         boolean esCaja = !texto.contains("unidad");
         String unidadTexto = esCaja ? "cajas" : "unidades";
         int cantidadAnterior = itemActual == null ? 0
@@ -241,6 +258,33 @@ public class ModificarPedidoHandler implements IntencionHandler {
         Matcher m = PRODUCTO_PATTERN.matcher(texto);
         String fragmento = m.find() ? m.group(1) : RELLENO.matcher(texto).replaceAll(" ");
         return fragmento.replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
+    }
+
+    private static OptionalInt extraerCantidad(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return OptionalInt.empty();
+        }
+        // 1. Número con unidad explícita ("5 cajas", "2 unidades")
+        Matcher m = CANTIDAD_CON_UNIDAD.matcher(texto);
+        if (m.find()) {
+            return OptionalInt.of(Integer.parseInt(m.group(1)));
+        }
+        // 2. Número tras verbo de acción ("súmale 5", "quítale 2")
+        m = CANTIDAD_CON_VERBO.matcher(texto);
+        if (m.find()) {
+            return OptionalInt.of(Integer.parseInt(m.group(1)));
+        }
+        // 3. Número con preposición de destino ("deja en 30", "cambia a 15")
+        m = CANTIDAD_ACTUALIZAR.matcher(texto);
+        if (m.find()) {
+            return OptionalInt.of(Integer.parseInt(m.group(1)));
+        }
+        // 4. Número genérico restante
+        m = CANTIDAD_GENERICA.matcher(texto);
+        if (m.find()) {
+            return OptionalInt.of(Integer.parseInt(m.group(1)));
+        }
+        return OptionalInt.empty();
     }
 
     private AccionPedido detectarAccion(String texto) {
