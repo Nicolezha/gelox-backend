@@ -171,6 +171,54 @@ class ModificarPedidoHandlerTest {
     }
 
     @Test
+    @DisplayName("CP-25: 'Al pedido 1 súmale 5 cajas de festival' agrega 5 y no toma el 1 del pedido como cantidad")
+    void agregar_conSelectorPedido1_sumaCantidadCorrecta() {
+        PedidoProveedor pedido = pedidoPendienteConFestival(2);
+        when(pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)).thenReturn(List.of(pedido));
+        when(pedidoRepository.findByIdWithItems(pedido.getId())).thenReturn(Optional.of(pedido));
+        when(resolvedorProducto.resolver("festival")).thenReturn(List.of(
+                new ResolvedorProducto.ProductoCandidato(festival.getId(), "Festival", 1.0, 24)));
+
+        VozResultado resultado = handler.interpretar(ctx("Al pedido 1 súmale 5 cajas de festival."));
+
+        assertThat(resultado.ok()).isTrue();
+        assertThat(resultado.textoRespuesta()).contains("se agregan 5 cajas de Festival").contains("quedarían 7");
+        assertThat(resultado.datos()).containsEntry("accion", "AGREGAR");
+        assertThat(resultado.datos()).containsEntry("cantidadAnterior", 2);
+        assertThat(resultado.datos()).containsEntry("cantidadNueva", 7);
+    }
+
+    @Test
+    @DisplayName("CP-26: 'Pedido 1 quítale dos cajas de festival' resta 2 y no toma el 1 del pedido como cantidad")
+    void eliminar_conSelectorPedido1_restaCantidadCorrecta() {
+        PedidoProveedor pedido = pedidoPendienteConFestival(3);
+        when(pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)).thenReturn(List.of(pedido));
+        when(pedidoRepository.findByIdWithItems(pedido.getId())).thenReturn(Optional.of(pedido));
+        when(resolvedorProducto.resolver("festival")).thenReturn(List.of(
+                new ResolvedorProducto.ProductoCandidato(festival.getId(), "Festival", 1.0, 24)));
+
+        VozResultado resultado = handler.interpretar(ctx("Pedido 1 quítale dos cajas de festival."));
+
+        assertThat(resultado.ok()).isTrue();
+        assertThat(resultado.textoRespuesta()).contains("se quitan 2 cajas de Festival").contains("quedarían 1");
+        assertThat(resultado.datos()).containsEntry("accion", "ELIMINAR");
+        assertThat(resultado.datos()).containsEntry("cantidadAnterior", 3);
+        assertThat(resultado.datos()).containsEntry("cantidadNueva", 1);
+    }
+
+    @Test
+    @DisplayName("CP-25/26: decir pedido 2 cuando solo hay 1 pendiente responde mensaje claro")
+    void selectorPedidoInexistenteConUnSoloPendiente() {
+        PedidoProveedor pedido = pedidoPendienteConFestival(2);
+        when(pedidoRepository.findByEstadoOrderByFechaDesc(EstadoPedido.PENDIENTE)).thenReturn(List.of(pedido));
+
+        VozResultado resultado = handler.interpretar(ctx("Al pedido 2 súmale 5 cajas de festival"));
+
+        assertThat(resultado.ok()).isFalse();
+        assertThat(resultado.textoRespuesta()).contains("Solo hay 1 pedido pendiente");
+    }
+
+    @Test
     @DisplayName("actualizar: fija el valor absoluto en el resumen")
     void actualizar_generaResumen() {
         PedidoProveedor pedido = pedidoPendienteConFestival(15);
