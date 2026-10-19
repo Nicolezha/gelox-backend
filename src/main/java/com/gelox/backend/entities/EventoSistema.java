@@ -1,5 +1,6 @@
 package com.gelox.backend.entities;
 
+import com.gelox.backend.entities.tenant.TenantAware;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -13,11 +14,14 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class EventoSistema {
+public class EventoSistema implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Column(name = "tenant_id")
+    private UUID tenantId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

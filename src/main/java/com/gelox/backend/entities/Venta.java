@@ -1,5 +1,6 @@
 package com.gelox.backend.entities;
 
+import com.gelox.backend.entities.tenant.TenantAware;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -13,12 +14,15 @@ import java.util.UUID;
 @AllArgsConstructor
 @Entity
 @Table(name = "venta")
-public class Venta {
+public class Venta implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(updatable = false, nullable = false)
     private UUID id;
+
+    @Column(name = "tenant_id")
+    private UUID tenantId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "canal", nullable = false)

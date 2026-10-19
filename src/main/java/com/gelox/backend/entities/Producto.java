@@ -1,5 +1,6 @@
 package com.gelox.backend.entities;
 
+import com.gelox.backend.entities.tenant.TenantAware;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -7,13 +8,16 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "producto")
-public class Producto {
+public class Producto implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "codigo_tecnico", nullable = false, unique = true)
+    @Column(name = "tenant_id")
+    private UUID tenantId;
+
+    @Column(name = "codigo_tecnico", nullable = false)
     private String codigoTecnico;
 
     @Column(nullable = false)
@@ -75,6 +79,11 @@ public class Producto {
     // Getters y Setters
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+
+    @Override
+    public UUID getTenantId() { return tenantId; }
+    @Override
+    public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
 
     public String getCodigoTecnico() { return codigoTecnico; }
     public void setCodigoTecnico(String codigoTecnico) { this.codigoTecnico = codigoTecnico; }

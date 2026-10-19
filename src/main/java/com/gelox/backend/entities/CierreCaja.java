@@ -1,5 +1,6 @@
 package com.gelox.backend.entities;
 
+import com.gelox.backend.entities.tenant.TenantAware;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,15 +17,18 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "cierre_caja", uniqueConstraints = @UniqueConstraint(columnNames = "fecha"))
-public class CierreCaja {
+@Table(name = "cierre_caja", uniqueConstraints = @UniqueConstraint(columnNames = {"tenant_id", "fecha"}))
+public class CierreCaja implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "fecha", nullable = false, unique = true)
+    @Column(name = "tenant_id")
+    private UUID tenantId;
+
+    @Column(name = "fecha", nullable = false)
     private LocalDate fecha;
 
     @ManyToOne(fetch = FetchType.LAZY)
