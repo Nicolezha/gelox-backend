@@ -10,6 +10,7 @@ import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.services.UsuarioService;
+import com.gelox.backend.tenant.TenantContext;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.UserRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,6 +67,7 @@ class GestionUsuariosTest {
     private static final String UID_ADMIN     = "uid-admin-test-001";
     private static final String UID_ENCARGADO = "uid-encargado-test-001";
     private static final UUID   ID_USUARIO    = UUID.randomUUID();
+    private static final UUID   TENANT        = UUID.randomUUID();
 
     private Usuario admin;
     private Usuario encargado;
@@ -82,13 +84,16 @@ class GestionUsuariosTest {
                 .correo("target@gelox-test.com")
                 .rol(RolUsuario.ENCARGADO_VENTAS)
                 .activo(true)
+                .tenantId(TENANT)
                 .build();
+        TenantContext.set(TENANT);
     }
 
     @org.junit.jupiter.api.AfterEach
     void limpiarContextoDeSeguridad() {
         // El contexto es thread-local: sin limpiar, contamina a los tests de controlador siguientes.
         SecurityContextHolder.clearContext();
+        TenantContext.clear();
     }
 
     private void setSecurityContext(Usuario usuario) {

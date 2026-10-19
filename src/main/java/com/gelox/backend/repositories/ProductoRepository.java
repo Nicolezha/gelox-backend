@@ -40,6 +40,7 @@ public interface ProductoRepository extends JpaRepository<Producto, UUID> {
                        / COALESCE(NULLIF(p.unidades_por_caja, 0), 1)::numeric AS valor_inmovilizado
             FROM producto p
             WHERE p.activo = true
+              AND p.tenant_id = :tenantId
               AND p.stock_actual > 0
               AND NOT EXISTS (SELECT 1 FROM movimiento_inventario m
                                WHERE m.producto_id = p.id
@@ -47,7 +48,8 @@ public interface ProductoRepository extends JpaRepository<Producto, UUID> {
                                  AND m.fecha >= :desde)
             ORDER BY valor_inmovilizado DESC, p.nombre ASC
             """, nativeQuery = true)
-    List<Object[]> findInventarioMuerto(@Param("desde") java.time.LocalDateTime desde);
+    List<Object[]> findInventarioMuerto(@Param("tenantId") UUID tenantId,
+                                        @Param("desde") java.time.LocalDateTime desde);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Producto p WHERE p.id IN :ids")

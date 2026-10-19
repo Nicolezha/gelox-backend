@@ -15,6 +15,7 @@ import com.gelox.backend.exceptions.PlanillaYaLiquidadaException;
 import com.gelox.backend.repositories.ItemPlanillaRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
 import com.gelox.backend.security.RequiereRol;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,7 @@ public class LiquidacionService {
 
         // 1. Obtener planilla; lanzar 404 si no existe
         PlanillaComerciante planilla = planillaRepository.findById(planillaId)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new PlanillaNoEncontradaException(
                         "Planilla no encontrada: " + planillaId));
 

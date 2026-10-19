@@ -8,6 +8,7 @@ import com.gelox.backend.entities.Producto;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.security.RequiereRol;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,7 @@ public class ProductoService {
         validarCategoria(dto.getCategoria());
 
         Producto producto = productoRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Producto no encontrado con id: " + id));
 
@@ -106,6 +108,7 @@ public class ProductoService {
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     public void desactivarProducto(UUID id, UUID usuarioId) {
         Producto producto = productoRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Producto no encontrado con id: " + id));
 
@@ -122,6 +125,7 @@ public class ProductoService {
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     public void activarProducto(UUID id, UUID usuarioId) {
         Producto producto = productoRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Producto no encontrado con id: " + id));
 
@@ -148,6 +152,7 @@ public class ProductoService {
     @Transactional(readOnly = true)
     public ProductoResponseDTO obtenerProducto(UUID id) {
         return productoRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .map(this::toDTO)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Producto no encontrado con id: " + id));

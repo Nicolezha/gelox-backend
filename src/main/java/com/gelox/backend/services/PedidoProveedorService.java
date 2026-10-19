@@ -5,6 +5,7 @@ import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.*;
 import com.gelox.backend.repositories.*;
 import com.gelox.backend.security.RequiereRol;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -62,6 +63,7 @@ public class PedidoProveedorService {
         List<ItemPedidoProveedor> items = new ArrayList<>();
         for (ItemPedidoRequest ir : req.items()) {
             Producto producto = productoRepo.findById(ir.productoId())
+                    .filter(TenantContext::pertenece)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Producto no encontrado: " + ir.productoId()));
 
@@ -118,6 +120,7 @@ public class PedidoProveedorService {
 
         if (req.pedidoId() != null) {
             pedido = pedidoRepo.findById(req.pedidoId())
+                    .filter(TenantContext::pertenece)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Pedido no encontrado: " + req.pedidoId()));
             itemPedidoRepo.findByPedidoIdWithProducto(req.pedidoId())
@@ -128,6 +131,7 @@ public class PedidoProveedorService {
         // Procesar cada producto recibido
         for (ItemEntradaRequest ir : req.items()) {
             Producto producto = productoRepo.findById(ir.productoId())
+                    .filter(TenantContext::pertenece)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Producto no encontrado: " + ir.productoId()));
 
@@ -236,6 +240,7 @@ public class PedidoProveedorService {
     public PerdidaResponseDTO registrarPerdida(RegistrarPerdidaRequest req, Usuario usuarioActual) {
 
         Producto producto = productoRepo.findById(req.productoId())
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Producto no encontrado: " + req.productoId()));
 
@@ -480,7 +485,7 @@ public class PedidoProveedorService {
             String estadoParam    = (estadoEnum != null) ? estadoEnum.name() : null;
             String fechaInicioStr = fechaInicio != null ? fechaInicio.toString() : "0001-01-01";
             String fechaFinStr    = fechaFin    != null ? fechaFin.toString()    : "9999-12-31";
-            todos = pedidoRepo.findResumenWithFilters(estadoParam, fechaInicioStr, fechaFinStr)
+            todos = pedidoRepo.findResumenWithFilters(TenantContext.requerido(), estadoParam, fechaInicioStr, fechaFinStr)
                     .stream()
                     .map(PedidoResumenDTO::fromRow)
                     .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
@@ -559,6 +564,7 @@ public class PedidoProveedorService {
         }
 
         Producto producto = productoRepo.findById(req.productoId())
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Producto no encontrado: " + req.productoId()));
 

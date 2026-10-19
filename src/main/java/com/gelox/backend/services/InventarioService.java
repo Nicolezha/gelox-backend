@@ -12,6 +12,7 @@ import com.gelox.backend.exceptions.StockInsuficienteException;
 import com.gelox.backend.repositories.MovimientoInventarioRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.security.RequiereRol;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,7 +88,7 @@ public class InventarioService {
         LocalDateTime ahora = LocalDateTime.now();
         boolean esAdmin = "ADMINISTRADOR".equals(rolUsuario);   // costos solo para el Gerente
 
-        return productoRepository.findInventarioMuerto(ahora.minusDays(diasSeguros))
+        return productoRepository.findInventarioMuerto(TenantContext.requerido(), ahora.minusDays(diasSeguros))
                 .stream()
                 .map(r -> {
                     LocalDateTime ultimaSalida = toLocalDateTime(r[4]);

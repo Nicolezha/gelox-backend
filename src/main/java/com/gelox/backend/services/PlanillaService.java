@@ -14,6 +14,7 @@ import com.gelox.backend.repositories.ItemPlanillaRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.security.RequiereRol;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,7 @@ public class PlanillaService {
 
         // 1. Validar que el comerciante exista y esté activo
         Comerciante comerciante = comercianteRepository.findById(req.comercianteId())
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Comerciante no encontrado."));
         if (!Boolean.TRUE.equals(comerciante.getActivo())) {
@@ -163,6 +165,7 @@ public class PlanillaService {
                                    Usuario usuario) {
 
         PlanillaComerciante planilla = planillaRepository.findById(planillaId)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Planilla no encontrada"));
         if (Boolean.TRUE.equals(planilla.getCerrada())) {
@@ -208,6 +211,7 @@ public class PlanillaService {
     @Transactional(readOnly = true)
     public PlanillaImpresionResponseDTO obtenerParaImpresion(UUID planillaId) {
         PlanillaComerciante planilla = planillaRepository.findById(planillaId)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Planilla no encontrada"));
 

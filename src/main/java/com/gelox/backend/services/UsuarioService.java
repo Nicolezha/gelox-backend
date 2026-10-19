@@ -8,6 +8,7 @@ import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.security.RequiereRol;
+import com.gelox.backend.tenant.TenantContext;
 import com.google.firebase.auth.AuthErrorCode;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
@@ -34,6 +35,8 @@ public class UsuarioService {
     public UsuarioResponseDTO crearUsuario(CrearUsuarioDTO dto) throws Exception {
         validarRol(dto.getRol());
         dto.setCorreo(normalizarCorreo(dto.getCorreo()));
+        // Antes de crear la cuenta en Firebase: sin distribuidora no se crea nada
+        UUID tenantId = TenantContext.requerido();
 
         // RF03 — el correo no se puede repetir
         if (usuarioRepository.existsByCorreo(dto.getCorreo())) {
@@ -56,7 +59,7 @@ public class UsuarioService {
         }
 
         FirebaseAuth.getInstance().setCustomUserClaims(
-                firebaseUser.getUid(), Map.of("rol", dto.getRol())
+                firebaseUser.getUid(), Map.of("rol", dto.getRol(), "tenant_id", tenantId.toString())
         );
 
         Usuario usuario = new Usuario();
@@ -66,6 +69,8 @@ public class UsuarioService {
         usuario.setRol(RolUsuario.valueOf(dto.getRol()));
         usuario.setFotoUrl(dto.getFotoUrl());
         usuario.setActivo(true);
+        // La relación distribuidora es de solo lectura (insertable = false): se persiste por tenant_id
+        usuario.setTenantId(tenantId);
 
         Usuario saved = usuarioRepository.save(usuario);
         eventoSistemaService.registrarEvento(
@@ -92,6 +97,7 @@ public class UsuarioService {
         validarRol(dto.getRol());
 
         Usuario usuario = usuarioRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con id: " + id));
 
         // RF03 — el correo no puede pertenecer a otro usuario
@@ -110,7 +116,7 @@ public class UsuarioService {
         );
 
         FirebaseAuth.getInstance().setCustomUserClaims(
-                usuario.getFirebaseUid(), Map.of("rol", dto.getRol())
+                usuario.getFirebaseUid(), Map.of("rol", dto.getRol(), "tenant_id", TenantContext.requerido().toString())
         );
 
         usuario.setNombre(dto.getNombre());
@@ -130,6 +136,7 @@ public class UsuarioService {
     @RequiereRol("ADMINISTRADOR")
     public void deshabilitarUsuario(UUID id) throws Exception {
         Usuario usuario = usuarioRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con id: " + id));
 
         FirebaseAuth.getInstance().updateUser(
@@ -161,6 +168,7 @@ public class UsuarioService {
     @RequiereRol("ADMINISTRADOR")
     public UsuarioResponseDTO obtenerUsuario(UUID id) {
         Usuario usuario = usuarioRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con id: " + id));
         return toDTO(usuario);
     }
@@ -191,6 +199,7 @@ public class UsuarioService {
     @RequiereRol("ADMINISTRADOR")
     public void habilitarUsuario(UUID id) throws Exception {
         Usuario usuario = usuarioRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con id: " + id));
 
         FirebaseAuth.getInstance().updateUser(

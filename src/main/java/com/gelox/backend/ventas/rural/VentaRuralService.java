@@ -1,5 +1,6 @@
 package com.gelox.backend.ventas.rural;
 
+import com.gelox.backend.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gelox.backend.entities.*;
@@ -125,6 +126,7 @@ public class VentaRuralService {
 
         if (req.clienteRuralId() != null) {
             clienteRural = clienteRuralRepository.findById(req.clienteRuralId())
+                    .filter(TenantContext::pertenece)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                             "Cliente rural no encontrado: " + req.clienteRuralId()));
             nombreDestinatario       = clienteRural.getNombre();

@@ -11,6 +11,7 @@ import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.services.AuthService;
+import com.gelox.backend.tenant.DistribuidoraEstadoCache;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import org.junit.jupiter.api.BeforeEach;
@@ -142,7 +143,8 @@ class LoginTest {
         when(firebaseAuth.verifyIdToken("token-invalido"))
                 .thenThrow(mock(FirebaseAuthException.class));
 
-        FirebaseAuthFilter filtro = new FirebaseAuthFilter(firebaseAuth, usuarioRepository);
+        FirebaseAuthFilter filtro = new FirebaseAuthFilter(firebaseAuth, usuarioRepository,
+                mock(DistribuidoraEstadoCache.class));
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer token-invalido");
         MockHttpServletResponse response = new MockHttpServletResponse();

@@ -7,6 +7,7 @@ import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.ComercianteRepository;
 import com.gelox.backend.repositories.ItemPlanillaRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -153,7 +154,7 @@ public class ComercianteService {
 
         // Sin fechas → sin límite (la query filtra con IS NULL OR)
         return comercianteRepo
-                .findPlanillasResumen(comercianteId, fechaInicio, fechaFin)
+                .findPlanillasResumen(TenantContext.requerido(), comercianteId, fechaInicio, fechaFin)
                 .stream()
                 .map(PlanillaResumenDTO::fromRow)
                 .toList();
@@ -188,6 +189,7 @@ public class ComercianteService {
 
     private Comerciante buscarOFallar(UUID id) {
         return comercianteRepo.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new NoSuchElementException(
                         "Comerciante no encontrado con id: " + id));
     }

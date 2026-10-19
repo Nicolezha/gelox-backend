@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Repositorio para los reportes diarios (RF40, RF41).
@@ -33,73 +34,85 @@ public class ReporteDiarioRepository {
     // RF40 — Indicadores consolidados del día
     // ══════════════════════════════════════════════════════════════════════════
 
-    public BigDecimal getIngresosVentanillaDia(LocalDate fecha) {
+    public BigDecimal getIngresosVentanillaDia(UUID tenantId, LocalDate fecha) {
         Object r = em.createNativeQuery("""
                 SELECT COALESCE(SUM(v.total), 0)
                 FROM venta v
                 WHERE v.fecha::date = :fecha
+                  AND v.tenant_id = :tenantId
                   AND v.canal = 'VENTANILLA'
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha", fecha)
                 .getSingleResult();
         return toBigDecimal(r);
     }
 
-    public BigDecimal getIngresosRuralDia(LocalDate fecha) {
+    public BigDecimal getIngresosRuralDia(UUID tenantId, LocalDate fecha) {
         Object r = em.createNativeQuery("""
                 SELECT COALESCE(SUM(v.total), 0)
                 FROM venta v
                 WHERE v.fecha::date = :fecha
+                  AND v.tenant_id = :tenantId
                   AND v.canal = 'RURAL'
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha", fecha)
                 .getSingleResult();
         return toBigDecimal(r);
     }
 
-    public BigDecimal getIngresosComerciantesDia(LocalDate fecha) {
+    public BigDecimal getIngresosComerciantesDia(UUID tenantId, LocalDate fecha) {
         Object r = em.createNativeQuery("""
                 SELECT COALESCE(SUM(p.total_ganancia), 0)
                 FROM planilla_comerciante p
                 WHERE p.fecha = :fecha
+                  AND p.tenant_id = :tenantId
                   AND p.cerrada = true
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha", fecha)
                 .getSingleResult();
         return toBigDecimal(r);
     }
 
-    public long countVentanillaDia(LocalDate fecha) {
+    public long countVentanillaDia(UUID tenantId, LocalDate fecha) {
         Object r = em.createNativeQuery("""
                 SELECT COUNT(*)
                 FROM venta v
                 WHERE v.fecha::date = :fecha
+                  AND v.tenant_id = :tenantId
                   AND v.canal = 'VENTANILLA'
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha", fecha)
                 .getSingleResult();
         return ((Number) r).longValue();
     }
 
-    public long countRuralDia(LocalDate fecha) {
+    public long countRuralDia(UUID tenantId, LocalDate fecha) {
         Object r = em.createNativeQuery("""
                 SELECT COUNT(*)
                 FROM venta v
                 WHERE v.fecha::date = :fecha
+                  AND v.tenant_id = :tenantId
                   AND v.canal = 'RURAL'
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha", fecha)
                 .getSingleResult();
         return ((Number) r).longValue();
     }
 
-    public long countPlanillasDia(LocalDate fecha) {
+    public long countPlanillasDia(UUID tenantId, LocalDate fecha) {
         Object r = em.createNativeQuery("""
                 SELECT COUNT(*)
                 FROM planilla_comerciante p
                 WHERE p.fecha = :fecha
+                  AND p.tenant_id = :tenantId
                   AND p.cerrada = true
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha", fecha)
                 .getSingleResult();
         return ((Number) r).longValue();
@@ -110,7 +123,7 @@ public class ReporteDiarioRepository {
     // ══════════════════════════════════════════════════════════════════════════
 
     @SuppressWarnings("unchecked")
-    public List<Object[]> getTransaccionesVentanilla(LocalDate fecha, int offset, int limit) {
+    public List<Object[]> getTransaccionesVentanilla(UUID tenantId, LocalDate fecha, int offset, int limit) {
         return em.createNativeQuery("""
                 SELECT
                     v.id::text,
@@ -134,10 +147,12 @@ public class ReporteDiarioRepository {
                     v.metodo_pago::text AS metodo_pago
                 FROM venta v
                 WHERE v.fecha::date = :fecha
+                  AND v.tenant_id = :tenantId
                   AND v.canal = 'VENTANILLA'
                 ORDER BY v.fecha DESC
                 LIMIT :limit OFFSET :offset
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha",  fecha)
                 .setParameter("limit",  limit)
                 .setParameter("offset", offset)
@@ -145,7 +160,7 @@ public class ReporteDiarioRepository {
     }
 
     @SuppressWarnings("unchecked")
-    public List<Object[]> getTransaccionesRural(LocalDate fecha, int offset, int limit) {
+    public List<Object[]> getTransaccionesRural(UUID tenantId, LocalDate fecha, int offset, int limit) {
         return em.createNativeQuery("""
                 SELECT
                     v.id::text,
@@ -174,10 +189,12 @@ public class ReporteDiarioRepository {
                 LEFT JOIN cliente_rural cr ON cr.id = v.cliente_rural_id
                 LEFT JOIN pedido_rural  pr ON pr.venta_id = v.id
                 WHERE v.fecha::date = :fecha
+                  AND v.tenant_id = :tenantId
                   AND v.canal = 'RURAL'
                 ORDER BY v.fecha DESC
                 LIMIT :limit OFFSET :offset
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha",  fecha)
                 .setParameter("limit",  limit)
                 .setParameter("offset", offset)
@@ -185,7 +202,7 @@ public class ReporteDiarioRepository {
     }
 
     @SuppressWarnings("unchecked")
-    public List<Object[]> getTransaccionesPlanilla(LocalDate fecha, int offset, int limit) {
+    public List<Object[]> getTransaccionesPlanilla(UUID tenantId, LocalDate fecha, int offset, int limit) {
         return em.createNativeQuery("""
                 SELECT
                     pc.id::text,
@@ -205,10 +222,12 @@ public class ReporteDiarioRepository {
                 FROM planilla_comerciante pc
                 JOIN comerciante c ON c.id = pc.comerciante_id
                 WHERE pc.fecha = :fecha
+                  AND pc.tenant_id = :tenantId
                   AND pc.cerrada = true
                 ORDER BY pc.total_ganancia DESC
                 LIMIT :limit OFFSET :offset
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha",  fecha)
                 .setParameter("limit",  limit)
                 .setParameter("offset", offset)
@@ -216,7 +235,7 @@ public class ReporteDiarioRepository {
     }
 
     @SuppressWarnings("unchecked")
-    public List<Object[]> getTodasTransacciones(LocalDate fecha, int offset, int limit) {
+    public List<Object[]> getTodasTransacciones(UUID tenantId, LocalDate fecha, int offset, int limit) {
         return em.createNativeQuery("""
                 SELECT * FROM (
                     (SELECT
@@ -241,6 +260,7 @@ public class ReporteDiarioRepository {
                         v.metodo_pago::text AS metodo_pago
                     FROM venta v
                     WHERE v.fecha::date = :fecha
+                      AND v.tenant_id = :tenantId
                       AND v.canal = 'VENTANILLA')
                     UNION ALL
                     (SELECT
@@ -270,6 +290,7 @@ public class ReporteDiarioRepository {
                     LEFT JOIN cliente_rural cr ON cr.id = v.cliente_rural_id
                     LEFT JOIN pedido_rural  pr ON pr.venta_id = v.id
                     WHERE v.fecha::date = :fecha
+                      AND v.tenant_id = :tenantId
                       AND v.canal = 'RURAL')
                     UNION ALL
                     (SELECT
@@ -290,11 +311,13 @@ public class ReporteDiarioRepository {
                     FROM planilla_comerciante pc
                     JOIN comerciante c ON c.id = pc.comerciante_id
                     WHERE pc.fecha = :fecha
+                      AND pc.tenant_id = :tenantId
                       AND pc.cerrada = true)
                 ) t
                 ORDER BY hora DESC NULLS LAST
                 LIMIT :limit OFFSET :offset
                 """)
+                .setParameter("tenantId", tenantId)
                 .setParameter("fecha",  fecha)
                 .setParameter("limit",  limit)
                 .setParameter("offset", offset)

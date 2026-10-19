@@ -1,7 +1,9 @@
 package com.gelox.backend.entities;
 
 import com.gelox.backend.entities.tenant.TenantAware;
+import com.gelox.backend.tenant.TenantEntityListener;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -14,6 +16,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@EntityListeners(TenantEntityListener.class)
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @Table(name = "planilla_comerciante")
 public class PlanillaComerciante implements TenantAware {
 
