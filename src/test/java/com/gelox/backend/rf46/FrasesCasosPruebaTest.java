@@ -3,6 +3,8 @@ package com.gelox.backend.rf46;
 import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.voz.ClasificadorIntencion;
 import com.gelox.backend.voz.NormalizadorVoz;
+import com.gelox.backend.voz.pln.ModeloIntencion;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -15,7 +17,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class FrasesCasosPruebaTest {
 
-    private final ClasificadorIntencion clasificador = new ClasificadorIntencion();
+    private static ClasificadorIntencion clasificador;
+
+    @BeforeAll
+    static void cargarModelo() {
+        ModeloIntencion modelo = new ModeloIntencion();
+        modelo.cargar();
+        clasificador = new ClasificadorIntencion(modelo);
+    }
 
     @ParameterizedTest(name = "{0}: \"{1}\"")
     @DisplayName("cada frase de los casos de prueba resuelve a su intención")

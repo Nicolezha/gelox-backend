@@ -47,7 +47,7 @@ public class RegistrarVentaRuralFlujo {
     private static final Pattern DESTINATARIO_PATTERN = Pattern.compile(
             "(?iu)\\b(?:para|a)\\s+(.+?)(?=\\s*,|\\s+para\\b|\\s+con\\s+|\\s+en\\s+|\\s+env[ií]o\\b|\\s+\\d+\\b|$)");
     private static final Pattern HONORIFICO_PATTERN = Pattern.compile(
-            "(?iu)^(do[nñ]a|don|se[nñ]ora|se[nñ]or|sra?\\.?|sr\\.?)\\s+");
+            "(?iu)^(do[nñ]a|don|se[nñ]ora|se[nñ]or|sra?\\.?|sr\\.?)(?:\\s+|$)");
 
     /** Sobre texto normalizado: "ocho mil" llega como "8 mil". */
     private static final Pattern ENVIO_PATTERN = Pattern.compile("envio\\s+(?:de\\s+)?\\$?(\\d+)(\\s+mil\\b)?");

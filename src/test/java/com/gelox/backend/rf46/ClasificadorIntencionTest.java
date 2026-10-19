@@ -42,18 +42,17 @@ class ClasificadorIntencionTest {
     // ---- Combinación modelo + reglas (FP-15 §2.5) ----
 
     @Test
-    @DisplayName("PLN — frase que solo entiende el modelo: 'vendame 2 de solo lac' → MODELO")
+    @DisplayName("PLN — frase que solo entiende el modelo: 'dame las cifras de hoy' → MODELO")
     void modelo_fraseQueLasReglasNoCubren() {
         assertThat(new ClasificadorIntencion(modeloQueDevuelve(Optional.empty()))
-                .clasificar("vendame 2 de solo lac").intencion())
+                .clasificar("dame las cifras de hoy").intencion())
                 .as("las reglas solas no la reconocen").isNull();
 
-        var r = clasificador.clasificar("vendame 2 de solo lac");
+        var r = clasificador.clasificar("dame las cifras de hoy");
 
-        assertThat(r.intencion()).isEqualTo(TipoIntencionVoz.REGISTRAR_VENTA);
+        assertThat(r.intencion()).isEqualTo(TipoIntencionVoz.CONSULTAR_FINANZAS);
         assertThat(r.metodo()).isEqualTo(MetodoClasificacion.MODELO);
         assertThat(r.probabilidadIntencion()).isGreaterThanOrEqualTo(ClasificadorIntencion.UMBRAL_INTENCION);
-        assertThat(r.slots()).containsEntry("cantidad", "2").containsEntry("producto", "solo lac");
     }
 
     @Test
