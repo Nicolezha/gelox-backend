@@ -9,6 +9,7 @@ import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.CierreCajaRepository;
 import com.gelox.backend.repositories.DashboardRepository;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -39,9 +40,9 @@ public class CierreCajaService {
                     "Ya existe un cierre de caja registrado para la fecha: " + fecha);
         }
 
-        BigDecimal calcVentanilla   = dashboardRepository.getTotalVentasPorCanal("VENTANILLA", fecha, fecha);
-        BigDecimal calcRural        = dashboardRepository.getTotalVentasPorCanal("RURAL", fecha, fecha);
-        BigDecimal calcComerciantes = dashboardRepository.getIngresosPlanilasDia(fecha);
+        BigDecimal calcVentanilla   = dashboardRepository.getTotalVentasPorCanal(TenantContext.requerido(), "VENTANILLA", fecha, fecha);
+        BigDecimal calcRural        = dashboardRepository.getTotalVentasPorCanal(TenantContext.requerido(), "RURAL", fecha, fecha);
+        BigDecimal calcComerciantes = dashboardRepository.getIngresosPlanilasDia(TenantContext.requerido(), fecha);
         BigDecimal calcTotal        = calcVentanilla.add(calcRural).add(calcComerciantes);
 
         BigDecimal fisTotal = dto.montoFisicoVentanilla()
@@ -91,6 +92,7 @@ public class CierreCajaService {
     @Transactional(readOnly = true)
     public CierreCajaResponseDTO obtenerPorId(UUID id) {
         CierreCaja cierre = cierreCajaRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No hay cierre de caja con id: " + id));
         return toResponse(cierre);

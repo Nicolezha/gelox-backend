@@ -9,6 +9,7 @@ import com.gelox.backend.entities.Producto;
 import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.security.RequiereRol;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -155,6 +156,7 @@ public class CatalogoService {
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     public CatalogoProductoDTO activarProducto(UUID id, Usuario usuario) {
         Producto producto = catalogoRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Producto no encontrado"));
         producto.setActivo(true);

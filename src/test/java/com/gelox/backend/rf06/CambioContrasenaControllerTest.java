@@ -11,6 +11,7 @@ import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.exceptions.ContrasenaNoCoincideException;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.services.PerfilService;
+import com.gelox.backend.tenant.DistribuidoraEstadoCache;
 import com.google.firebase.auth.FirebaseAuth;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,6 +48,9 @@ class CambioContrasenaControllerTest {
 
     @MockBean
     FirebaseAuth firebaseAuth;
+
+    @MockBean
+    DistribuidoraEstadoCache distribuidoraEstadoCache;
 
     @MockBean
     UsuarioRepository usuarioRepository;

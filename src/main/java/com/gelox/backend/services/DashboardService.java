@@ -7,6 +7,7 @@ import com.gelox.backend.dto.VentasPorCanalDTO;
 import com.gelox.backend.dto.Top5ComerciantesDTO;
 import com.gelox.backend.repositories.DashboardRepository;
 import com.gelox.backend.repositories.ReporteRepository;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -37,21 +38,21 @@ public class DashboardService {
         return new KpiDTO(
                 ingresosDia,
                 gananciaNeta,
-                dashboardRepository.getComerciantesActivos(),
-                dashboardRepository.getTotalComerciantes(),
+                dashboardRepository.getComerciantesActivos(TenantContext.requerido()),
+                dashboardRepository.getTotalComerciantes(TenantContext.requerido()),
                 calcularVariacion(ingresosAyer, ingresosDia),
                 calcularVariacion(gananciaAyer, gananciaNeta)
         );
     }
 
     private BigDecimal calcularIngresos(LocalDate fecha) {
-        return dashboardRepository.getIngresosVentasDia(fecha)
-                .add(dashboardRepository.getIngresosPlanilasDia(fecha));
+        return dashboardRepository.getIngresosVentasDia(TenantContext.requerido(), fecha)
+                .add(dashboardRepository.getIngresosPlanilasDia(TenantContext.requerido(), fecha));
     }
 
     private BigDecimal calcularGanancia(LocalDate fecha, BigDecimal ingresos) {
-        BigDecimal costos = dashboardRepository.getCostosVentasDia(fecha)
-                .add(dashboardRepository.getCostosPlanilasDia(fecha));
+        BigDecimal costos = dashboardRepository.getCostosVentasDia(TenantContext.requerido(), fecha)
+                .add(dashboardRepository.getCostosPlanilasDia(TenantContext.requerido(), fecha));
         return ingresos.subtract(costos);
     }
 
@@ -63,13 +64,13 @@ public class DashboardService {
         Map<Integer, BigDecimal> inversionMap = new HashMap<>();
         Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
 
-        for (Object[] row : reporteRepository.getInversionPorSemana(periodo)) {
+        for (Object[] row : reporteRepository.getInversionPorSemana(TenantContext.requerido(), periodo)) {
             inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
         }
-        for (Object[] row : reporteRepository.getIngresosVentasPorSemana(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosVentasPorSemana(TenantContext.requerido(), periodo)) {
             ingresosMap.merge(((Number) row[0]).intValue(), toBigDecimal(row[1]), BigDecimal::add);
         }
-        for (Object[] row : reporteRepository.getIngresosPllanillasPorSemana(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorSemana(TenantContext.requerido(), periodo)) {
             ingresosMap.merge(((Number) row[0]).intValue(), toBigDecimal(row[1]), BigDecimal::add);
         }
 
@@ -86,7 +87,7 @@ public class DashboardService {
     }
 
     public Top5ComerciantesDTO obtenerTop5Comerciantes(LocalDate fechaInicio, LocalDate fechaFin) {
-        List<Object[]> rows = dashboardRepository.getTop5Comerciantes(fechaInicio, fechaFin);
+        List<Object[]> rows = dashboardRepository.getTop5Comerciantes(TenantContext.requerido(), fechaInicio, fechaFin);
         List<Top5ComerciantesDTO.ComercianteIngresoDTO> lista = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
             Object[] row = rows.get(i);
@@ -107,9 +108,9 @@ public class DashboardService {
     }
 
     public VentasPorCanalDTO obtenerVentasPorCanal(LocalDate fechaInicio, LocalDate fechaFin) {
-        BigDecimal ventanilla   = dashboardRepository.getTotalVentasPorCanal("VENTANILLA", fechaInicio, fechaFin);
-        BigDecimal rural        = dashboardRepository.getTotalVentasPorCanal("RURAL", fechaInicio, fechaFin);
-        BigDecimal comerciantes = dashboardRepository.getTotalPlanillasCerradas(fechaInicio, fechaFin);
+        BigDecimal ventanilla   = dashboardRepository.getTotalVentasPorCanal(TenantContext.requerido(), "VENTANILLA", fechaInicio, fechaFin);
+        BigDecimal rural        = dashboardRepository.getTotalVentasPorCanal(TenantContext.requerido(), "RURAL", fechaInicio, fechaFin);
+        BigDecimal comerciantes = dashboardRepository.getTotalPlanillasCerradas(TenantContext.requerido(), fechaInicio, fechaFin);
 
         BigDecimal total = ventanilla.add(rural).add(comerciantes);
 

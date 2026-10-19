@@ -4,6 +4,7 @@ import com.gelox.backend.dto.EventoSistemaDTO;
 import com.gelox.backend.entities.EventoSistema;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.repositories.EventoSistemaRepository;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -34,17 +35,17 @@ public class EventoSistemaService {
                 .usuarioId(usuarioId)
                 .build();
         repository.save(evento);
-        // Mantener solo los 10 eventos más recientes para evitar acumulación
-        repository.eliminarEventosAntiguos();
+        // Mantener solo los 10 eventos más recientes de la distribuidora para evitar acumulación
+        repository.eliminarEventosAntiguos(TenantContext.requerido());
     }
 
     /**
      * Al arrancar la aplicación, limpia de una vez todos los registros acumulados
-     * dejando únicamente los 10 más recientes en la tabla evento_sistema.
+     * dejando únicamente los 10 más recientes de cada distribuidora en la tabla evento_sistema.
      */
     @EventListener(ApplicationReadyEvent.class)
     public void limpiarEventosAlInicio() {
-        repository.eliminarEventosAntiguos();
+        repository.eliminarEventosAntiguosPorDistribuidora();
     }
 
     @Transactional(readOnly = true)

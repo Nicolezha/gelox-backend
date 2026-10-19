@@ -6,6 +6,7 @@ import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.ventas.rural.dto.ClienteRuralDTO;
 import com.gelox.backend.ventas.rural.dto.CrearClienteRuralRequest;
 import com.gelox.backend.ventas.rural.dto.EditarClienteRuralRequest;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -110,6 +111,7 @@ public class ClienteRuralService {
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public ClienteRuralDTO editarCliente(java.util.UUID id, EditarClienteRuralRequest req) {
         ClienteRural cliente = clienteRuralRepository.findById(id)
+                .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Cliente no encontrado con id: " + id));
 

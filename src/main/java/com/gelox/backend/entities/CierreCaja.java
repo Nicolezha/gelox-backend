@@ -1,7 +1,9 @@
 package com.gelox.backend.entities;
 
 import com.gelox.backend.entities.tenant.TenantAware;
+import com.gelox.backend.tenant.TenantEntityListener;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +19,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@EntityListeners(TenantEntityListener.class)
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @Table(name = "cierre_caja", uniqueConstraints = @UniqueConstraint(columnNames = {"tenant_id", "fecha"}))
 public class CierreCaja implements TenantAware {
 

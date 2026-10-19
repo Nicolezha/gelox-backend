@@ -10,6 +10,7 @@ import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.voz.VozService;
 import com.gelox.backend.voz.dto.VozConfirmarResponse;
 import com.gelox.backend.voz.dto.VozInterpretarResponse;
+import com.gelox.backend.tenant.DistribuidoraEstadoCache;
 import com.google.firebase.auth.FirebaseAuth;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,6 +52,9 @@ class VozControllerTest {
 
     @MockBean
     FirebaseAuth firebaseAuth;
+
+    @MockBean
+    DistribuidoraEstadoCache distribuidoraEstadoCache;
 
     @MockBean
     UsuarioRepository usuarioRepository;

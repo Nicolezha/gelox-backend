@@ -31,13 +31,15 @@ public interface PedidoProveedorRepository extends JpaRepository<PedidoProveedor
                 COALESCE(SUM(COALESCE(i.cantidad_unidades, 0)), 0)::int  AS total_unidades
             FROM pedido_proveedor p
             LEFT JOIN item_pedido_proveedor i ON i.pedido_id = p.id
-            WHERE (:estado IS NULL OR p.estado::text = :estado)
+            WHERE p.tenant_id = :tenantId
+              AND (:estado IS NULL OR p.estado::text = :estado)
               AND p.fecha >= CAST(:fechaInicio AS date)
               AND p.fecha <= CAST(:fechaFin    AS date)
             GROUP BY p.id, p.fecha, p.estado, p.notas
             ORDER BY p.fecha DESC
             """, nativeQuery = true)
     List<Object[]> findResumenWithFilters(
+            @Param("tenantId")    UUID tenantId,
             @Param("estado")      String estado,
             @Param("fechaInicio") String fechaInicio,
             @Param("fechaFin")    String fechaFin);

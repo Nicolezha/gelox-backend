@@ -2,6 +2,7 @@ package com.gelox.backend.services;
 
 import com.gelox.backend.dto.*;
 import com.gelox.backend.repositories.ReporteRepository;
+import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,10 +21,10 @@ public class ReporteFinancieroService {
     private final ReporteRepository reporteRepository;
 
     public ReporteFinancieroDTO generarReporte(PeriodoFiltroDTO periodo) {
-        BigDecimal inversion       = reporteRepository.getTotalInversion(periodo);
-        BigDecimal ingVentanilla   = reporteRepository.getIngresosPorCanal("VENTANILLA", periodo);
-        BigDecimal ingRural        = reporteRepository.getIngresosPorCanal("RURAL", periodo);
-        BigDecimal ingComerciantes = reporteRepository.getIngresosComerciantesEnPeriodo(periodo);
+        BigDecimal inversion       = reporteRepository.getTotalInversion(TenantContext.requerido(), periodo);
+        BigDecimal ingVentanilla   = reporteRepository.getIngresosPorCanal(TenantContext.requerido(), "VENTANILLA", periodo);
+        BigDecimal ingRural        = reporteRepository.getIngresosPorCanal(TenantContext.requerido(), "RURAL", periodo);
+        BigDecimal ingComerciantes = reporteRepository.getIngresosComerciantesEnPeriodo(TenantContext.requerido(), periodo);
         BigDecimal ingresosTotales = ingVentanilla.add(ingRural).add(ingComerciantes);
         BigDecimal utilidad        = ingresosTotales.subtract(inversion);
         BigDecimal margen          = inversion.compareTo(BigDecimal.ZERO) == 0
@@ -58,10 +59,10 @@ public class ReporteFinancieroService {
 
     /** DIA — un único punto "Hoy" con el total del día */
     private List<PuntoGraficaDTO> buildGraficaDia(PeriodoFiltroDTO periodo) {
-        BigDecimal inversion = reporteRepository.getTotalInversion(periodo);
-        BigDecimal ingresos  = reporteRepository.getIngresosPorCanal("VENTANILLA", periodo)
-                .add(reporteRepository.getIngresosPorCanal("RURAL", periodo))
-                .add(reporteRepository.getIngresosComerciantesEnPeriodo(periodo));
+        BigDecimal inversion = reporteRepository.getTotalInversion(TenantContext.requerido(), periodo);
+        BigDecimal ingresos  = reporteRepository.getIngresosPorCanal(TenantContext.requerido(), "VENTANILLA", periodo)
+                .add(reporteRepository.getIngresosPorCanal(TenantContext.requerido(), "RURAL", periodo))
+                .add(reporteRepository.getIngresosComerciantesEnPeriodo(TenantContext.requerido(), periodo));
         String etiqueta = periodo.fechaInicio().equals(LocalDate.now()) ? "Hoy" : periodo.fechaInicio().toString();
         return List.of(new PuntoGraficaDTO(etiqueta, inversion, ingresos));
     }
@@ -73,14 +74,14 @@ public class ReporteFinancieroService {
         Map<Integer, BigDecimal> inversionMap = new HashMap<>();
         Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
 
-        for (Object[] row : reporteRepository.getInversionPorDiaOffset(periodo)) {
+        for (Object[] row : reporteRepository.getInversionPorDiaOffset(TenantContext.requerido(), periodo)) {
             inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
         }
-        for (Object[] row : reporteRepository.getIngresosVentasPorDiaOffset(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosVentasPorDiaOffset(TenantContext.requerido(), periodo)) {
             int offset = ((Number) row[0]).intValue();
             ingresosMap.merge(offset, toBigDecimal(row[1]), BigDecimal::add);
         }
-        for (Object[] row : reporteRepository.getIngresosPllanillasPorDiaOffset(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorDiaOffset(TenantContext.requerido(), periodo)) {
             int offset = ((Number) row[0]).intValue();
             ingresosMap.merge(offset, toBigDecimal(row[1]), BigDecimal::add);
         }
@@ -104,14 +105,14 @@ public class ReporteFinancieroService {
         Map<Integer, BigDecimal> inversionMap = new HashMap<>();
         Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
 
-        for (Object[] row : reporteRepository.getInversionPorSemana(periodo)) {
+        for (Object[] row : reporteRepository.getInversionPorSemana(TenantContext.requerido(), periodo)) {
             inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
         }
-        for (Object[] row : reporteRepository.getIngresosVentasPorSemana(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosVentasPorSemana(TenantContext.requerido(), periodo)) {
             int sem = ((Number) row[0]).intValue();
             ingresosMap.merge(sem, toBigDecimal(row[1]), BigDecimal::add);
         }
-        for (Object[] row : reporteRepository.getIngresosPllanillasPorSemana(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorSemana(TenantContext.requerido(), periodo)) {
             int sem = ((Number) row[0]).intValue();
             ingresosMap.merge(sem, toBigDecimal(row[1]), BigDecimal::add);
         }
@@ -135,14 +136,14 @@ public class ReporteFinancieroService {
         Map<Integer, BigDecimal> inversionMap = new HashMap<>();
         Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
 
-        for (Object[] row : reporteRepository.getInversionPorMes(periodo)) {
+        for (Object[] row : reporteRepository.getInversionPorMes(TenantContext.requerido(), periodo)) {
             inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
         }
-        for (Object[] row : reporteRepository.getIngresosVentasPorMes(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosVentasPorMes(TenantContext.requerido(), periodo)) {
             int mes = ((Number) row[0]).intValue();
             ingresosMap.merge(mes, toBigDecimal(row[1]), BigDecimal::add);
         }
-        for (Object[] row : reporteRepository.getIngresosPllanillasPorMes(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorMes(TenantContext.requerido(), periodo)) {
             int mes = ((Number) row[0]).intValue();
             ingresosMap.merge(mes, toBigDecimal(row[1]), BigDecimal::add);
         }
@@ -187,14 +188,14 @@ public class ReporteFinancieroService {
         Map<Integer, BigDecimal> inversionMap = new HashMap<>();
         Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
 
-        for (Object[] row : reporteRepository.getInversionPorDiaOffset(periodo)) {
+        for (Object[] row : reporteRepository.getInversionPorDiaOffset(TenantContext.requerido(), periodo)) {
             inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
         }
-        for (Object[] row : reporteRepository.getIngresosVentasPorDiaOffset(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosVentasPorDiaOffset(TenantContext.requerido(), periodo)) {
             int offset = ((Number) row[0]).intValue();
             ingresosMap.merge(offset, toBigDecimal(row[1]), BigDecimal::add);
         }
-        for (Object[] row : reporteRepository.getIngresosPllanillasPorDiaOffset(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorDiaOffset(TenantContext.requerido(), periodo)) {
             int offset = ((Number) row[0]).intValue();
             ingresosMap.merge(offset, toBigDecimal(row[1]), BigDecimal::add);
         }
@@ -220,14 +221,14 @@ public class ReporteFinancieroService {
         Map<Integer, BigDecimal> inversionMap = new HashMap<>();
         Map<Integer, BigDecimal> ingresosMap  = new HashMap<>();
 
-        for (Object[] row : reporteRepository.getInversionPorAnioMes(periodo)) {
+        for (Object[] row : reporteRepository.getInversionPorAnioMes(TenantContext.requerido(), periodo)) {
             inversionMap.put(((Number) row[0]).intValue(), toBigDecimal(row[1]));
         }
-        for (Object[] row : reporteRepository.getIngresosVentasPorAnioMes(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosVentasPorAnioMes(TenantContext.requerido(), periodo)) {
             int key = ((Number) row[0]).intValue();
             ingresosMap.merge(key, toBigDecimal(row[1]), BigDecimal::add);
         }
-        for (Object[] row : reporteRepository.getIngresosPllanillasPorAnioMes(periodo)) {
+        for (Object[] row : reporteRepository.getIngresosPllanillasPorAnioMes(TenantContext.requerido(), periodo)) {
             int key = ((Number) row[0]).intValue();
             ingresosMap.merge(key, toBigDecimal(row[1]), BigDecimal::add);
         }
@@ -254,15 +255,15 @@ public class ReporteFinancieroService {
         canalData.put("VENTANILLA", new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
         canalData.put("RURAL",      new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
 
-        for (Object[] row : reporteRepository.getRentabilidadVentanillaRural(periodo)) {
+        for (Object[] row : reporteRepository.getRentabilidadVentanillaRural(TenantContext.requerido(), periodo)) {
             String canal    = (String) row[0];
             BigDecimal ing  = toBigDecimal(row[1]);
             BigDecimal cost = toBigDecimal(row[2]);
             canalData.put(canal, new BigDecimal[]{ing, cost});
         }
 
-        BigDecimal ingComerciantes  = reporteRepository.getIngresosComerciantesEnPeriodo(periodo);
-        BigDecimal costComerciantes = reporteRepository.getCostosComerciantesEnPeriodo(periodo);
+        BigDecimal ingComerciantes  = reporteRepository.getIngresosComerciantesEnPeriodo(TenantContext.requerido(), periodo);
+        BigDecimal costComerciantes = reporteRepository.getCostosComerciantesEnPeriodo(TenantContext.requerido(), periodo);
 
         List<RentabilidadCanalDTO> canales = new ArrayList<>();
         for (String canal : List.of("VENTANILLA", "RURAL")) {

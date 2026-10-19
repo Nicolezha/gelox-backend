@@ -1,7 +1,9 @@
 package com.gelox.backend.entities;
 
 import com.gelox.backend.entities.tenant.TenantAware;
+import com.gelox.backend.tenant.TenantEntityListener;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Filter;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -9,6 +11,8 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
+@EntityListeners(TenantEntityListener.class)
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @Table(name = "evento_sistema")
 @Data
 @Builder

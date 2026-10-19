@@ -13,6 +13,8 @@ import com.gelox.backend.repositories.PedidoProveedorRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.services.EventoSistemaService;
 import com.gelox.backend.services.PedidoProveedorService;
+import com.gelox.backend.tenant.TenantContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,6 +59,13 @@ class PedidoProveedorModificarTest {
     Producto festival;
     Producto soloLack;
 
+    private static final UUID TENANT = UUID.randomUUID();
+
+    @AfterEach
+    void limpiarTenant() {
+        TenantContext.clear();
+    }
+
     @BeforeEach
     void setUp() {
         service = new PedidoProveedorService(pedidoRepo, null, productoRepo, null, null, eventoService);
@@ -75,6 +84,10 @@ class PedidoProveedorModificarTest {
         soloLack.setCodigoTecnico("SL-001");
         soloLack.setNombre("Solo Lack");
         soloLack.setPrecioCosto(BigDecimal.valueOf(2000));
+
+        festival.setTenantId(TENANT);
+        soloLack.setTenantId(TENANT);
+        TenantContext.set(TENANT);
 
         lenient().when(pedidoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }

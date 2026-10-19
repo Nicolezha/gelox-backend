@@ -1,5 +1,6 @@
 package com.gelox.backend.services;
 
+import com.gelox.backend.tenant.TenantContext;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gelox.backend.dto.DetalleProductoDTO;
@@ -33,20 +34,20 @@ public class ReporteDiarioService {
     // ══════════════════════════════════════════════════════════════════════════
 
     public ReporteDiarioDTO generarReporteDiario(LocalDate fecha) {
-        BigDecimal ingVentanilla   = reporteDiarioRepository.getIngresosVentanillaDia(fecha);
-        BigDecimal ingRural        = reporteDiarioRepository.getIngresosRuralDia(fecha);
-        BigDecimal ingComerciantes = reporteDiarioRepository.getIngresosComerciantesDia(fecha);
+        BigDecimal ingVentanilla   = reporteDiarioRepository.getIngresosVentanillaDia(TenantContext.requerido(), fecha);
+        BigDecimal ingRural        = reporteDiarioRepository.getIngresosRuralDia(TenantContext.requerido(), fecha);
+        BigDecimal ingComerciantes = reporteDiarioRepository.getIngresosComerciantesDia(TenantContext.requerido(), fecha);
         BigDecimal totalIngresos   = ingVentanilla.add(ingRural).add(ingComerciantes);
 
-        long txVentanilla   = reporteDiarioRepository.countVentanillaDia(fecha);
-        long txRural        = reporteDiarioRepository.countRuralDia(fecha);
-        long txComerciantes = reporteDiarioRepository.countPlanillasDia(fecha);
+        long txVentanilla   = reporteDiarioRepository.countVentanillaDia(TenantContext.requerido(), fecha);
+        long txRural        = reporteDiarioRepository.countRuralDia(TenantContext.requerido(), fecha);
+        long txComerciantes = reporteDiarioRepository.countPlanillasDia(TenantContext.requerido(), fecha);
 
         // Variación respecto al día anterior
         LocalDate ayer = fecha.minusDays(1);
-        BigDecimal ayerVentanilla   = reporteDiarioRepository.getIngresosVentanillaDia(ayer);
-        BigDecimal ayerRural        = reporteDiarioRepository.getIngresosRuralDia(ayer);
-        BigDecimal ayerComerciantes = reporteDiarioRepository.getIngresosComerciantesDia(ayer);
+        BigDecimal ayerVentanilla   = reporteDiarioRepository.getIngresosVentanillaDia(TenantContext.requerido(), ayer);
+        BigDecimal ayerRural        = reporteDiarioRepository.getIngresosRuralDia(TenantContext.requerido(), ayer);
+        BigDecimal ayerComerciantes = reporteDiarioRepository.getIngresosComerciantesDia(TenantContext.requerido(), ayer);
 
         return new ReporteDiarioDTO(
                 fecha,
@@ -79,22 +80,22 @@ public class ReporteDiarioService {
         long total;
 
         if (canal == null || canal.isBlank()) {
-            rows  = reporteDiarioRepository.getTodasTransacciones(fecha, offset, limit);
-            total = reporteDiarioRepository.countVentanillaDia(fecha)
-                  + reporteDiarioRepository.countRuralDia(fecha)
-                  + reporteDiarioRepository.countPlanillasDia(fecha);
+            rows  = reporteDiarioRepository.getTodasTransacciones(TenantContext.requerido(), fecha, offset, limit);
+            total = reporteDiarioRepository.countVentanillaDia(TenantContext.requerido(), fecha)
+                  + reporteDiarioRepository.countRuralDia(TenantContext.requerido(), fecha)
+                  + reporteDiarioRepository.countPlanillasDia(TenantContext.requerido(), fecha);
         } else {
             rows = switch (canal.trim().toUpperCase()) {
-                case "VENTANILLA" -> reporteDiarioRepository.getTransaccionesVentanilla(fecha, offset, limit);
-                case "RURAL"      -> reporteDiarioRepository.getTransaccionesRural(fecha, offset, limit);
-                case "PLANILLA"   -> reporteDiarioRepository.getTransaccionesPlanilla(fecha, offset, limit);
+                case "VENTANILLA" -> reporteDiarioRepository.getTransaccionesVentanilla(TenantContext.requerido(), fecha, offset, limit);
+                case "RURAL"      -> reporteDiarioRepository.getTransaccionesRural(TenantContext.requerido(), fecha, offset, limit);
+                case "PLANILLA"   -> reporteDiarioRepository.getTransaccionesPlanilla(TenantContext.requerido(), fecha, offset, limit);
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Canal inválido. Use: VENTANILLA, RURAL o PLANILLA");
             };
             total = switch (canal.trim().toUpperCase()) {
-                case "VENTANILLA" -> reporteDiarioRepository.countVentanillaDia(fecha);
-                case "RURAL"      -> reporteDiarioRepository.countRuralDia(fecha);
-                case "PLANILLA"   -> reporteDiarioRepository.countPlanillasDia(fecha);
+                case "VENTANILLA" -> reporteDiarioRepository.countVentanillaDia(TenantContext.requerido(), fecha);
+                case "RURAL"      -> reporteDiarioRepository.countRuralDia(TenantContext.requerido(), fecha);
+                case "PLANILLA"   -> reporteDiarioRepository.countPlanillasDia(TenantContext.requerido(), fecha);
                 default           -> 0L;
             };
         }

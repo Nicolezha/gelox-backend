@@ -1,7 +1,12 @@
 package com.gelox.backend.auth;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gelox.backend.entities.EstadoDistribuidora;
+import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.UsuarioRepository;
+import com.gelox.backend.tenant.DistribuidoraEstadoCache;
+import com.gelox.backend.tenant.TenantContext;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
@@ -11,6 +16,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,14 +25,23 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class FirebaseAuthFilter extends OncePerRequestFilter {
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private final FirebaseAuth firebaseAuth;
     private final UsuarioRepository usuarioRepository;
+    private final DistribuidoraEstadoCache distribuidoraEstadoCache;
+
+    // Contacto de soporte de GELOX que se muestra a una distribuidora suspendida o inactiva
+    @Value("${gelox.soporte.contacto:}")
+    private String contactoSoporte;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -41,6 +56,7 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
         }
 
         String token = authHeader.substring(7);
+        UUID tenantId = null;
 
         try {
             FirebaseToken decoded = firebaseAuth.verifyIdToken(token);
@@ -58,6 +74,37 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
             if (!usuario.getActivo()) {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN, "Usuario inactivo");
                 return;
+            }
+
+            // El SUPERADMINISTRADOR es de la plataforma: no trabaja dentro de una distribuidora
+            if (usuario.getRol() != RolUsuario.SUPERADMINISTRADOR) {
+                tenantId = usuario.getTenantId();
+                if (tenantId == null) {
+                    escribirError(response, HttpServletResponse.SC_FORBIDDEN, Map.of("error", "Sin distribuidora"));
+                    return;
+                }
+
+                Object claimTenant = decoded.getClaims().get("tenant_id");
+                if (claimTenant != null && !tenantId.toString().equalsIgnoreCase(claimTenant.toString())) {
+                    log.warn("Claim tenant_id {} no coincide con la distribuidora del usuario {}", claimTenant, firebaseUid);
+                    escribirError(response, HttpServletResponse.SC_UNAUTHORIZED,
+                            Map.of("error", "El token no corresponde a la distribuidora del usuario"));
+                    return;
+                }
+
+                EstadoDistribuidora estado = distribuidoraEstadoCache.obtenerEstado(tenantId);
+                if (estado == null) {
+                    escribirError(response, HttpServletResponse.SC_FORBIDDEN, Map.of("error", "Sin distribuidora"));
+                    return;
+                }
+                if (estado == EstadoDistribuidora.SUSPENDIDO || estado == EstadoDistribuidora.INACTIVO) {
+                    boolean suspendida = estado == EstadoDistribuidora.SUSPENDIDO;
+                    escribirError(response, HttpServletResponse.SC_FORBIDDEN, Map.of(
+                            "error", suspendida ? "La distribuidora está suspendida" : "La distribuidora está inactiva",
+                            "codigo", suspendida ? "DISTRIBUIDORA_SUSPENDIDA" : "DISTRIBUIDORA_INACTIVA",
+                            "contacto", contactoSoporte != null ? contactoSoporte : ""));
+                    return;
+                }
             }
 
             List<SimpleGrantedAuthority> authorities = List.of(
@@ -79,6 +126,20 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        filterChain.doFilter(request, response);
+        try {
+            if (tenantId != null) {
+                TenantContext.set(tenantId);
+            }
+            filterChain.doFilter(request, response);
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    private void escribirError(HttpServletResponse response, int status, Map<String, String> cuerpo) throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write(OBJECT_MAPPER.writeValueAsString(cuerpo));
     }
 }
