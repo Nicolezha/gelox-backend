@@ -3,7 +3,6 @@ package com.gelox.backend.tenant;
 import com.gelox.backend.entities.Distribuidora;
 import com.gelox.backend.entities.EstadoDistribuidora;
 import com.gelox.backend.repositories.DistribuidoraRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -16,7 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * Un cambio de estado tarda hasta 60 s en aplicarse, salvo que se llame a invalidar().
  */
 @Component
-@RequiredArgsConstructor
 public class DistribuidoraEstadoCache {
 
     private static final long VENCIMIENTO_NANOS = Duration.ofSeconds(60).toNanos();
@@ -24,6 +22,12 @@ public class DistribuidoraEstadoCache {
     private final DistribuidoraRepository distribuidoraRepository;
 
     private final Map<UUID, Entrada> cache = new ConcurrentHashMap<>();
+
+    // Constructor explícito: con @RequiredArgsConstructor y el campo cache ya inicializado,
+    // el analizador de Java de VS Code marca un falso error (Maven sí compila).
+    public DistribuidoraEstadoCache(DistribuidoraRepository distribuidoraRepository) {
+        this.distribuidoraRepository = distribuidoraRepository;
+    }
 
     /** Estado actual de la distribuidora, o null si no existe. */
     public EstadoDistribuidora obtenerEstado(UUID tenantId) {
