@@ -12,6 +12,7 @@ import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.PedidoProveedorRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.services.EventoSistemaService;
+import com.gelox.backend.services.IdentidadDistribuidoraService;
 import com.gelox.backend.services.PedidoProveedorService;
 import com.gelox.backend.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -68,7 +70,8 @@ class PedidoProveedorModificarTest {
 
     @BeforeEach
     void setUp() {
-        service = new PedidoProveedorService(pedidoRepo, null, productoRepo, null, null, eventoService);
+        service = new PedidoProveedorService(pedidoRepo, null, productoRepo, null, null, eventoService,
+                mock(IdentidadDistribuidoraService.class));
         ReflectionTestUtils.setField(service, "plantillaExcel", new ClassPathResource("templates/catalogo.xlsx"));
 
         usuario = TestHelper.buildUsuario("uid-1", "voz@gelox-test.com", RolUsuario.ADMINISTRADOR, true);

@@ -52,7 +52,15 @@ public class SupabaseStorageService {
      * @return URL pública del archivo subido
      */
     public String subirImagen(MultipartFile archivo, String carpeta) {
-        validarArchivo(archivo);
+        return subirImagen(archivo, carpeta, MIME_PERMITIDOS);
+    }
+
+    /**
+     * Igual que {@link #subirImagen(MultipartFile, String)} pero con otros tipos permitidos
+     * (la identidad de la distribuidora admite SVG). El llamador valida su propio límite de tamaño.
+     */
+    public String subirImagen(MultipartFile archivo, String carpeta, Set<String> mimePermitidos) {
+        validarArchivo(archivo, mimePermitidos);
 
         String extension    = obtenerExtension(archivo.getOriginalFilename());
         String nombreObjeto = carpeta + "/" + UUID.randomUUID() + "." + extension;
@@ -86,15 +94,17 @@ public class SupabaseStorageService {
 
     // ──────────────────────────────────────────────────────────────────────────
 
-    private void validarArchivo(MultipartFile archivo) {
+    private void validarArchivo(MultipartFile archivo, Set<String> mimePermitidos) {
         if (archivo == null || archivo.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "El archivo está vacío.");
         }
         String mime = archivo.getContentType();
-        if (mime == null || !MIME_PERMITIDOS.contains(mime.toLowerCase())) {
+        if (mime == null || !mimePermitidos.contains(mime.toLowerCase())) {
             throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-                    "Solo se permiten imágenes JPEG, PNG, WebP o GIF.");
+                    mimePermitidos == MIME_PERMITIDOS
+                            ? "Solo se permiten imágenes JPEG, PNG, WebP o GIF."
+                            : "Tipo de imagen no permitido.");
         }
         if (archivo.getSize() > 5 * 1024 * 1024) {
             throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,

@@ -1,0 +1,833 @@
+{
+  "info": {
+    "name": "GELOX IT2 - Identidad y landing por subdominio",
+    "_postman_id": "b3103ff4-34a6-50a9-a8a2-8e4a5e5dc1a2",
+    "description": "Iteración 2 (T119). RF60: identidad visual de la distribuidora (GET/PUT /api/distribuidora/identidad). RF61: landing pública por subdominio (/api/landing/{subdominio}/...). Correr cada carpeta en orden.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "RF60",
+      "item": [
+        {
+          "name": "01 - GET identidad (Gerente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('trae nombre y colores', () => {",
+                  "  pm.expect(body.nombreComercial).to.be.a('string');",
+                  "  pm.expect(body.colorPrimario).to.match(/^#[0-9A-Fa-f]{6}$/);",
+                  "  pm.expect(body.colorSecundario).to.match(/^#[0-9A-Fa-f]{6}$/);",
+                  "});",
+                  "pm.collectionVariables.set('nombreComercialOriginal', body.nombreComercial);",
+                  "pm.collectionVariables.set('colorPrimarioOriginal', body.colorPrimario);",
+                  "pm.collectionVariables.set('colorSecundarioOriginal', body.colorSecundario);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "Guarda los valores actuales para restaurarlos al final de la carpeta (08)."
+          },
+          "response": []
+        },
+        {
+          "name": "02 - GET identidad como ENCARGADO_VENTAS (también puede leer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenVendedor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "Cualquier usuario autenticado de la distribuidora lee la identidad: el frontend la usa para pintar la interfaz."
+          },
+          "response": []
+        },
+        {
+          "name": "03 - PUT identidad: cambiar colores (Gerente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('colores nuevos', () => {",
+                  "  pm.expect(body.colorPrimario).to.eql('#112233');",
+                  "  pm.expect(body.colorSecundario).to.eql('#AABBCC');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "multipart/form-data. Para probar el logo, activar el campo 'logo' y elegir un PNG/JPG/SVG de hasta 2 MB: la respuesta trae logoUrl.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nombreComercial",
+                  "value": "{{nombreComercialOriginal}}",
+                  "type": "text"
+                },
+                {
+                  "key": "colorPrimario",
+                  "value": "#112233",
+                  "type": "text"
+                },
+                {
+                  "key": "colorSecundario",
+                  "value": "#AABBCC",
+                  "type": "text"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: PNG, JPG o SVG de hasta 2 MB. Activar y elegir un archivo para probar el cambio de logo."
+                },
+                {
+                  "key": "favicon",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: mismas reglas que el logo."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04 - GET identidad devuelve los valores nuevos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('persistió el cambio', () => {",
+                  "  pm.expect(body.colorPrimario).to.eql('#112233');",
+                  "  pm.expect(body.colorSecundario).to.eql('#AABBCC');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "05 - PUT color inválido → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje en error', () => pm.expect(pm.response.json().error).to.include('#RRGGBB'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nombreComercial",
+                  "value": "{{nombreComercialOriginal}}",
+                  "type": "text"
+                },
+                {
+                  "key": "colorPrimario",
+                  "value": "rojo",
+                  "type": "text"
+                },
+                {
+                  "key": "colorSecundario",
+                  "value": "#AABBCC",
+                  "type": "text"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: PNG, JPG o SVG de hasta 2 MB. Activar y elegir un archivo para probar el cambio de logo."
+                },
+                {
+                  "key": "favicon",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: mismas reglas que el logo."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06 - PUT como ENCARGADO_VENTAS → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('mensaje en error', () => pm.expect(pm.response.json().error).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenVendedor}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nombreComercial",
+                  "value": "Intento",
+                  "type": "text"
+                },
+                {
+                  "key": "colorPrimario",
+                  "value": "#112233",
+                  "type": "text"
+                },
+                {
+                  "key": "colorSecundario",
+                  "value": "#AABBCC",
+                  "type": "text"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: PNG, JPG o SVG de hasta 2 MB. Activar y elegir un archivo para probar el cambio de logo."
+                },
+                {
+                  "key": "favicon",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: mismas reglas que el logo."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "07 - PUT sin token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nombreComercial",
+                  "value": "Intento",
+                  "type": "text"
+                },
+                {
+                  "key": "colorPrimario",
+                  "value": "#112233",
+                  "type": "text"
+                },
+                {
+                  "key": "colorSecundario",
+                  "value": "#AABBCC",
+                  "type": "text"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: PNG, JPG o SVG de hasta 2 MB. Activar y elegir un archivo para probar el cambio de logo."
+                },
+                {
+                  "key": "favicon",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: mismas reglas que el logo."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "08 - PUT restaurar la identidad original",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('colores restaurados', () => pm.expect(pm.response.json().colorPrimario).to.eql(pm.collectionVariables.get('colorPrimarioOriginal')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "Deja la distribuidora como estaba antes de correr la carpeta.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nombreComercial",
+                  "value": "{{nombreComercialOriginal}}",
+                  "type": "text"
+                },
+                {
+                  "key": "colorPrimario",
+                  "value": "{{colorPrimarioOriginal}}",
+                  "type": "text"
+                },
+                {
+                  "key": "colorSecundario",
+                  "value": "{{colorSecundarioOriginal}}",
+                  "type": "text"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: PNG, JPG o SVG de hasta 2 MB. Activar y elegir un archivo para probar el cambio de logo."
+                },
+                {
+                  "key": "favicon",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true,
+                  "description": "Opcional: mismas reglas que el logo."
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "RF61",
+      "item": [
+        {
+          "name": "01 - Productos por subdominio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('agrupado por categoría', () => pm.expect(body).to.be.an('object'));",
+                  "const nombres = Object.values(body).flat().map(p => p.nombre).sort();",
+                  "pm.collectionVariables.set('catalogoSubdominio', JSON.stringify(nombres));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/landing/{{subdominio}}/productos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "landing",
+                "{{subdominio}}",
+                "productos"
+              ]
+            },
+            "description": "Pública (sin token). Guarda los nombres para compararlos con la ruta sin subdominio (02) y con otra distribuidora (03)."
+          },
+          "response": []
+        },
+        {
+          "name": "02 - Productos sin subdominio = mismo catálogo que magicosabor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const nombres = Object.values(body).flat().map(p => p.nombre).sort();",
+                  "pm.test('mismo catálogo que la 01', () => pm.expect(JSON.stringify(nombres)).to.eql(pm.collectionVariables.get('catalogoSubdominio')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/landing/productos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "landing",
+                "productos"
+              ]
+            },
+            "description": "La landing actual (sin subdominio) responde con la distribuidora piloto. Correr después de la 01 con subdominio = magicosabor."
+          },
+          "response": []
+        },
+        {
+          "name": "03 - Catálogo de otra distribuidora sin productos de la piloto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const propios = Object.values(pm.response.json()).flat().map(p => p.nombre);",
+                  "const piloto = JSON.parse(pm.collectionVariables.get('catalogoSubdominio') || '[]');",
+                  "pm.test('sin productos de la piloto', () => pm.expect(propios.filter(n => piloto.includes(n))).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/landing/{{subdominioOtro}}/productos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "landing",
+                "{{subdominioOtro}}",
+                "productos"
+              ]
+            },
+            "description": "Requiere otra distribuidora ACTIVO o PRUEBA (variable subdominioOtro) con productos de nombres distintos a los de la piloto."
+          },
+          "response": []
+        },
+        {
+          "name": "04 - Info del negocio por subdominio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('trae dirección y enlace', () => {",
+                  "  pm.expect(body).to.have.property('direccion');",
+                  "  pm.expect(body).to.have.property('enlaceComoLlegar');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/landing/{{subdominio}}/info-negocio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "landing",
+                "{{subdominio}}",
+                "info-negocio"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "05 - WhatsApp por subdominio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('url de wa.me', () => pm.expect(pm.response.json().url).to.match(/^https:\\/\\/wa\\.me\\/\\d+$/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/landing/{{subdominio}}/whatsapp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "landing",
+                "{{subdominio}}",
+                "whatsapp"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "06 - Identidad por subdominio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('nombre y colores', () => {",
+                  "  pm.expect(body.nombreComercial).to.be.a('string');",
+                  "  pm.expect(body.colorPrimario).to.match(/^#[0-9A-Fa-f]{6}$/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/landing/{{subdominio}}/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "landing",
+                "{{subdominio}}",
+                "identidad"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "07 - Subdominio inexistente → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('mensaje en error', () => pm.expect(pm.response.json().error).to.eql('Distribuidora no encontrada'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/landing/no-existe-gelox/productos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "landing",
+                "no-existe-gelox",
+                "productos"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "08 - Subdominio suspendido → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/landing/{{subdominioSuspendido}}/productos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "landing",
+                "{{subdominioSuspendido}}",
+                "productos"
+              ]
+            },
+            "description": "Requiere una distribuidora en estado SUSPENDIDO (variable subdominioSuspendido)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "Firebase ID Token de un ADMINISTRADOR (Gerente) de la distribuidora"
+    },
+    {
+      "key": "tokenVendedor",
+      "value": "",
+      "type": "string",
+      "description": "Firebase ID Token de un ENCARGADO_VENTAS de la misma distribuidora, para el 403"
+    },
+    {
+      "key": "subdominio",
+      "value": "magicosabor",
+      "type": "string",
+      "description": "Distribuidora piloto"
+    },
+    {
+      "key": "subdominioOtro",
+      "value": "",
+      "type": "string",
+      "description": "Subdominio de otra distribuidora ACTIVO o PRUEBA"
+    },
+    {
+      "key": "subdominioSuspendido",
+      "value": "",
+      "type": "string",
+      "description": "Subdominio de una distribuidora en estado SUSPENDIDO"
+    },
+    {
+      "key": "nombreComercialOriginal",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF60 / 01'"
+    },
+    {
+      "key": "colorPrimarioOriginal",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF60 / 01'"
+    },
+    {
+      "key": "colorSecundarioOriginal",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF60 / 01'"
+    },
+    {
+      "key": "catalogoSubdominio",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF61 / 01'"
+    }
+  ]
+}

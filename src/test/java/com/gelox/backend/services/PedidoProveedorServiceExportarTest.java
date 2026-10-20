@@ -37,6 +37,10 @@ class PedidoProveedorServiceExportarTest {
     @Mock
     PedidoProveedorRepository pedidoRepo;
 
+    // Sin identidad (el mock devuelve null) el título de la plantilla no cambia
+    @Mock
+    IdentidadDistribuidoraService identidadService;
+
     @InjectMocks
     PedidoProveedorService service;
 

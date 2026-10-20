@@ -32,5 +32,14 @@ public record PlanillaImpresionResponseDTO(
         int        totalUnidadesDevueltas,
         int        totalUnidadesVendidas,
         BigDecimal totalGanancia,
-        BigDecimal efectivoRecibido
-) {}
+        BigDecimal efectivoRecibido,
+
+        Identidad identidad
+) {
+    /** T119 — encabezado impreso con la identidad de la distribuidora. */
+    public record Identidad(
+            String nombreComercial,
+            String logoUrl,
+            String colorPrimario
+    ) {}
+}

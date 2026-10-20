@@ -5,6 +5,7 @@ import com.gelox.backend.dto.CrearDespachoRequest;
 import com.gelox.backend.dto.CrearDespachoResponse;
 import com.gelox.backend.dto.ItemDespachoRequest;
 import com.gelox.backend.dto.ItemDespachoResponseDTO;
+import com.gelox.backend.dto.IdentidadDTO;
 import com.gelox.backend.dto.ItemImpresionPlanillaDTO;
 import com.gelox.backend.dto.PlanillaImpresionResponseDTO;
 import com.gelox.backend.entities.*;
@@ -37,6 +38,7 @@ public class PlanillaService {
     private final ProductoRepository productoRepository;
     private final InventarioService inventarioService;
     private final EventoSistemaService eventoSistemaService;
+    private final IdentidadDistribuidoraService identidadService;
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public CrearDespachoResponse crearDespacho(CrearDespachoRequest req, Usuario usuario) {
@@ -240,6 +242,7 @@ public class PlanillaService {
 
         var comerciante = planilla.getComerciante();
         var usuario     = planilla.getUsuario();
+        IdentidadDTO identidad = identidadService.obtenerIdentidad();
 
         return new PlanillaImpresionResponseDTO(
                 planilla.getId(),
@@ -259,7 +262,11 @@ public class PlanillaService {
                 totalDevueltas,
                 totalVendidas,
                 totalGanancia,
-                planilla.getEfectivoRecibido()
+                planilla.getEfectivoRecibido(),
+                new PlanillaImpresionResponseDTO.Identidad(
+                        identidad.nombreComercial(),
+                        identidad.logoUrl(),
+                        identidad.colorPrimario())
         );
     }
 }

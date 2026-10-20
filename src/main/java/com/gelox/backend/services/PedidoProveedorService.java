@@ -35,6 +35,7 @@ public class PedidoProveedorService {
     private final MovimientoInventarioRepository movimientoRepo;
     private final PerdidaRepository             perdidaRepo;
     private final EventoSistemaService          eventoService;
+    private final IdentidadDistribuidoraService identidadService;
 
     @Value("classpath:templates/catalogo.xlsx")
     private Resource plantillaExcel;
@@ -339,6 +340,18 @@ public class PedidoProveedorService {
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
             Sheet sheet = wb.getSheetAt(0);
+
+            // T119 — nombre de la distribuidora en el título (A1, combinada A1:I3).
+            // Solo cambia el texto de esa celda: las columnas del formato Nutresa no se mueven.
+            IdentidadDTO identidad = identidadService.obtenerIdentidad();
+            if (identidad != null && identidad.nombreComercial() != null) {
+                Row filaTitulo = sheet.getRow(0);
+                Cell celdaTitulo = filaTitulo != null ? filaTitulo.getCell(0) : null;
+                if (celdaTitulo != null) {
+                    celdaTitulo.setCellValue(cellText(celdaTitulo).stripTrailing()
+                            + " - " + identidad.nombreComercial());
+                }
+            }
 
             // Buscar fila de encabezados y los índices de columna
             int colSku = -1, colUm = -1, colCantidad = -1, headerRow = -1;
