@@ -1,6 +1,5 @@
 package com.gelox.backend.tenant;
 
-import com.gelox.backend.entities.Distribuidora;
 import com.gelox.backend.entities.EstadoDistribuidora;
 import com.gelox.backend.repositories.DistribuidoraRepository;
 import org.springframework.stereotype.Component;
@@ -29,15 +28,15 @@ public class DistribuidoraEstadoCache {
         this.distribuidoraRepository = distribuidoraRepository;
     }
 
-    /** Estado actual de la distribuidora, o null si no existe. */
-    public EstadoDistribuidora obtenerEstado(UUID tenantId) {
+    /** Estado actual de la distribuidora (con su nombre comercial), o null si no existe. */
+    public Estado estado(UUID tenantId) {
         long ahora = System.nanoTime();
         Entrada entrada = cache.get(tenantId);
         if (entrada != null && ahora - entrada.cargadaEn() < VENCIMIENTO_NANOS) {
             return entrada.estado();
         }
-        EstadoDistribuidora estado = distribuidoraRepository.findById(tenantId)
-                .map(Distribuidora::getEstado)
+        Estado estado = distribuidoraRepository.findById(tenantId)
+                .map(d -> new Estado(d.getEstado(), d.getNombreComercial()))
                 .orElse(null);
         if (estado != null) {
             cache.put(tenantId, new Entrada(estado, ahora));
@@ -51,6 +50,14 @@ public class DistribuidoraEstadoCache {
         cache.remove(tenantId);
     }
 
-    private record Entrada(EstadoDistribuidora estado, long cargadaEn) {
+    /** El nombre comercial viaja con el estado para el 403 de distribuidora bloqueada. */
+    public record Estado(EstadoDistribuidora valor, String nombreComercial) {
+
+        public boolean bloqueada() {
+            return valor == EstadoDistribuidora.SUSPENDIDO || valor == EstadoDistribuidora.INACTIVO;
+        }
+    }
+
+    private record Entrada(Estado estado, long cargadaEn) {
     }
 }

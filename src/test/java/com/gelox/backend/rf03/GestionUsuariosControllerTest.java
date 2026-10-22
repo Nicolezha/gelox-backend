@@ -187,17 +187,17 @@ class GestionUsuariosControllerTest {
     }
 
     // -----------------------------------------------------------------------
-    // CP13-extra — deshabilitar usuario inexistente → HTTP 400
+    // CP13-extra — deshabilitar usuario inexistente (o de otra distribuidora) → HTTP 404
     // -----------------------------------------------------------------------
     @Test
-    @DisplayName("CP13-extra - usuario a deshabilitar no existe: servicio lanza BadRequest → 400")
-    void cp13Extra_deshabilitarUsuarioInexistente_retorna400() throws Exception {
-        doThrow(new IllegalArgumentException("Usuario no encontrado"))
+    @DisplayName("CP13-extra - usuario a deshabilitar no existe: servicio lanza 404")
+    void cp13Extra_deshabilitarUsuarioInexistente_retorna404() throws Exception {
+        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"))
                 .when(usuarioService).deshabilitarUsuario(ID_USUARIO);
 
         mockMvc.perform(delete("/api/usuarios/{id}", ID_USUARIO)
                         .with(SecurityMockMvcRequestPostProcessors.authentication(
                                 TestHelper.authParaUsuario(admin))))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNotFound());
     }
 }

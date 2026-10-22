@@ -251,10 +251,10 @@ class GestionUsuariosTest {
     }
 
     // -----------------------------------------------------------------------
-    // CP12-extra — usuario no encontrado → IllegalArgumentException
+    // CP12-extra — usuario no encontrado (o de otra distribuidora) → ResponseStatusException 404
     // -----------------------------------------------------------------------
     @Test
-    @DisplayName("CP12-extra - editar usuario inexistente: servicio lanza IllegalArgumentException")
+    @DisplayName("CP12-extra - editar usuario inexistente: servicio lanza 404")
     void cp12Extra_editarUsuarioInexistente() {
         setSecurityContext(admin);
 
@@ -268,7 +268,7 @@ class GestionUsuariosTest {
 
         try (MockedStatic<FirebaseAuth> firebaseAuthStatic = mockStatic(FirebaseAuth.class)) {
             assertThatThrownBy(() -> usuarioService.editarUsuario(idInexistente, dto))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("no encontrado");
         }
     }
