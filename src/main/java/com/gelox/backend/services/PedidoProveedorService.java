@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.NoSuchElementException;
 
@@ -55,7 +56,7 @@ public class PedidoProveedorService {
         // 1. Construir la entidad pedido
         PedidoProveedor pedido = PedidoProveedor.builder()
                 .usuario(usuarioActual)
-                .fecha(LocalDate.now())
+                .fecha(LocalDate.now(ZoneId.of("America/Bogota")))
                 .estado(EstadoPedido.PENDIENTE)
                 .notas(req.notas())
                 .build();
