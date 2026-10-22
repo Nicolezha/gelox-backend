@@ -15,7 +15,9 @@ import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.UserRecord;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -98,7 +100,7 @@ public class UsuarioService {
 
         Usuario usuario = usuarioRepository.findById(id)
                 .filter(TenantContext::pertenece)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con id: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con id: " + id));
 
         // RF03 — el correo no puede pertenecer a otro usuario
         dto.setCorreo(normalizarCorreo(dto.getCorreo()));
@@ -137,7 +139,7 @@ public class UsuarioService {
     public void deshabilitarUsuario(UUID id) throws Exception {
         Usuario usuario = usuarioRepository.findById(id)
                 .filter(TenantContext::pertenece)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con id: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con id: " + id));
 
         FirebaseAuth.getInstance().updateUser(
                 new UserRecord.UpdateRequest(usuario.getFirebaseUid()).setDisabled(true)
@@ -169,7 +171,7 @@ public class UsuarioService {
     public UsuarioResponseDTO obtenerUsuario(UUID id) {
         Usuario usuario = usuarioRepository.findById(id)
                 .filter(TenantContext::pertenece)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con id: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con id: " + id));
         return toDTO(usuario);
     }
 
@@ -200,7 +202,7 @@ public class UsuarioService {
     public void habilitarUsuario(UUID id) throws Exception {
         Usuario usuario = usuarioRepository.findById(id)
                 .filter(TenantContext::pertenece)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con id: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con id: " + id));
 
         FirebaseAuth.getInstance().updateUser(
                 new UserRecord.UpdateRequest(usuario.getFirebaseUid()).setDisabled(false)

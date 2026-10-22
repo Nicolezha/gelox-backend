@@ -2,6 +2,8 @@ package com.gelox.backend.tenant;
 
 import com.gelox.backend.entities.Producto;
 import com.gelox.backend.repositories.ProductoRepository;
+import com.gelox.backend.services.EventoSistemaService;
+import com.gelox.backend.services.ProductoService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -10,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -34,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect"
 })
-@Import(TenantFilterAspect.class)
+@Import({TenantFilterAspect.class, ProductoService.class})
 @ImportAutoConfiguration(AopAutoConfiguration.class)
 class AislamientoTenantTest {
 
@@ -45,7 +48,13 @@ class AislamientoTenantTest {
     ProductoRepository productoRepository;
 
     @Autowired
+    ProductoService productoService;
+
+    @Autowired
     PlatformTransactionManager transactionManager;
+
+    @MockBean
+    EventoSistemaService eventoSistemaService;
 
     @BeforeEach
     void limpiarAntes() {
@@ -132,6 +141,19 @@ class AislamientoTenantTest {
 
         assertThat(productoRepository.findById(deB.getId())).isPresent();
         assertThat(productoRepository.findById(deB.getId()).filter(TenantContext::pertenece)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findById de un producto de B desde A responde 404 (no 403)")
+    void obtenerProducto_deOtroTenant_404() {
+        Producto deB = productoRepository.saveAndFlush(producto("B-1", TENANT_B));
+
+        TenantContext.set(TENANT_A);
+
+        assertThatThrownBy(() -> productoService.obtenerProducto(deB.getId()))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                        .isEqualTo(HttpStatus.NOT_FOUND));
     }
 
     @Test

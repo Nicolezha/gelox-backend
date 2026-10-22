@@ -34,7 +34,7 @@ public class TenantFilterAspect {
     private final PlatformTransactionManager transactionManager;
 
     @Around("execution(* com.gelox.backend..repositories..*(..)) || execution(* com.gelox.backend..*Repository.*(..))")
-    public Object aplicarFiltroTenant(ProceedingJoinPoint joinPoint) throws Throwable {
+    public Object activarFiltro(ProceedingJoinPoint joinPoint) throws Throwable {
         UUID tenantId = TenantContext.get();
         if (tenantId == null) {
             return joinPoint.proceed();
