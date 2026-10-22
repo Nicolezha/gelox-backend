@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 
 /**
@@ -17,6 +19,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "item_recomendacion")
 public class ItemRecomendacion {
+
+    private static final ZoneId ZONA_BOGOTA = ZoneId.of("America/Bogota");
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -93,4 +97,46 @@ public class ItemRecomendacion {
 
     @Column(name = "fecha_decision")
     private LocalDateTime fechaDecision;
+
+    /** El usuario acepta lo sugerido. */
+    public void aprobar() {
+        this.decision = DecisionItem.APROBADO;
+        this.cajasAprobadas = cajasSugeridas;
+        this.motivoRechazo = null;
+        this.fechaDecision = LocalDateTime.now(ZONA_BOGOTA);
+    }
+
+    /** El usuario cambia las cajas; 0 cajas equivale a rechazar el ítem. */
+    public void modificar(int cajas) {
+        if (cajas < 0) {
+            throw new IllegalArgumentException("Las cajas aprobadas no pueden ser negativas");
+        }
+        if (cajas == 0) {
+            rechazar("Modificado a 0 cajas");
+            return;
+        }
+        this.decision = DecisionItem.MODIFICADO;
+        this.cajasAprobadas = cajas;
+        this.motivoRechazo = null;
+        this.fechaDecision = LocalDateTime.now(ZONA_BOGOTA);
+    }
+
+    public void rechazar(String motivo) {
+        this.decision = DecisionItem.RECHAZADO;
+        this.cajasAprobadas = 0;
+        this.motivoRechazo = motivo;
+        this.fechaDecision = LocalDateTime.now(ZONA_BOGOTA);
+    }
+
+    /** Costo que aporta este ítem a la recomendación según su decisión. */
+    BigDecimal costoAprobado() {
+        if (decision == DecisionItem.APROBADO) {
+            return costoEstimado;
+        }
+        if (decision == DecisionItem.MODIFICADO && cajasSugeridas != null && cajasSugeridas > 0) {
+            return costoEstimado.multiply(BigDecimal.valueOf(cajasAprobadas))
+                    .divide(BigDecimal.valueOf(cajasSugeridas), 2, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.ZERO;
+    }
 }

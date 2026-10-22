@@ -27,5 +27,12 @@ public enum TipoEvento {
     // RF31 — Confirmación de venta
     CONFIRMAR_VENTA,
     // RF36 — Despacho planilla comerciante
-    DESPACHO_PLANILLA
+    DESPACHO_PLANILLA,
+    // Multi-tenant — distribuidoras
+    APROVISIONAMIENTO_DISTRIBUIDORA,
+    CAMBIO_ESTADO_DISTRIBUIDORA,
+    ACTUALIZACION_IDENTIDAD,
+    // RF54 / RF56 — Recomendación de compras
+    RECOMENDACION_GENERADA,
+    PEDIDO_DESDE_RECOMENDACION
 }
