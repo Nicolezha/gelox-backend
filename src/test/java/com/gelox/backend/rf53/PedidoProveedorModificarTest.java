@@ -12,7 +12,7 @@ import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.repositories.PedidoProveedorRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.services.EventoSistemaService;
-import com.gelox.backend.services.IdentidadDistribuidoraService;
+import com.gelox.backend.plataforma.IdentidadDistribuidoraService;
 import com.gelox.backend.services.PedidoProveedorService;
 import com.gelox.backend.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;

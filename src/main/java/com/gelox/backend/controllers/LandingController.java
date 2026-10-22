@@ -3,6 +3,7 @@ package com.gelox.backend.controllers;
 import com.gelox.backend.dto.CatalogoProductoPublicoDTO;
 import com.gelox.backend.dto.IdentidadDTO;
 import com.gelox.backend.dto.InfoNegocioDTO;
+import com.gelox.backend.entities.CategoriaProducto;
 import com.gelox.backend.services.LandingService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +14,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import static com.gelox.backend.services.LandingService.SUBDOMINIO_PILOTO;
+
+/**
+ * Landing pública (permitAll). RF61: los datos salen de la distribuidora del subdominio;
+ * las rutas sin subdominio responden con la distribuidora piloto.
+ */
 @RestController
 @RequestMapping("/api/landing")
 public class LandingController {
@@ -25,53 +32,53 @@ public class LandingController {
 
     @GetMapping("/productos")
     public ResponseEntity<Map<String, List<CatalogoProductoPublicoDTO>>> productos() {
-        return ResponseEntity.ok(landingService.obtenerCatalogo());
+        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO));
     }
 
     @GetMapping("/productos/paletas")
     public ResponseEntity<List<CatalogoProductoPublicoDTO>> paletas() {
-        return ResponseEntity.ok(landingService.obtenerPaletas());
+        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO, CategoriaProducto.PALETAS));
     }
 
     @GetMapping("/productos/conos")
     public ResponseEntity<List<CatalogoProductoPublicoDTO>> conos() {
-        return ResponseEntity.ok(landingService.obtenerConos());
+        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO, CategoriaProducto.CONOS));
     }
 
     @GetMapping("/productos/familiares")
     public ResponseEntity<List<CatalogoProductoPublicoDTO>> familiares() {
-        return ResponseEntity.ok(landingService.obtenerFamiliares());
+        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO, CategoriaProducto.FAMILIARES));
     }
 
     @GetMapping("/whatsapp")
     public ResponseEntity<Map<String, String>> whatsapp() {
-        return ResponseEntity.ok(Map.of("url", landingService.obtenerUrlWhatsApp()));
+        return whatsapp(SUBDOMINIO_PILOTO);
     }
 
     @GetMapping("/info-negocio")
     public ResponseEntity<InfoNegocioDTO> infoNegocio() {
-        return ResponseEntity.ok(landingService.obtenerInfoNegocio());
+        return infoNegocio(SUBDOMINIO_PILOTO);
     }
 
-    // ── RF61 — landing por subdominio (las rutas de arriba usan la distribuidora piloto) ──
+    // ── RF61 — landing por subdominio ──
 
     @GetMapping("/{subdominio}/productos")
     public ResponseEntity<Map<String, List<CatalogoProductoPublicoDTO>>> productos(@PathVariable String subdominio) {
-        return ResponseEntity.ok(landingService.obtenerCatalogo(subdominio));
+        return ResponseEntity.ok(landingService.productos(subdominio));
     }
 
     @GetMapping("/{subdominio}/whatsapp")
     public ResponseEntity<Map<String, String>> whatsapp(@PathVariable String subdominio) {
-        return ResponseEntity.ok(Map.of("url", landingService.obtenerUrlWhatsApp(subdominio)));
+        return ResponseEntity.ok(Map.of("url", landingService.whatsapp(subdominio)));
     }
 
     @GetMapping("/{subdominio}/info-negocio")
     public ResponseEntity<InfoNegocioDTO> infoNegocio(@PathVariable String subdominio) {
-        return ResponseEntity.ok(landingService.obtenerInfoNegocio(subdominio));
+        return ResponseEntity.ok(landingService.infoNegocio(subdominio));
     }
 
     @GetMapping("/{subdominio}/identidad")
     public ResponseEntity<IdentidadDTO> identidad(@PathVariable String subdominio) {
-        return ResponseEntity.ok(landingService.obtenerIdentidad(subdominio));
+        return ResponseEntity.ok(landingService.identidad(subdominio));
     }
 }

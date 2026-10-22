@@ -2,7 +2,7 @@
   "info": {
     "name": "GELOX IT2 - Identidad y landing por subdominio",
     "_postman_id": "b3103ff4-34a6-50a9-a8a2-8e4a5e5dc1a2",
-    "description": "Iteración 2 (T119). RF60: identidad visual de la distribuidora (GET/PUT /api/distribuidora/identidad). RF61: landing pública por subdominio (/api/landing/{subdominio}/...). Correr cada carpeta en orden.",
+    "description": "Iteración 2 (T119). RF60: identidad visual de la distribuidora (GET/PUT /api/distribuidora/identidad). RF61: landing pública por subdominio (/api/landing/{subdominio}/...). Correr cada carpeta en orden. Los PUT con archivos usan postman-fixtures/: poner como working directory de Postman la carpeta gelox-backend.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -166,7 +166,80 @@
           "response": []
         },
         {
-          "name": "04 - GET identidad devuelve los valores nuevos",
+          "name": "04 - PUT logo y favicon (Gerente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('logo y favicon con nombre logo-{marca} / favicon-{marca}', () => {",
+                  "  pm.expect(body.logoUrl).to.match(/\\/distribuidoras\\/[0-9a-f-]+\\/logo-\\d+\\.png$/);",
+                  "  pm.expect(body.faviconUrl).to.match(/\\/distribuidoras\\/[0-9a-f-]+\\/favicon-\\d+\\.ico$/);",
+                  "});",
+                  "pm.collectionVariables.set('logoUrlNuevo', body.logoUrl);",
+                  "pm.collectionVariables.set('faviconUrlNuevo', body.faviconUrl);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "Sube postman-fixtures/logo-valido.png y favicon-valido.ico. El working directory de Postman debe ser la carpeta gelox-backend (Settings → General → Working directory).",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nombreComercial",
+                  "value": "{{nombreComercialOriginal}}",
+                  "type": "text"
+                },
+                {
+                  "key": "colorPrimario",
+                  "value": "#112233",
+                  "type": "text"
+                },
+                {
+                  "key": "colorSecundario",
+                  "value": "#AABBCC",
+                  "type": "text"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": "postman-fixtures/logo-valido.png"
+                },
+                {
+                  "key": "favicon",
+                  "type": "file",
+                  "src": "postman-fixtures/favicon-valido.ico"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "05 - GET identidad devuelve los valores nuevos",
           "event": [
             {
               "listen": "test",
@@ -178,6 +251,8 @@
                   "pm.test('persistió el cambio', () => {",
                   "  pm.expect(body.colorPrimario).to.eql('#112233');",
                   "  pm.expect(body.colorSecundario).to.eql('#AABBCC');",
+                  "  pm.expect(body.logoUrl).to.eql(pm.collectionVariables.get('logoUrlNuevo'));",
+                  "  pm.expect(body.faviconUrl).to.eql(pm.collectionVariables.get('faviconUrlNuevo'));",
                   "});"
                 ]
               }
@@ -207,7 +282,7 @@
           "response": []
         },
         {
-          "name": "05 - PUT color inválido → 400",
+          "name": "06 - PUT color inválido → 400",
           "event": [
             {
               "listen": "test",
@@ -263,14 +338,14 @@
                   "type": "file",
                   "src": [],
                   "disabled": true,
-                  "description": "Opcional: PNG, JPG o SVG de hasta 2 MB. Activar y elegir un archivo para probar el cambio de logo."
+                  "description": "Opcional: PNG, JPG o SVG de máximo 2 MB."
                 },
                 {
                   "key": "favicon",
                   "type": "file",
                   "src": [],
                   "disabled": true,
-                  "description": "Opcional: mismas reglas que el logo."
+                  "description": "Opcional: PNG o ICO de máximo 512 KB."
                 }
               ]
             }
@@ -278,7 +353,193 @@
           "response": []
         },
         {
-          "name": "06 - PUT como ENCARGADO_VENTAS → 403",
+          "name": "07 - PUT logo de 3 MB → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje en error', () => pm.expect(pm.response.json().error).to.include('2 MB'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nombreComercial",
+                  "value": "{{nombreComercialOriginal}}",
+                  "type": "text"
+                },
+                {
+                  "key": "colorPrimario",
+                  "value": "#112233",
+                  "type": "text"
+                },
+                {
+                  "key": "colorSecundario",
+                  "value": "#AABBCC",
+                  "type": "text"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": "postman-fixtures/logo-3mb.png"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "08 - PUT favicon de 600 KB → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje en error', () => pm.expect(pm.response.json().error).to.include('512 KB'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nombreComercial",
+                  "value": "{{nombreComercialOriginal}}",
+                  "type": "text"
+                },
+                {
+                  "key": "colorPrimario",
+                  "value": "#112233",
+                  "type": "text"
+                },
+                {
+                  "key": "colorSecundario",
+                  "value": "#AABBCC",
+                  "type": "text"
+                },
+                {
+                  "key": "favicon",
+                  "type": "file",
+                  "src": "postman-fixtures/favicon-600kb.ico"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "09 - PUT logo SVG con <script> → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje en error', () => pm.expect(pm.response.json().error).to.include('script'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nombreComercial",
+                  "value": "{{nombreComercialOriginal}}",
+                  "type": "text"
+                },
+                {
+                  "key": "colorPrimario",
+                  "value": "#112233",
+                  "type": "text"
+                },
+                {
+                  "key": "colorSecundario",
+                  "value": "#AABBCC",
+                  "type": "text"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": "postman-fixtures/logo-con-script.svg"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "10 - PUT como ENCARGADO_VENTAS → 403",
           "event": [
             {
               "listen": "test",
@@ -349,7 +610,7 @@
           "response": []
         },
         {
-          "name": "07 - PUT sin token → 401",
+          "name": "11 - PUT sin token → 401",
           "event": [
             {
               "listen": "test",
@@ -414,7 +675,7 @@
           "response": []
         },
         {
-          "name": "08 - PUT restaurar la identidad original",
+          "name": "12 - PUT restaurar la identidad original",
           "event": [
             {
               "listen": "test",
@@ -604,9 +865,9 @@
                 "exec": [
                   "const body = pm.response.json();",
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "pm.test('trae dirección y enlace', () => {",
-                  "  pm.expect(body).to.have.property('direccion');",
-                  "  pm.expect(body).to.have.property('enlaceComoLlegar');",
+                  "pm.test('trae los datos de la distribuidora', () => {",
+                  "  ['nombreComercial', 'eslogan', 'direccion', 'barrio', 'ciudad', 'horario', 'enlaceComoLlegar', 'whatsapp']",
+                  "    .forEach(campo => pm.expect(body).to.have.property(campo));",
                   "});"
                 ]
               }
@@ -828,6 +1089,18 @@
       "value": "",
       "type": "string",
       "description": "Se completa al correr 'RF61 / 01'"
+    },
+    {
+      "key": "logoUrlNuevo",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF60 / PUT logo y favicon'"
+    },
+    {
+      "key": "faviconUrlNuevo",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF60 / PUT logo y favicon'"
     }
   ]
 }

@@ -10,6 +10,7 @@ import com.gelox.backend.dto.ItemImpresionPlanillaDTO;
 import com.gelox.backend.dto.PlanillaImpresionResponseDTO;
 import com.gelox.backend.entities.*;
 import com.gelox.backend.exceptions.StockInsuficienteException;
+import com.gelox.backend.plataforma.IdentidadDistribuidoraService;
 import com.gelox.backend.repositories.ComercianteRepository;
 import com.gelox.backend.repositories.ItemPlanillaRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
@@ -242,7 +243,7 @@ public class PlanillaService {
 
         var comerciante = planilla.getComerciante();
         var usuario     = planilla.getUsuario();
-        IdentidadDTO identidad = identidadService.obtenerIdentidad();
+        IdentidadDTO identidad = identidadService.obtener();
 
         return new PlanillaImpresionResponseDTO(
                 planilla.getId(),
