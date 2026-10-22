@@ -5,6 +5,10 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -20,6 +24,21 @@ import java.util.UUID;
 public class Distribuidora {
 
     private static final ZoneId ZONA_BOGOTA = ZoneId.of("America/Bogota");
+
+    /** Transiciones permitidas del ciclo de vida (FP-15, sección 2.12.2). */
+    private static final Map<EstadoDistribuidora, Set<EstadoDistribuidora>> TRANSICIONES =
+            new EnumMap<>(EstadoDistribuidora.class);
+
+    static {
+        TRANSICIONES.put(EstadoDistribuidora.PRUEBA,
+                EnumSet.of(EstadoDistribuidora.ACTIVO, EstadoDistribuidora.SUSPENDIDO, EstadoDistribuidora.INACTIVO));
+        TRANSICIONES.put(EstadoDistribuidora.ACTIVO,
+                EnumSet.of(EstadoDistribuidora.SUSPENDIDO, EstadoDistribuidora.INACTIVO));
+        TRANSICIONES.put(EstadoDistribuidora.SUSPENDIDO,
+                EnumSet.of(EstadoDistribuidora.ACTIVO, EstadoDistribuidora.INACTIVO));
+        // INACTIVO es estado final: cualquier cambio responde 409 "Transición no válida"
+        TRANSICIONES.put(EstadoDistribuidora.INACTIVO, EnumSet.noneOf(EstadoDistribuidora.class));
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -114,5 +133,15 @@ public class Distribuidora {
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now(ZONA_BOGOTA);
+    }
+
+    /** Solo las distribuidoras en PRUEBA o ACTIVO pueden operar. */
+    public boolean permiteAcceso() {
+        return estado == EstadoDistribuidora.PRUEBA || estado == EstadoDistribuidora.ACTIVO;
+    }
+
+    public boolean puedeCambiarA(EstadoDistribuidora destino) {
+        return estado != null && destino != null
+                && TRANSICIONES.getOrDefault(estado, Set.of()).contains(destino);
     }
 }

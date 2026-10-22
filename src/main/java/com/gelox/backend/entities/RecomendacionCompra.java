@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -77,6 +78,7 @@ public class RecomendacionCompra implements TenantAware {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "recomendacion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("prioridad ASC")
     @Builder.Default
     private List<ItemRecomendacion> items = new ArrayList<>();
 
@@ -90,5 +92,22 @@ public class RecomendacionCompra implements TenantAware {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now(ZONA_BOGOTA);
+    }
+
+    /**
+     * Costo de los ítems aprobados (costo completo) y modificados (proporcional a las cajas
+     * aprobadas). Se invoca después de cada decisión.
+     */
+    public void recalcularCostoAprobado() {
+        BigDecimal total = BigDecimal.ZERO;
+        for (ItemRecomendacion item : items) {
+            total = total.add(item.costoAprobado());
+        }
+        this.costoAprobado = total.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Una recomendación ya convertida en pedido no admite más decisiones. */
+    public boolean admiteDecision() {
+        return estado != EstadoRecomendacion.PEDIDO_GENERADO;
     }
 }
