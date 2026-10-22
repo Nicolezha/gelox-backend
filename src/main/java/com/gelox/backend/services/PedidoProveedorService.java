@@ -3,6 +3,7 @@ package com.gelox.backend.services;
 import com.gelox.backend.catalogo.dto.PagedResponse;
 import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.*;
+import com.gelox.backend.plataforma.IdentidadDistribuidoraService;
 import com.gelox.backend.repositories.*;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
@@ -342,15 +343,13 @@ public class PedidoProveedorService {
             Sheet sheet = wb.getSheetAt(0);
 
             // T119 — nombre de la distribuidora en el título (A1, combinada A1:I3).
-            // Solo cambia el texto de esa celda: las columnas del formato Nutresa no se mueven.
-            IdentidadDTO identidad = identidadService.obtenerIdentidad();
-            if (identidad != null && identidad.nombreComercial() != null) {
-                Row filaTitulo = sheet.getRow(0);
-                Cell celdaTitulo = filaTitulo != null ? filaTitulo.getCell(0) : null;
-                if (celdaTitulo != null) {
-                    celdaTitulo.setCellValue(cellText(celdaTitulo).stripTrailing()
-                            + " - " + identidad.nombreComercial());
-                }
+            // Solo cambia el texto de esa celda: sin imágenes ni filas o columnas nuevas, porque
+            // el portal de Nutresa y el propio sistema leen el formato desde la fila "Producto/SKU".
+            IdentidadDTO identidad = identidadService.obtener();
+            Row filaTitulo = sheet.getRow(0);
+            Cell celdaTitulo = filaTitulo != null ? filaTitulo.getCell(0) : null;
+            if (identidad != null && identidad.nombreComercial() != null && celdaTitulo != null) {
+                celdaTitulo.setCellValue("Formato de pedido masivo — " + identidad.nombreComercial());
             }
 
             // Buscar fila de encabezados y los índices de columna

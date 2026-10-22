@@ -60,10 +60,19 @@ public class SupabaseStorageService {
      * (la identidad de la distribuidora admite SVG). El llamador valida su propio límite de tamaño.
      */
     public String subirImagen(MultipartFile archivo, String carpeta, Set<String> mimePermitidos) {
+        return subirImagen(archivo, carpeta, mimePermitidos,
+                UUID.randomUUID() + "." + obtenerExtension(archivo != null ? archivo.getOriginalFilename() : null));
+    }
+
+    /**
+     * Igual que {@link #subirImagen(MultipartFile, String, Set)} pero con el nombre del archivo
+     * fijado por el llamador (ej. "logo-1729630000000.png").
+     */
+    public String subirImagen(MultipartFile archivo, String carpeta, Set<String> mimePermitidos,
+                              String nombreArchivo) {
         validarArchivo(archivo, mimePermitidos);
 
-        String extension    = obtenerExtension(archivo.getOriginalFilename());
-        String nombreObjeto = carpeta + "/" + UUID.randomUUID() + "." + extension;
+        String nombreObjeto = carpeta + "/" + nombreArchivo;
         String uploadUrl    = supabaseUrl + "/storage/v1/object/" + bucket + "/" + nombreObjeto;
 
         try {

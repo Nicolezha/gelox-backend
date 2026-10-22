@@ -27,5 +27,7 @@ public enum TipoEvento {
     // RF31 — Confirmación de venta
     CONFIRMAR_VENTA,
     // RF36 — Despacho planilla comerciante
-    DESPACHO_PLANILLA
+    DESPACHO_PLANILLA,
+    // RF60 — Cambio de la identidad visual de la distribuidora
+    ACTUALIZACION_IDENTIDAD
 }

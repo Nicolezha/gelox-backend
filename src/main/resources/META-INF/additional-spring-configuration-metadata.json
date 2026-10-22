@@ -34,36 +34,6 @@
       "name": "app.mail.from-name",
       "type": "java.lang.String",
       "description": "Nombre visible del remitente en los correos del sistema."
-    },
-    {
-      "name": "negocio.whatsapp.numero",
-      "type": "java.lang.String",
-      "description": "Número de WhatsApp del negocio (formato internacional sin +)."
-    },
-    {
-      "name": "negocio.direccion",
-      "type": "java.lang.String",
-      "description": "Dirección física del negocio."
-    },
-    {
-      "name": "negocio.barrio",
-      "type": "java.lang.String",
-      "description": "Barrio donde se encuentra el negocio."
-    },
-    {
-      "name": "negocio.ciudad",
-      "type": "java.lang.String",
-      "description": "Ciudad donde opera el negocio."
-    },
-    {
-      "name": "negocio.horario",
-      "type": "java.lang.String",
-      "description": "Horario de atención del negocio."
-    },
-    {
-      "name": "negocio.maps.url",
-      "type": "java.lang.String",
-      "description": "Enlace de Google Maps con la ubicación del negocio."
     }
   ]
 }

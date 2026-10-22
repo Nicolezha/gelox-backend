@@ -56,12 +56,14 @@ class LandingSubdominioTest {
     @Autowired
     ProductoRepository productoRepository;
 
+    LandingController landingController;
     MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         TenantContext.clear();
-        mockMvc = MockMvcBuilders.standaloneSetup(new LandingController(landingService))
+        landingController = new LandingController(landingService);
+        mockMvc = MockMvcBuilders.standaloneSetup(landingController)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 // standalone no ordena los conversores como Spring Boot: sin esto respondería XML
                 .defaultRequest(get("/").accept(MediaType.APPLICATION_JSON))
@@ -99,6 +101,7 @@ class LandingSubdominioTest {
                 .horario("Lunes a Domingo")
                 .mapsUrl("https://maps.test/" + subdominio)
                 .whatsapp(whatsapp)
+                .eslogan("Helados para todos")
                 .build());
     }
 
@@ -130,7 +133,7 @@ class LandingSubdominioTest {
     @Test
     @DisplayName("la ruta actual sin subdominio devuelve el mismo catálogo que magicosabor")
     void rutaSinSubdominio_esLaDistribuidoraPiloto() {
-        assertThat(landingService.obtenerCatalogo()).isEqualTo(landingService.obtenerCatalogo("magicosabor"));
+        assertThat(landingController.productos().getBody()).isEqualTo(landingService.productos("magicosabor"));
     }
 
     @Test
@@ -165,7 +168,10 @@ class LandingSubdominioTest {
     void datosDelNegocio_salenDeLaDistribuidora() throws Exception {
         mockMvc.perform(get("/api/landing/magicosabor/info-negocio"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombreComercial").value("Mágico Sabor"))
+                .andExpect(jsonPath("$.eslogan").value("Helados para todos"))
                 .andExpect(jsonPath("$.direccion").value("Calle magicosabor"))
+                .andExpect(jsonPath("$.whatsapp").value("573124099628"))
                 .andExpect(jsonPath("$.enlaceComoLlegar").value("https://maps.test/magicosabor"));
         mockMvc.perform(get("/api/landing/magicosabor/whatsapp"))
                 .andExpect(status().isOk())
@@ -184,14 +190,24 @@ class LandingSubdominioTest {
     }
 
     @Test
+    @DisplayName("el TenantContext queda vacío después de la petición pública (también si responde 404)")
+    void peticionPublica_dejaElContextoVacio() throws Exception {
+        mockMvc.perform(get("/api/landing/magicosabor/productos")).andExpect(status().isOk());
+        assertThat(TenantContext.get()).isNull();
+
+        mockMvc.perform(get("/api/landing/suspendida/productos")).andExpect(status().isNotFound());
+        assertThat(TenantContext.get()).isNull();
+    }
+
+    @Test
     @DisplayName("el tenant puesto a mano no queda en el contexto, y si había uno se restaura")
     void tenantManual_seRestaura() {
-        landingService.obtenerCatalogo("magicosabor");
+        landingService.productos("magicosabor");
         assertThat(TenantContext.get()).isNull();
 
         UUID tenantDeLaPeticion = UUID.randomUUID();
         TenantContext.set(tenantDeLaPeticion);
-        landingService.obtenerCatalogo("heladosnorte");
+        landingService.productos("heladosnorte");
         assertThat(TenantContext.get()).isEqualTo(tenantDeLaPeticion);
     }
 }

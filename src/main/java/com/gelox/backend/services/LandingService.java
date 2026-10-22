@@ -46,11 +46,8 @@ public class LandingService {
         this.productoRepository = productoRepository;
     }
 
-    public Map<String, List<CatalogoProductoPublicoDTO>> obtenerCatalogo() {
-        return obtenerCatalogo(SUBDOMINIO_PILOTO);
-    }
-
-    public Map<String, List<CatalogoProductoPublicoDTO>> obtenerCatalogo(String subdominio) {
+    /** Productos activos de la distribuidora agrupados por categoría. */
+    public Map<String, List<CatalogoProductoPublicoDTO>> productos(String subdominio) {
         List<Producto> productos = conTenantDe(resolver(subdominio), productoRepository::findByActivoTrue);
         return productos.stream()
                 .filter(this::tienePrecio)
@@ -59,11 +56,7 @@ public class LandingService {
                 .collect(Collectors.groupingBy(CatalogoProductoPublicoDTO::categoria));
     }
 
-    public String obtenerUrlWhatsApp() {
-        return obtenerUrlWhatsApp(SUBDOMINIO_PILOTO);
-    }
-
-    public String obtenerUrlWhatsApp(String subdominio) {
+    public String whatsapp(String subdominio) {
         Distribuidora d = resolver(subdominio);
         if (d.getWhatsapp() == null || d.getWhatsapp().isBlank()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -72,38 +65,26 @@ public class LandingService {
         return "https://wa.me/" + d.getWhatsapp();
     }
 
-    public InfoNegocioDTO obtenerInfoNegocio() {
-        return obtenerInfoNegocio(SUBDOMINIO_PILOTO);
-    }
-
-    public InfoNegocioDTO obtenerInfoNegocio(String subdominio) {
+    public InfoNegocioDTO infoNegocio(String subdominio) {
         Distribuidora d = resolver(subdominio);
         return new InfoNegocioDTO(
+                d.getNombreComercial(),
+                d.getEslogan(),
                 d.getDireccion(),
                 d.getBarrio(),
                 d.getCiudad(),
                 d.getHorario(),
-                d.getMapsUrl()
+                d.getMapsUrl(),
+                d.getWhatsapp()
         );
     }
 
-    public IdentidadDTO obtenerIdentidad(String subdominio) {
+    public IdentidadDTO identidad(String subdominio) {
         return IdentidadDTO.from(resolver(subdominio));
     }
 
-    public List<CatalogoProductoPublicoDTO> obtenerPaletas() {
-        return obtenerPorCategoria(SUBDOMINIO_PILOTO, CategoriaProducto.PALETAS);
-    }
-
-    public List<CatalogoProductoPublicoDTO> obtenerConos() {
-        return obtenerPorCategoria(SUBDOMINIO_PILOTO, CategoriaProducto.CONOS);
-    }
-
-    public List<CatalogoProductoPublicoDTO> obtenerFamiliares() {
-        return obtenerPorCategoria(SUBDOMINIO_PILOTO, CategoriaProducto.FAMILIARES);
-    }
-
-    private List<CatalogoProductoPublicoDTO> obtenerPorCategoria(String subdominio, CategoriaProducto categoria) {
+    /** Productos activos de una sola categoría (rutas /productos/paletas, /conos y /familiares). */
+    public List<CatalogoProductoPublicoDTO> productos(String subdominio, CategoriaProducto categoria) {
         return conTenantDe(resolver(subdominio),
                 () -> productoRepository.findByActivoTrueAndCategoria(categoria))
                 .stream().filter(this::tienePrecio).map(this::toDTO).toList();
