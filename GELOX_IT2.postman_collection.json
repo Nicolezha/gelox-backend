@@ -1,11 +1,342 @@
 {
   "info": {
-    "name": "GELOX IT2 - Identidad y landing por subdominio",
+    "name": "GELOX IT2 - Recomendación, identidad y landing por subdominio",
     "_postman_id": "b3103ff4-34a6-50a9-a8a2-8e4a5e5dc1a2",
-    "description": "Iteración 2 (T119). RF60: identidad visual de la distribuidora (GET/PUT /api/distribuidora/identidad). RF61: landing pública por subdominio (/api/landing/{subdominio}/...). Correr cada carpeta en orden. Los PUT con archivos usan postman-fixtures/: poner como working directory de Postman la carpeta gelox-backend.",
+    "description": "Iteración 2. RF54 (T112): generación de la recomendación de compras (POST /api/recomendaciones). (T119) RF60: identidad visual de la distribuidora (GET/PUT /api/distribuidora/identidad). RF61: landing pública por subdominio (/api/landing/{subdominio}/...). Correr cada carpeta en orden. Los PUT con archivos usan postman-fixtures/: poner como working directory de Postman la carpeta gelox-backend.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
+    {
+      "name": "RF54",
+      "description": "T112 — Motor de recomendación de compras. POST /api/recomendaciones {presupuesto, origen}. Correr en orden: 01 guarda el id que usa 02.",
+      "item": [
+        {
+          "name": "01 - POST generar recomendación (Gerente) → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('trae la forma del contrato RF54', () => {",
+                  "  pm.expect(body.id).to.be.a('string');",
+                  "  pm.expect(body.estado).to.eql('GENERADA');",
+                  "  pm.expect(body.presupuesto).to.eql(80000);",
+                  "  pm.expect(body.costoAprobado).to.eql(0);",
+                  "  pm.expect(body.confianzaBaja).to.be.a('boolean');",
+                  "  pm.expect(body.diasHistorial).to.be.a('number');",
+                  "  pm.expect(body.diasConVentas).to.be.a('number');",
+                  "  pm.expect(body.items).to.be.an('array');",
+                  "  pm.expect(body.productosExcluidos).to.be.an('array');",
+                  "});",
+                  "pm.test('costoTotal no supera el presupuesto y suma COMPLETO + REDUCIDO', () => {",
+                  "  const suma = body.items.filter(i => i.ajustePresupuesto !== 'EXCLUIDO').reduce((a, i) => a + i.costoEstimado, 0);",
+                  "  pm.expect(body.costoTotal).to.be.at.most(80000);",
+                  "  pm.expect(Math.round(suma)).to.eql(Math.round(body.costoTotal));",
+                  "});",
+                  "pm.test('prioridades 1..n y EXCLUIDO con 0 cajas', () => {",
+                  "  body.items.forEach((i, idx) => {",
+                  "    pm.expect(i.prioridad).to.eql(idx + 1);",
+                  "    pm.expect(['CRITICO', 'ALERTA', 'ESTABLE']).to.include(i.urgencia);",
+                  "    pm.expect(i.justificacion).to.be.a('string').and.not.empty;",
+                  "    if (i.ajustePresupuesto === 'EXCLUIDO') pm.expect(i.cajasSugeridas).to.eql(0);",
+                  "  });",
+                  "});",
+                  "pm.collectionVariables.set('recomendacionId', body.id);",
+                  "pm.collectionVariables.set('itemsRecomendacion', body.items.length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/recomendaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recomendaciones"
+              ]
+            },
+            "description": "Genera y guarda la recomendación con $80.000 (ejemplo de la sección 2.10.7 del FP-15). Guarda el id para la siguiente petición.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"presupuesto\": 80000,\n  \"origen\": \"PANTALLA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "02 - GET detalle de la recomendación guardada → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('quedó guardada con sus ítems y variables', () => {",
+                  "  pm.expect(body.id).to.eql(pm.collectionVariables.get('recomendacionId'));",
+                  "  pm.expect(body.items.length).to.eql(Number(pm.collectionVariables.get('itemsRecomendacion')));",
+                  "  body.items.forEach(i => {",
+                  "    pm.expect(i.stockSeguridad).to.be.a('number');",
+                  "    pm.expect(i.puntoReorden).to.be.a('number');",
+                  "    pm.expect(i.factorEstacionalidad).to.be.a('number');",
+                  "    pm.expect(i.decision).to.eql('PENDIENTE');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/recomendaciones/{{recomendacionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recomendaciones",
+                "{{recomendacionId}}"
+              ]
+            },
+            "description": "Usa el GET de RF55 (T114) para comprobar que la recomendación quedó guardada con todas las variables del cálculo."
+          },
+          "response": []
+        },
+        {
+          "name": "03 - POST presupuesto 0 → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje del contrato', () => pm.expect(pm.response.json().error).to.eql('El presupuesto debe ser mayor a cero'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/recomendaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recomendaciones"
+              ]
+            },
+            "description": "Presupuesto ≤ 0 → 400.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"presupuesto\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04 - POST sin presupuesto → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje del contrato', () => pm.expect(pm.response.json().error).to.eql('El presupuesto debe ser mayor a cero'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/recomendaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recomendaciones"
+              ]
+            },
+            "description": "Presupuesto ausente → mismo 400.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origen\": \"PANTALLA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "05 - POST como ENCARGADO_VENTAS → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenVendedor}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/recomendaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recomendaciones"
+              ]
+            },
+            "description": "Solo ADMINISTRADOR y ENCARGADO_INVENTARIO generan recomendaciones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"presupuesto\": 80000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06 - POST presupuesto de $1 → todo EXCLUIDO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('nada cabe: costoTotal 0 y los ítems quedan EXCLUIDO con 0 cajas', () => {",
+                  "  pm.expect(body.costoTotal).to.eql(0);",
+                  "  body.items.forEach(i => {",
+                  "    pm.expect(i.ajustePresupuesto).to.eql('EXCLUIDO');",
+                  "    pm.expect(i.cajasSugeridas).to.eql(0);",
+                  "    pm.expect(i.justificacion).to.include('Excede el presupuesto');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/recomendaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recomendaciones"
+              ]
+            },
+            "description": "Con un presupuesto que no alcanza para ninguna caja, los ítems se guardan EXCLUIDO y se sigue recorriendo la lista.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"presupuesto\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
     {
       "name": "RF60",
       "item": [
@@ -1101,6 +1432,18 @@
       "value": "",
       "type": "string",
       "description": "Se completa al correr 'RF60 / PUT logo y favicon'"
+    },
+    {
+      "key": "recomendacionId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF54 / 01'"
+    },
+    {
+      "key": "itemsRecomendacion",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF54 / 01'"
     }
   ]
 }

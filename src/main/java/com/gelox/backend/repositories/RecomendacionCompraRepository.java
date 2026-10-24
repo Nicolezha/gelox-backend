@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface RecomendacionCompraRepository extends JpaRepository<RecomendacionCompra, UUID> {
@@ -39,4 +40,18 @@ public interface RecomendacionCompraRepository extends JpaRepository<Recomendaci
     List<RecomendacionCompra> buscarConItems(@Param("tenantId") UUID tenantId,
                                              @Param("desde") LocalDateTime desde,
                                              @Param("hasta") LocalDateTime hasta);
+
+    /** Recomendación más reciente del tenant en el rango [desde, hasta) con alguno de los estados (RF54, voz). */
+    @Query("""
+            SELECT r FROM RecomendacionCompra r
+            WHERE r.tenantId = :tenantId
+              AND r.estado IN :estados
+              AND r.createdAt >= :desde AND r.createdAt < :hasta
+            ORDER BY r.createdAt DESC
+            LIMIT 1
+            """)
+    Optional<RecomendacionCompra> buscarUltima(@Param("tenantId") UUID tenantId,
+                                               @Param("estados") Collection<EstadoRecomendacion> estados,
+                                               @Param("desde") LocalDateTime desde,
+                                               @Param("hasta") LocalDateTime hasta);
 }
