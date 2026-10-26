@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS distribuidora (
     subdominio         VARCHAR(30)  NOT NULL UNIQUE
                        CONSTRAINT ck_distribuidora_subdominio CHECK (subdominio ~ '^[a-z0-9-]{3,30}$'),
     correo_gerente     VARCHAR(150) NOT NULL,
-    gerente_titular_id UUID,
+    gerente_titular_id UUID REFERENCES usuario(id),
     telefono           VARCHAR(20),
     direccion          TEXT,
     barrio             VARCHAR(80),
@@ -74,7 +74,7 @@ DECLARE
     ];
     con_indice_compuesto TEXT[] := ARRAY[
         'producto', 'venta', 'pedido_proveedor', 'comerciante',
-        'planilla_comerciante', 'movimiento_inventario', 'perdida', 'evento_sistema'
+        'planilla_comerciante', 'cierre_caja', 'movimiento_inventario', 'perdida', 'evento_sistema'
     ];
 BEGIN
     FOREACH t IN ARRAY tablas LOOP
@@ -130,9 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_movimiento_inventario_tenant_fecha ON movimiento_
 CREATE INDEX IF NOT EXISTS idx_perdida_tenant_fecha            ON perdida (tenant_id, fecha);
 CREATE INDEX IF NOT EXISTS idx_evento_sistema_tenant_fecha     ON evento_sistema (tenant_id, fecha DESC);
 
--- 6. El trigger de V4 inserta en evento_sistema: ahora debe propagar tenant_id.
--- evento_sistema.tipo es VARCHAR(255) sin CHECK: los nuevos tipos (p. ej.
--- APROVISIONAMIENTO_DISTRIBUIDORA, 31 caracteres) caben sin ampliar la columna.
+-- 6. El trigger de V4 inserta en evento_sistema: ahora debe propagar tenant_id
 CREATE OR REPLACE FUNCTION fn_evaluar_stock_alerta()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -192,19 +190,3 @@ BEGIN
       AND DATE(v.fecha) = p_fecha;
 END;
 $$;
-
--- 8. Gerente titular de Mágico Sabor: el usuario ADMINISTRADOR de Ayde Arévalo.
--- Se hace al final porque usuario y distribuidora se referencian entre sí. Si ese usuario
--- no existe en la base donde corre la migración, el UPDATE no afecta filas (no falla).
--- Toma también su correo como correo_gerente, en lugar del valor piloto del INSERT.
-UPDATE distribuidora d
-   SET gerente_titular_id = u.id,
-       correo_gerente     = u.correo
-  FROM usuario u
- WHERE d.id = '00000000-0000-0000-0000-000000000001'
-   AND u.id = '44e3104d-3483-458d-9898-f3afa216e580'
-   AND u.rol = 'ADMINISTRADOR';
-
-ALTER TABLE distribuidora DROP CONSTRAINT IF EXISTS fk_distribuidora_gerente_titular;
-ALTER TABLE distribuidora ADD CONSTRAINT fk_distribuidora_gerente_titular
-    FOREIGN KEY (gerente_titular_id) REFERENCES usuario(id);
