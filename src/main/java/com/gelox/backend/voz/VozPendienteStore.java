@@ -13,7 +13,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Recuerda, en memoria, una operación a la espera de que el usuario diga
- * "confirmar" o "cancelar", durante {@value #TTL_SEGUNDOS} segundos.
+ * "confirmar" o "cancelar". Cada pendiente guarda su propio vencimiento:
+ * {@value #TTL_DECISION_RECOMENDACION_SEGUNDOS} s para DECIDIR_RECOMENDACION (FP-15 §2.11.5)
+ * y {@value #TTL_SEGUNDOS} s para las demás operaciones.
  * <p>
  * Es en memoria a propósito (Render corre una sola instancia): así no hace
  * falta agregar un estado "pendiente" a {@code EstadoComandoVoz} — el
@@ -24,12 +26,19 @@ public class VozPendienteStore {
 
     public static final int TTL_SEGUNDOS = 45;
 
+    public static final int TTL_DECISION_RECOMENDACION_SEGUNDOS = 15;
+
+    /** Plazo para confirmar esta operación; es el expiraEnSegundos que recibe el frontend. */
+    public static int ttlSegundos(TipoIntencionVoz intencion) {
+        return intencion == TipoIntencionVoz.DECIDIR_RECOMENDACION ? TTL_DECISION_RECOMENDACION_SEGUNDOS : TTL_SEGUNDOS;
+    }
+
     private final ConcurrentHashMap<UUID, VozPendiente> pendientes = new ConcurrentHashMap<>();
 
     public void put(UUID comandoId, UUID usuarioId, TipoIntencionVoz intencion, Object payload) {
         limpiarVencidos();
         pendientes.put(comandoId, new VozPendiente(
-                comandoId, usuarioId, intencion, payload, Instant.now().plusSeconds(TTL_SEGUNDOS)));
+                comandoId, usuarioId, intencion, payload, Instant.now().plusSeconds(ttlSegundos(intencion))));
     }
 
     /** Quita y devuelve el pendiente — solo se puede tomar una vez. */

@@ -5,10 +5,12 @@ import com.gelox.backend.entities.EstadoComandoVoz;
 import com.gelox.backend.entities.MetodoClasificacion;
 import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.recomendacion.RecomendacionCompraService;
 import com.gelox.backend.repositories.ComandoVozRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.voz.dto.VozConfirmarRequest;
 import com.gelox.backend.voz.handlers.PendienteAclaracion;
+import com.gelox.backend.voz.handlers.RecomendacionVozHandler;
 import com.gelox.backend.voz.dto.VozConfirmarResponse;
 import com.gelox.backend.voz.dto.VozInterpretarRequest;
 import com.gelox.backend.voz.dto.VozInterpretarResponse;
@@ -59,9 +61,12 @@ public class VozService {
     private static final Pattern ES_AGREGADO = Pattern.compile("^(agrega|anade|tambien)\\b");
 
     private final List<IntencionHandler> handlers;
+    /** El LLM (ProcesadorLenguajeLlm, @Primary) con respaldo en el clasificador de la Iteración 1. */
+    private final ProcesadorLenguaje procesador;
     private final ClasificadorIntencion clasificador;
     private final ComandoVozRepository comandoVozRepository;
     private final VozPendienteStore pendienteStore;
+    private final RecomendacionCompraService recomendacionService;
 
     private Map<TipoIntencionVoz, IntencionHandler> handlersPorTipo;
 
@@ -80,17 +85,28 @@ public class VozService {
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS", "ENCARGADO_INVENTARIO"})
     public VozInterpretarResponse interpretar(VozInterpretarRequest request, Usuario usuario) {
-        ClasificadorIntencion.ResultadoClasificacion resultado = clasificador.clasificar(request.texto());
+        ClasificadorIntencion.ResultadoClasificacion resultado = procesador.procesar(request.texto());
+        Map<String, String> slots = resultado.slots();
 
         // T41-BE5 — "agrega/añade/también ..." continúa la venta que espera confirmación.
         TipoIntencionVoz intencion = resultado.intencion();
         // PLN — un agregado sin la palabra "pedido" no lo reinterpreta el modelo (podría tomarlo como
         // MODIFICAR_PEDIDO o como una venta nueva): se decide con las reglas, como antes del modelo.
         String normalizadoAgregado = NormalizadorVoz.normalizar(request.texto());
-        if (resultado.metodo() == MetodoClasificacion.MODELO
+        if ((resultado.metodo() == MetodoClasificacion.MODELO || resultado.metodo() == MetodoClasificacion.LLM)
                 && ES_AGREGADO.matcher(normalizadoAgregado).find()
                 && !normalizadoAgregado.contains("pedido")) {
             intencion = clasificador.intencionPorReglas(request.texto());
+        }
+        // T115-BE3 — "genera el pedido" sin productos: con el LLM lo resuelve la regla 4 del prompt;
+        // con el clasificador de respaldo se redirige a la recomendación de hoy si ya tiene aprobados.
+        if (intencion == TipoIntencionVoz.GENERAR_PEDIDO
+                && resultado.metodo() != MetodoClasificacion.LLM
+                && !slots.containsKey("cantidad")
+                && handlersPorTipo.containsKey(TipoIntencionVoz.DECIDIR_RECOMENDACION)
+                && hayAprobadosHoy()) {
+            intencion = TipoIntencionVoz.DECIDIR_RECOMENDACION;
+            slots = Map.of("accion", RecomendacionVozHandler.Accion.GENERAR_PEDIDO.name());
         }
         VozPendiente ventaEnCurso = null;
         boolean agregado = false;
@@ -131,9 +147,9 @@ public class VozService {
             VozPendiente paraHandler = new VozPendiente(
                     ventaEnCurso.comandoId(), ventaEnCurso.usuarioId(), intencion,
                     datosPrevios.payloadHandler(), ventaEnCurso.expiraEn());
-            ctx = new VozContexto(request.texto(), resultado.slots(), request.confianza(), usuario, hoy, paraHandler);
+            ctx = new VozContexto(request.texto(), slots, request.confianza(), usuario, hoy, paraHandler);
         } else {
-            ctx = new VozContexto(request.texto(), resultado.slots(), request.confianza(), usuario, hoy);
+            ctx = new VozContexto(request.texto(), slots, request.confianza(), usuario, hoy);
         }
         VozResultado interpretado = handler.interpretar(ctx);
 
@@ -167,10 +183,10 @@ public class VozService {
                 // Consulta pendiente solo por baja confianza (RNF-5): se confirma lo entendido
                 // y la respuesta llega con la confirmación, no antes.
                 return new VozInterpretarResponse(comandoId, true, intencion.name(), true,
-                        VozPendienteStore.TTL_SEGUNDOS, "Entendí: \"" + request.texto() + "\". ¿Confirmas?", Map.of());
+                        VozPendienteStore.ttlSegundos(intencion), "Entendí: \"" + request.texto() + "\". ¿Confirmas?", Map.of());
             }
             return new VozInterpretarResponse(comandoId, true, intencion.name(), true,
-                    VozPendienteStore.TTL_SEGUNDOS, interpretado.textoRespuesta(), interpretado.datos());
+                    VozPendienteStore.ttlSegundos(intencion), interpretado.textoRespuesta(), interpretado.datos());
         }
 
         ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
@@ -178,6 +194,12 @@ public class VozService {
                     resultado.probabilidadIntencion(), resultado.metodo());
         return new VozInterpretarResponse(comando.getId(), true, intencion.name(), false, null,
                 interpretado.textoRespuesta(), interpretado.datos());
+    }
+
+    private boolean hayAprobadosHoy() {
+        return recomendacionService.recomendacionDelDia()
+                .map(r -> !RecomendacionVozHandler.aprobados(r).isEmpty())
+                .orElse(false);
     }
 
     private static boolean esperaDestinatario(VozPendiente pendiente) {

@@ -1,12 +1,17 @@
 package com.gelox.backend.voz;
 
 import com.gelox.backend.TestHelper;
+import com.gelox.backend.entities.AjustePresupuesto;
 import com.gelox.backend.entities.ComandoVoz;
+import com.gelox.backend.entities.DecisionItem;
 import com.gelox.backend.entities.EstadoComandoVoz;
 import com.gelox.backend.entities.MetodoClasificacion;
 import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.recomendacion.RecomendacionCompraService;
+import com.gelox.backend.recomendacion.dto.ItemDTO;
+import com.gelox.backend.recomendacion.dto.RecomendacionDTO;
 import com.gelox.backend.repositories.ComandoVozRepository;
 import com.gelox.backend.voz.dto.VozConfirmarRequest;
 import com.gelox.backend.voz.dto.VozConfirmarResponse;
@@ -25,8 +30,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,6 +51,9 @@ class VozServiceTest {
 
     @Mock
     ComandoVozRepository comandoVozRepository;
+
+    @Mock
+    RecomendacionCompraService recomendacionService;
 
     VozService vozService;
     VozPendienteStore pendienteStore;
@@ -70,12 +80,7 @@ class VozServiceTest {
         handlerInventario = new HandlerDePrueba(TipoIntencionVoz.CONSULTAR_INVENTARIO, false);
 
         clasificador = new ClasificadorIntencion(modelo);
-        vozService = new VozService(
-                List.of(handlerVenta, handlerInventario),
-                clasificador,
-                comandoVozRepository,
-                pendienteStore);
-        vozService.indexarHandlers();
+        vozService = crearServicio(List.of(handlerVenta, handlerInventario));
 
         usuario = TestHelper.buildUsuario("uid-1", "voz@gelox-test.com", RolUsuario.ENCARGADO_VENTAS, true);
     }
@@ -377,6 +382,69 @@ class VozServiceTest {
             var r = clasificador.clasificar(frase);
             assertThat(r.intencion()).as("intención de '%s' (p=%s)", frase, r.probabilidadIntencion()).isNull();
         }
+    }
+
+    /** Sin LLM: el clasificador de la Iteración 1 hace de procesador (es el respaldo de ProcesadorLenguajeLlm). */
+    private VozService crearServicio(List<IntencionHandler> handlers) {
+        VozService servicio = new VozService(handlers, clasificador, clasificador,
+                comandoVozRepository, pendienteStore, recomendacionService);
+        servicio.indexarHandlers();
+        return servicio;
+    }
+
+    private static RecomendacionDTO recomendacionConItem(DecisionItem decision, Integer cajasAprobadas) {
+        ItemDTO item = new ItemDTO(UUID.randomUUID(), UUID.randomUUID(), "Aloha Mango Biche", 1, null, null, null,
+                null, null, null, 0, null, 24, 1, AjustePresupuesto.COMPLETO, new BigDecimal("48840"), null, null,
+                decision, cajasAprobadas, null, null);
+        return new RecomendacionDTO(UUID.randomUUID(), null, null, null, new BigDecimal("48840"),
+                new BigDecimal("48840"), false, 90, 30, null, null, null, List.of(item));
+    }
+
+    @Test
+    @DisplayName("T115-BE3 — 'genera el pedido' sin productos va a la recomendación si tiene aprobados (15 s)")
+    void generarPedidoSinItems_redirigeALaRecomendacion() {
+        HandlerDePrueba handlerPedido = new HandlerDePrueba(TipoIntencionVoz.GENERAR_PEDIDO, true);
+        HandlerDePrueba handlerDecidir = new HandlerDePrueba(TipoIntencionVoz.DECIDIR_RECOMENDACION, true);
+        VozService servicio = crearServicio(List.of(handlerVenta, handlerPedido, handlerDecidir));
+        when(recomendacionService.recomendacionDelDia())
+                .thenReturn(Optional.of(recomendacionConItem(DecisionItem.APROBADO, 1)));
+
+        VozInterpretarResponse r = servicio.interpretar(new VozInterpretarRequest("genera el pedido", 0.95), usuario);
+
+        assertThat(r.intencion()).isEqualTo(TipoIntencionVoz.DECIDIR_RECOMENDACION.name());
+        assertThat(r.expiraEnSegundos()).isEqualTo(15);
+        assertThat(handlerDecidir.ultimoContexto.slots()).containsEntry("accion", "GENERAR_PEDIDO");
+        assertThat(handlerPedido.ultimoContexto).isNull();
+    }
+
+    @Test
+    @DisplayName("T115-BE3 — sin aprobados en la recomendación sigue siendo GENERAR_PEDIDO con 45 s")
+    void generarPedidoSinAprobados_noRedirige() {
+        HandlerDePrueba handlerPedido = new HandlerDePrueba(TipoIntencionVoz.GENERAR_PEDIDO, true);
+        HandlerDePrueba handlerDecidir = new HandlerDePrueba(TipoIntencionVoz.DECIDIR_RECOMENDACION, true);
+        VozService servicio = crearServicio(List.of(handlerVenta, handlerPedido, handlerDecidir));
+        when(recomendacionService.recomendacionDelDia())
+                .thenReturn(Optional.of(recomendacionConItem(DecisionItem.PENDIENTE, null)));
+
+        VozInterpretarResponse r = servicio.interpretar(new VozInterpretarRequest("genera el pedido", 0.95), usuario);
+
+        assertThat(r.intencion()).isEqualTo(TipoIntencionVoz.GENERAR_PEDIDO.name());
+        assertThat(r.expiraEnSegundos()).isEqualTo(VozPendienteStore.TTL_SEGUNDOS);
+        assertThat(handlerDecidir.ultimoContexto).isNull();
+    }
+
+    @Test
+    @DisplayName("T115-BE3 — un pedido dictado con productos no consulta la recomendación")
+    void generarPedidoConItems_noConsultaLaRecomendacion() {
+        HandlerDePrueba handlerPedido = new HandlerDePrueba(TipoIntencionVoz.GENERAR_PEDIDO, true);
+        HandlerDePrueba handlerDecidir = new HandlerDePrueba(TipoIntencionVoz.DECIDIR_RECOMENDACION, true);
+        VozService servicio = crearServicio(List.of(handlerVenta, handlerPedido, handlerDecidir));
+
+        VozInterpretarResponse r = servicio.interpretar(
+                new VozInterpretarRequest("genera un pedido con 20 cajas de solo lack", 0.95), usuario);
+
+        assertThat(r.intencion()).isEqualTo(TipoIntencionVoz.GENERAR_PEDIDO.name());
+        verifyNoInteractions(recomendacionService);
     }
 
     private static class HandlerDePrueba implements IntencionHandler {
