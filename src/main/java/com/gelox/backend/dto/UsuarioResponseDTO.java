@@ -13,4 +13,6 @@ public class UsuarioResponseDTO {
     private boolean activo;
     private LocalDateTime ultimoAcceso;
     private String fotoUrl;
+    // RF62 — el frontend oculta deshabilitar y cambiar rol para el gerente titular
+    private boolean esGerenteTitular;
 }

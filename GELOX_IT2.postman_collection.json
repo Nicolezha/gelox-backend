@@ -2,7 +2,7 @@
   "info": {
     "name": "GELOX IT2 - Recomendación, identidad y landing por subdominio",
     "_postman_id": "b3103ff4-34a6-50a9-a8a2-8e4a5e5dc1a2",
-    "description": "Iteración 2. RF54 (T112): generación de la recomendación de compras (POST /api/recomendaciones). (T119) RF60: identidad visual de la distribuidora (GET/PUT /api/distribuidora/identidad). RF61: landing pública por subdominio (/api/landing/{subdominio}/...). Correr cada carpeta en orden. Los PUT con archivos usan postman-fixtures/: poner como working directory de Postman la carpeta gelox-backend.",
+    "description": "Iteración 2. RF54 (T112): generación de la recomendación de compras (POST /api/recomendaciones). (T119) RF60: identidad visual de la distribuidora (GET/PUT /api/distribuidora/identidad). RF61: landing pública por subdominio (/api/landing/{subdominio}/...). Correr cada carpeta en orden. Los PUT con archivos usan postman-fixtures/: poner como working directory de Postman la carpeta gelox-backend. (T121) RF62: gestión de usuarios por distribuidora (/api/usuarios): alcance por tenant, roles permitidos y gerente titular.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -1359,6 +1359,680 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "RF62",
+      "description": "T121 — Gestión de usuarios por distribuidora. token = Gerente de la distribuidora A; usuarioOtroTenantId = id de un usuario de otra distribuidora; firebaseApiKey para el login de 06. Correr en orden.",
+      "item": [
+        {
+          "name": "01 - GET listar usuarios (solo el propio tenant)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('cada usuario trae esGerenteTitular (boolean)', () => {",
+                  "  body.forEach(u => pm.expect(u.esGerenteTitular).to.be.a('boolean'));",
+                  "});",
+                  "pm.test('a lo sumo un gerente titular', () => {",
+                  "  pm.expect(body.filter(u => u.esGerenteTitular).length).to.be.at.most(1);",
+                  "});",
+                  "const otro = pm.collectionVariables.get('usuarioOtroTenantId');",
+                  "if (otro) pm.test('no trae al usuario de la otra distribuidora', () => pm.expect(body.map(u => u.id)).to.not.include(otro));",
+                  "const titular = body.find(u => u.esGerenteTitular);",
+                  "if (titular) {",
+                  "  pm.collectionVariables.set('gerenteTitularId', titular.id);",
+                  "  pm.collectionVariables.set('gerenteTitularNombre', titular.nombre);",
+                  "  pm.collectionVariables.set('gerenteTitularCorreo', titular.correo);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios"
+              ]
+            },
+            "description": "Guarda el gerente titular para 13 y 14. Si usuarioOtroTenantId está definido, verifica que no aparezca."
+          },
+          "response": []
+        },
+        {
+          "name": "02 - POST crear con rol ADMINISTRADOR → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje: Solo se permiten los roles de Ventas e Inventarios', () => pm.expect(pm.response.text()).to.include('Solo se permiten los roles de Ventas e Inventarios'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"RF62 Admin\",\n  \"correo\": \"rf62-admin-{{$timestamp}}@gelox-test.com\",\n  \"contrasenaTemporal\": \"Pass1234!\",\n  \"rol\": \"ADMINISTRADOR\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03 - POST crear con rol SUPERADMINISTRADOR → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje: Solo se permiten los roles de Ventas e Inventarios', () => pm.expect(pm.response.text()).to.include('Solo se permiten los roles de Ventas e Inventarios'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"RF62 Super\",\n  \"correo\": \"rf62-super-{{$timestamp}}@gelox-test.com\",\n  \"contrasenaTemporal\": \"Pass1234!\",\n  \"rol\": \"SUPERADMINISTRADOR\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04 - POST crear ENCARGADO_VENTAS → 201",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('rf62Correo', 'rf62-ventas-' + Date.now() + '@gelox-test.com');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('rol y estado', () => {",
+                  "  pm.expect(body.rol).to.eql('ENCARGADO_VENTAS');",
+                  "  pm.expect(body.activo).to.eql(true);",
+                  "  pm.expect(body.esGerenteTitular).to.eql(false);",
+                  "});",
+                  "pm.collectionVariables.set('rf62UsuarioId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"RF62 Vendedor\",\n  \"correo\": \"{{rf62Correo}}\",\n  \"contrasenaTemporal\": \"{{rf62Contrasena}}\",\n  \"rol\": \"ENCARGADO_VENTAS\"\n}"
+            },
+            "description": "El correo se genera en el pre-request y se reutiliza en 05, 06 y 08."
+          },
+          "response": []
+        },
+        {
+          "name": "05 - POST crear con correo ya registrado → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje: Ya existe un usuario con ese correo.', () => pm.expect(pm.response.text()).to.include('Ya existe un usuario con ese correo.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"RF62 Duplicado\",\n  \"correo\": \"{{rf62Correo}}\",\n  \"contrasenaTemporal\": \"Pass1234!\",\n  \"rol\": \"ENCARGADO_INVENTARIO\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06 - Firebase login del usuario creado (claim tenant_id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function claims(jwt) {",
+                  "  const b64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');",
+                  "  return JSON.parse(decodeURIComponent(escape(atob(b64))));",
+                  "}",
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('tokenRf62', body.idToken);",
+                  "const nuevo = claims(body.idToken);",
+                  "const gerente = claims(pm.collectionVariables.get('token'));",
+                  "pm.test('claim rol = ENCARGADO_VENTAS', () => pm.expect(nuevo.rol).to.eql('ENCARGADO_VENTAS'));",
+                  "pm.test('claim tenant_id = distribuidora del Gerente', () => {",
+                  "  pm.expect(nuevo.tenant_id).to.be.a('string');",
+                  "  pm.expect(nuevo.tenant_id).to.eql(gerente.tenant_id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={{firebaseApiKey}}"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{rf62Correo}}\",\n  \"password\": \"{{rf62Contrasena}}\",\n  \"returnSecureToken\": true\n}"
+            },
+            "description": "Requiere firebaseApiKey (Web API key del proyecto Firebase). Decodifica el ID token y compara tenant_id con el del token del Gerente."
+          },
+          "response": []
+        },
+        {
+          "name": "07 - GET perfil con el token del usuario creado → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenRf62}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/perfil",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "perfil"
+              ]
+            },
+            "description": "Sesión válida antes de deshabilitar (ver 16)."
+          },
+          "response": []
+        },
+        {
+          "name": "08 - PUT editar asignando ADMINISTRADOR → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje: Solo se permiten los roles de Ventas e Inventarios', () => pm.expect(pm.response.text()).to.include('Solo se permiten los roles de Ventas e Inventarios'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{rf62UsuarioId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{rf62UsuarioId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"RF62 Vendedor\",\n  \"correo\": \"{{rf62Correo}}\",\n  \"rol\": \"ADMINISTRADOR\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "09 - GET obtener usuario de otra distribuidora → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('mensaje: Usuario no encontrado', () => pm.expect(pm.response.text()).to.include('Usuario no encontrado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{usuarioOtroTenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{usuarioOtroTenantId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "10 - PUT editar usuario de otra distribuidora → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('mensaje: Usuario no encontrado', () => pm.expect(pm.response.text()).to.include('Usuario no encontrado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{usuarioOtroTenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{usuarioOtroTenantId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Intento\",\n  \"correo\": \"rf62-intento-{{$timestamp}}@gelox-test.com\",\n  \"rol\": \"ENCARGADO_INVENTARIO\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "11 - DELETE deshabilitar usuario de otra distribuidora → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('mensaje: Usuario no encontrado', () => pm.expect(pm.response.text()).to.include('Usuario no encontrado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{usuarioOtroTenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{usuarioOtroTenantId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "12 - PATCH habilitar usuario de otra distribuidora → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('mensaje: Usuario no encontrado', () => pm.expect(pm.response.text()).to.include('Usuario no encontrado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{usuarioOtroTenantId}}/habilitar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{usuarioOtroTenantId}}",
+                "habilitar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "13 - DELETE deshabilitar al gerente titular → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje: gerente titular', () => pm.expect(pm.response.text()).to.include('gerente titular'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{gerenteTitularId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{gerenteTitularId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "14 - PUT cambiar el rol del gerente titular → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensaje: rol del gerente titular', () => pm.expect(pm.response.text()).to.include('rol del gerente titular'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{gerenteTitularId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{gerenteTitularId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{gerenteTitularNombre}}\",\n  \"correo\": \"{{gerenteTitularCorreo}}\",\n  \"rol\": \"ENCARGADO_VENTAS\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "15 - DELETE deshabilitar el usuario creado → 204",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{rf62UsuarioId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{rf62UsuarioId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "16 - GET perfil con el token del usuario deshabilitado → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('código USUARIO_INACTIVO', () => pm.expect(pm.response.json().codigo).to.eql('USUARIO_INACTIVO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenRf62}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/perfil",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "perfil"
+              ]
+            },
+            "description": "Mismo ID token de 06: tras deshabilitar (y revocar los refresh tokens) la siguiente petición responde 403."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -1444,6 +2118,60 @@
       "value": "",
       "type": "string",
       "description": "Se completa al correr 'RF54 / 01'"
+    },
+    {
+      "key": "usuarioOtroTenantId",
+      "value": "",
+      "type": "string",
+      "description": "RF62: id de un usuario de OTRA distribuidora, para los 404"
+    },
+    {
+      "key": "firebaseApiKey",
+      "value": "",
+      "type": "string",
+      "description": "RF62: Web API key de Firebase, para el login del usuario creado (06)"
+    },
+    {
+      "key": "rf62Contrasena",
+      "value": "Rf62Pass1234!",
+      "type": "string",
+      "description": "RF62: contraseña temporal del usuario creado"
+    },
+    {
+      "key": "rf62Correo",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF62 / 04'"
+    },
+    {
+      "key": "rf62UsuarioId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF62 / 04'"
+    },
+    {
+      "key": "tokenRf62",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF62 / 06'"
+    },
+    {
+      "key": "gerenteTitularId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF62 / 01'"
+    },
+    {
+      "key": "gerenteTitularNombre",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF62 / 01'"
+    },
+    {
+      "key": "gerenteTitularCorreo",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'RF62 / 01'"
     }
   ]
 }

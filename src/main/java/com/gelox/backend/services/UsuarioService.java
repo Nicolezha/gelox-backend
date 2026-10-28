@@ -96,11 +96,17 @@ public class UsuarioService {
 
     @RequiereRol("ADMINISTRADOR")
     public UsuarioResponseDTO editarUsuario(UUID id, EditarUsuarioDTO dto) throws Exception {
-        validarRol(dto.getRol());
-
-        Usuario usuario = usuarioRepository.findById(id)
-                .filter(TenantContext::pertenece)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con id: " + id));
+        // RF62 — usuario de otra distribuidora: 404, sin revelar que existe
+        Usuario usuario = buscarDelTenant(id);
+        UUID titularId = gerenteTitularId(usuario.getTenantId());
+        if (usuario.getId().equals(titularId)) {
+            // El titular conserva su rol: se le puede editar nombre, correo y foto
+            if (!usuario.getRol().name().equals(dto.getRol())) {
+                throw new IllegalArgumentException("No se puede cambiar el rol del gerente titular.");
+            }
+        } else {
+            validarRol(dto.getRol());
+        }
 
         // RF03 — el correo no puede pertenecer a otro usuario
         dto.setCorreo(normalizarCorreo(dto.getCorreo()));
@@ -111,14 +117,22 @@ public class UsuarioService {
             throw new IllegalArgumentException("Ya existe otro usuario con ese correo.");
         }
 
-        FirebaseAuth.getInstance().updateUser(
-                new UserRecord.UpdateRequest(usuario.getFirebaseUid())
-                        .setEmail(dto.getCorreo())
-                        .setDisplayName(dto.getNombre())
-        );
+        // findByCorreo pasa por el tenantFilter: el correo de otra distribuidora lo detecta Firebase
+        try {
+            FirebaseAuth.getInstance().updateUser(
+                    new UserRecord.UpdateRequest(usuario.getFirebaseUid())
+                            .setEmail(dto.getCorreo())
+                            .setDisplayName(dto.getNombre())
+            );
+        } catch (FirebaseAuthException e) {
+            if (e.getAuthErrorCode() == AuthErrorCode.EMAIL_ALREADY_EXISTS) {
+                throw new IllegalArgumentException("Ya existe otro usuario con ese correo.");
+            }
+            throw e;
+        }
 
         FirebaseAuth.getInstance().setCustomUserClaims(
-                usuario.getFirebaseUid(), Map.of("rol", dto.getRol(), "tenant_id", TenantContext.requerido().toString())
+                usuario.getFirebaseUid(), Map.of("rol", dto.getRol(), "tenant_id", usuario.getTenantId().toString())
         );
 
         usuario.setNombre(dto.getNombre());
@@ -132,18 +146,22 @@ public class UsuarioService {
                 "Usuario editado: " + actualizado.getNombre() + " (" + actualizado.getCorreo() + ")",
                 actualizado.getId()
         );
-        return toDTO(actualizado);
+        return toDTO(actualizado, titularId);
     }
 
     @RequiereRol("ADMINISTRADOR")
     public void deshabilitarUsuario(UUID id) throws Exception {
-        Usuario usuario = usuarioRepository.findById(id)
-                .filter(TenantContext::pertenece)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con id: " + id));
+        Usuario usuario = buscarDelTenant(id);
+        if (usuario.getId().equals(gerenteTitularId(usuario.getTenantId()))) {
+            throw new IllegalArgumentException("No se puede deshabilitar al gerente titular de la distribuidora.");
+        }
 
         FirebaseAuth.getInstance().updateUser(
                 new UserRecord.UpdateRequest(usuario.getFirebaseUid()).setDisabled(true)
         );
+        // RF62 — cierra la sesión en los demás dispositivos; el ID token vigente lo bloquea
+        // FirebaseAuthFilter con 403 porque usuario.activo queda en false
+        FirebaseAuth.getInstance().revokeRefreshTokens(usuario.getFirebaseUid());
 
         usuario.setActivo(false);
         usuarioRepository.save(usuario);
@@ -163,30 +181,47 @@ public class UsuarioService {
 
     @RequiereRol("ADMINISTRADOR")
     public List<UsuarioResponseDTO> listarUsuarios() {
-        return usuarioRepository.findAll()
-                .stream().map(this::toDTO).collect(Collectors.toList());
+        // findAll ya pasa por el tenantFilter (TenantFilterAspect); el filter es una segunda barrera
+        UUID titularId = gerenteTitularId(TenantContext.requerido());
+        return usuarioRepository.findAll().stream()
+                .filter(TenantContext::pertenece)
+                .map(u -> toDTO(u, titularId))
+                .collect(Collectors.toList());
     }
 
     @RequiereRol("ADMINISTRADOR")
     public UsuarioResponseDTO obtenerUsuario(UUID id) {
-        Usuario usuario = usuarioRepository.findById(id)
-                .filter(TenantContext::pertenece)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con id: " + id));
-        return toDTO(usuario);
+        Usuario usuario = buscarDelTenant(id);
+        return toDTO(usuario, gerenteTitularId(usuario.getTenantId()));
     }
 
     private String normalizarCorreo(String correo) {
         return correo == null ? null : correo.trim().toLowerCase();
     }
 
+    /** RF62 — el Gerente solo crea o asigna Ventas e Inventarios (nunca ADMINISTRADOR ni SUPERADMINISTRADOR). */
     private void validarRol(String rol) {
         if (!"ENCARGADO_INVENTARIO".equals(rol) && !"ENCARGADO_VENTAS".equals(rol)) {
-            throw new IllegalArgumentException(
-                    "Rol inválido. Use 'ENCARGADO_INVENTARIO' o 'ENCARGADO_VENTAS'.");
+            throw new IllegalArgumentException("Solo se permiten los roles de Ventas e Inventarios");
         }
     }
 
+    /** RF62 — findById no pasa por el tenantFilter: un usuario de otra distribuidora responde 404. */
+    private Usuario buscarDelTenant(UUID id) {
+        return usuarioRepository.findById(id)
+                .filter(TenantContext::pertenece)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+    }
+
+    private UUID gerenteTitularId(UUID tenantId) {
+        return usuarioRepository.findGerenteTitularId(tenantId).orElse(null);
+    }
+
     private UsuarioResponseDTO toDTO(Usuario u) {
+        return toDTO(u, null);
+    }
+
+    private UsuarioResponseDTO toDTO(Usuario u, UUID gerenteTitularId) {
         UsuarioResponseDTO dto = new UsuarioResponseDTO();
         dto.setId(u.getId());
         dto.setNombre(u.getNombre());
@@ -195,14 +230,13 @@ public class UsuarioService {
         dto.setActivo(u.getActivo());
         dto.setUltimoAcceso(u.getUltimoAcceso());
         dto.setFotoUrl(u.getFotoUrl());
+        dto.setEsGerenteTitular(u.getId() != null && u.getId().equals(gerenteTitularId));
         return dto;
     }
 
     @RequiereRol("ADMINISTRADOR")
     public void habilitarUsuario(UUID id) throws Exception {
-        Usuario usuario = usuarioRepository.findById(id)
-                .filter(TenantContext::pertenece)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con id: " + id));
+        Usuario usuario = buscarDelTenant(id);
 
         FirebaseAuth.getInstance().updateUser(
                 new UserRecord.UpdateRequest(usuario.getFirebaseUid()).setDisabled(false)
