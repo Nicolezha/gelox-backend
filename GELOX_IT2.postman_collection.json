@@ -2417,6 +2417,417 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "RF59",
+      "item": [
+        {
+          "name": "01 - Cambiar estado: PRUEBA -> ACTIVO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('estado ACTIVO', () => pm.expect(body.estado).to.eql('ACTIVO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraPruebaId}}/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras",
+                "{{distribuidoraPruebaId}}",
+                "estado"
+              ]
+            },
+            "description": "Requiere la distribuidora creada en RF58 / 01. PRUEBA -> ACTIVO es una transición válida.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"ACTIVO\",\n  \"motivo\": \"Pago verificado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "02 - Cambiar estado: motivo vacío (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 BAD REQUEST', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraPruebaId}}/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras",
+                "{{distribuidoraPruebaId}}",
+                "estado"
+              ]
+            },
+            "description": "El motivo es obligatorio en cualquier cambio de estado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"SUSPENDIDO\",\n  \"motivo\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03 - Suspender la distribuidora",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('estado SUSPENDIDO', () => pm.expect(body.estado).to.eql('SUSPENDIDO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraPruebaId}}/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras",
+                "{{distribuidoraPruebaId}}",
+                "estado"
+              ]
+            },
+            "description": "ACTIVO -> SUSPENDIDO: invalida el caché de estado y revoca las sesiones de los usuarios de esa distribuidora.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"SUSPENDIDO\",\n  \"motivo\": \"Mora de pago\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04 - Usuario de la distribuidora suspendida (403 bloqueado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('403 FORBIDDEN', () => pm.response.to.have.status(403));",
+                  "pm.test('codigo DISTRIBUIDORA_SUSPENDIDA', () => pm.expect(body.codigo).to.eql('DISTRIBUIDORA_SUSPENDIDA'));",
+                  "pm.test('trae contacto de soporte', () => pm.expect(body.contacto).to.exist);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenGerentePrueba}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/distribuidora/identidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "distribuidora",
+                "identidad"
+              ]
+            },
+            "description": "{{tokenGerentePrueba}} es el token del gerente titular de la distribuidora de prueba (obtenido tras RF58 / 01). Cualquier ruta de negocio responde el 403 con código."
+          },
+          "response": []
+        },
+        {
+          "name": "05 - Reactivar la distribuidora",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('estado ACTIVO', () => pm.expect(body.estado).to.eql('ACTIVO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraPruebaId}}/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras",
+                "{{distribuidoraPruebaId}}",
+                "estado"
+              ]
+            },
+            "description": "SUSPENDIDO -> ACTIVO: transición válida; el usuario vuelve a entrar en su siguiente intento (hasta 60 s por el caché).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"ACTIVO\",\n  \"motivo\": \"Pago regularizado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06 - Inactivar y luego intentar reactivar (409, INACTIVO es final)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK al inactivar', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraPruebaId}}/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras",
+                "{{distribuidoraPruebaId}}",
+                "estado"
+              ]
+            },
+            "description": "Deja la distribuidora en INACTIVO; correr 07 a continuación para probar que ya no admite más cambios.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"INACTIVO\",\n  \"motivo\": \"Cierre definitivo de prueba\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "07 - Intentar reactivar una distribuidora INACTIVO (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 CONFLICT', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraPruebaId}}/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras",
+                "{{distribuidoraPruebaId}}",
+                "estado"
+              ]
+            },
+            "description": "INACTIVO es un estado final: cualquier transición responde 409.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"ACTIVO\",\n  \"motivo\": \"Intento de reactivación\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "08 - Cambiar estado con rol ADMINISTRADOR (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 FORBIDDEN', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraPruebaId}}/estado",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras",
+                "{{distribuidoraPruebaId}}",
+                "estado"
+              ]
+            },
+            "description": "{{token}} es de un ADMINISTRADOR: /api/plataforma/** exige SUPERADMINISTRADOR.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"SUSPENDIDO\",\n  \"motivo\": \"Intento no autorizado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -2568,6 +2979,12 @@
       "value": "",
       "type": "string",
       "description": "Se completa al correr RF58 / 01: id de la distribuidora creada para pruebas"
+    },
+    {
+      "key": "tokenGerentePrueba",
+      "value": "",
+      "type": "string",
+      "description": "Firebase ID Token del gerente titular de la distribuidora de prueba (RF58/RF59)"
     }
   ]
 }

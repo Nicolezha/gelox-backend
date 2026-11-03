@@ -147,6 +147,10 @@ public class DistribuidoraService {
     @Transactional
     @RequiereRol("SUPERADMINISTRADOR")
     public DistribuidoraDTO cambiarEstado(UUID id, CambiarEstadoRequest req) {
+        if (req.motivo() == null || req.motivo().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El motivo es obligatorio");
+        }
+
         Distribuidora distribuidora = buscarPorId(id);
 
         if (!distribuidora.puedeCambiarA(req.estado())) {
