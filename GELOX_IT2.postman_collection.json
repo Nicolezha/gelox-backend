@@ -2033,6 +2033,390 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "RF58",
+      "item": [
+        {
+          "name": "01 - Crear distribuidora: alta correcta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('201 CREATED', () => pm.response.to.have.status(201));",
+                  "pm.test('estado PRUEBA', () => pm.expect(body.estado).to.eql('PRUEBA'));",
+                  "pm.test('trae correoEnviado', () => pm.expect(body.correoEnviado).to.exist);",
+                  "if (body.id) pm.collectionVariables.set('distribuidoraPruebaId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras"
+              ]
+            },
+            "description": "{{tokenSuper}} debe ser de un SUPERADMINISTRADOR. Crea la distribuidora en PRUEBA con la identidad por defecto de GELOX (#1F3864/#2E75B6) y su gerente titular en Firebase.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razonSocial\": \"Helados Prueba S.A.S.\",\n  \"nit\": \"900999888-1\",\n  \"nombreComercial\": \"Helados Prueba\",\n  \"subdominio\": \"helados-prueba\",\n  \"nombreGerente\": \"Gerente Prueba\",\n  \"correoGerente\": \"gerente@heladosprueba.com\",\n  \"telefono\": \"3001234567\",\n  \"direccion\": \"Calle 1 #2-3\",\n  \"plan\": \"BASICO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "02 - Crear distribuidora: NIT repetido (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 CONFLICT', () => pm.response.to.have.status(409));",
+                  "pm.test('mensaje de NIT repetido', () => pm.expect(pm.response.json().error).to.include('NIT'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras"
+              ]
+            },
+            "description": "Reutiliza el NIT de 01: debe responder 409 sin crear nada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razonSocial\": \"Otra S.A.S.\",\n  \"nit\": \"900999888-1\",\n  \"nombreComercial\": \"Otra\",\n  \"subdominio\": \"otra-distribuidora\",\n  \"nombreGerente\": \"Otro Gerente\",\n  \"correoGerente\": \"otro@otradist.com\",\n  \"telefono\": \"\",\n  \"direccion\": \"\",\n  \"plan\": \"BASICO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03 - Crear distribuidora: subdominio repetido (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 CONFLICT', () => pm.response.to.have.status(409));",
+                  "pm.test('mensaje de subdominio repetido', () => pm.expect(pm.response.json().error).to.include('subdominio'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras"
+              ]
+            },
+            "description": "Reutiliza el subdominio de 01.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razonSocial\": \"Otra S.A.S.\",\n  \"nit\": \"900111222-3\",\n  \"nombreComercial\": \"Otra\",\n  \"subdominio\": \"helados-prueba\",\n  \"nombreGerente\": \"Otro Gerente\",\n  \"correoGerente\": \"otro2@otradist.com\",\n  \"telefono\": \"\",\n  \"direccion\": \"\",\n  \"plan\": \"BASICO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04 - Crear distribuidora: subdominio inválido (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 BAD REQUEST', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras"
+              ]
+            },
+            "description": "Subdominio que no cumple ^[a-z0-9-]{3,30}$: falla la validación Jakarta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razonSocial\": \"Otra S.A.S.\",\n  \"nit\": \"900111222-4\",\n  \"nombreComercial\": \"Otra\",\n  \"subdominio\": \"A\",\n  \"nombreGerente\": \"Otro Gerente\",\n  \"correoGerente\": \"otro3@otradist.com\",\n  \"telefono\": \"\",\n  \"direccion\": \"\",\n  \"plan\": \"BASICO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "05 - Listar distribuidoras",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('es una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras"
+              ]
+            },
+            "description": "Lista todas las distribuidoras (incluida Mágico Sabor)."
+          },
+          "response": []
+        },
+        {
+          "name": "06 - Obtener detalle de la distribuidora creada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('mismo id', () => pm.expect(body.id).to.eql(pm.collectionVariables.get('distribuidoraPruebaId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraPruebaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras",
+                "{{distribuidoraPruebaId}}"
+              ]
+            },
+            "description": "Usa el id guardado en 01."
+          },
+          "response": []
+        },
+        {
+          "name": "07 - Crear distribuidora: rol ADMINISTRADOR (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 FORBIDDEN', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras"
+              ]
+            },
+            "description": "{{token}} es de un ADMINISTRADOR (Gerente de una distribuidora): /api/plataforma/** exige SUPERADMINISTRADOR.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razonSocial\": \"Otra S.A.S.\",\n  \"nit\": \"900111222-5\",\n  \"nombreComercial\": \"Otra\",\n  \"subdominio\": \"otra-mas\",\n  \"nombreGerente\": \"Otro Gerente\",\n  \"correoGerente\": \"otro4@otradist.com\",\n  \"telefono\": \"\",\n  \"direccion\": \"\",\n  \"plan\": \"BASICO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "08 - Reenviar acceso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('trae correoEnviado', () => pm.expect(body.correoEnviado).to.exist);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraPruebaId}}/reenviar-acceso",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "distribuidoras",
+                "{{distribuidoraPruebaId}}",
+                "reenviar-acceso"
+              ]
+            },
+            "description": "Genera una nueva contraseña temporal para el gerente titular y reenvía el enlace de acceso."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -2172,6 +2556,18 @@
       "value": "",
       "type": "string",
       "description": "Se completa al correr 'RF62 / 01'"
+    },
+    {
+      "key": "tokenSuper",
+      "value": "",
+      "type": "string",
+      "description": "Firebase ID Token de un SUPERADMINISTRADOR de la plataforma (RF58/RF59)"
+    },
+    {
+      "key": "distribuidoraPruebaId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr RF58 / 01: id de la distribuidora creada para pruebas"
     }
   ]
 }

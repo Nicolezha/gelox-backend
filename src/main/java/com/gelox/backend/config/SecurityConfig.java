@@ -40,6 +40,8 @@ public class SecurityConfig {
                         // Solo la recuperación es pública: verificar/perfil/cerrar-sesion requieren token.
                         .requestMatchers("/api/auth/recuperar-contrasena", "/actuator/health", "/error").permitAll()
                         .requestMatchers("/api/landing/**").permitAll()
+                        // RF58/RF59: solo el Superadministrador de la plataforma, sin distribuidora
+                        .requestMatchers("/api/plataforma/**").hasRole("SUPERADMINISTRADOR")
                         // RF40/RF41: ENCARGADO_VENTAS puede consultar el reporte y transacciones del día
                         .requestMatchers(HttpMethod.GET, "/api/reportes/diario", "/api/reportes/diario/transacciones")
                             .hasAnyRole("ADMINISTRADOR", "ENCARGADO_VENTAS")

@@ -22,4 +22,11 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
     /** RF62 — id del gerente titular de la distribuidora (distribuidora.gerente_titular_id). */
     @Query("select d.gerenteTitular.id from Distribuidora d where d.id = :tenantId")
     Optional<UUID> findGerenteTitularId(@Param("tenantId") UUID tenantId);
+
+    /**
+     * RF59 — usuarios de una distribuidora específica. Se usa fuera de un
+     * TenantContext (el Superadministrador no tiene uno) para revocar sus
+     * sesiones al suspenderla o inactivarla.
+     */
+    List<Usuario> findByTenantId(UUID tenantId);
 }
