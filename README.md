@@ -323,9 +323,12 @@ SUPABASE_URL=https://<proyecto>.supabase.co
 SUPABASE_SERVICE_KEY=tu_service_role_key
 SUPABASE_BUCKET=fotos
 
-# SendGrid (correos)
-SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxx
-MAIL_FROM=noreply@tudominio.com
+# Correos (SMTP de Brevo; MAIL_HOST y MAIL_PORT son opcionales)
+MAIL_HOST=smtp-relay.brevo.com
+MAIL_PORT=2525
+MAIL_USERNAME=tu_login@smtp-brevo.com
+MAIL_PASSWORD=tu_smtp_key_de_brevo
+MAIL_FROM=remitente_verificado_en_brevo@gmail.com
 MAIL_FROM_NAME=GELOX
 
 # Servidor
