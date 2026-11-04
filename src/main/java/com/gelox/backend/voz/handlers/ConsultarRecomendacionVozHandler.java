@@ -51,12 +51,13 @@ public class ConsultarRecomendacionVozHandler implements IntencionHandler {
     @Override
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     public VozResultado interpretar(VozContexto ctx) {
+        BigDecimal presupuesto = presupuesto(ctx.slots().get("presupuesto"));
         Optional<RecomendacionDTO> delDia = recomendacionService.recomendacionDelDia();
-        if (delDia.isPresent()) {
+        // Sin presupuesto, o con el mismo de la recomendación de hoy, se narra esa; con otro se genera una nueva.
+        if (delDia.isPresent() && (presupuesto == null || presupuesto.compareTo(delDia.get().presupuesto()) == 0)) {
             return narrar(delDia.get().id(), delDia.get().items(), delDia.get().costoTotal());
         }
 
-        BigDecimal presupuesto = presupuesto(ctx.slots().get("presupuesto"));
         if (presupuesto == null) {
             return new VozResultado(false, RecomendacionVozHandler.SIN_RECOMENDACION, Map.of(), null);
         }

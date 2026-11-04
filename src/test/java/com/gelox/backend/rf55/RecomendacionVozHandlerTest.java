@@ -151,14 +151,32 @@ class RecomendacionVozHandlerTest {
     }
 
     @Test
-    @DisplayName("con recomendación de hoy no genera otra: la narra")
+    @DisplayName("con recomendación de hoy y sin presupuesto, o con el mismo, no genera otra: la narra")
     void consultar_conRecomendacionDeHoy_noGenera() {
         hayRecomendacionPendiente();
 
+        VozResultado sinPresupuesto = consultar.interpretar(ctx(Map.of()));
+        VozResultado mismo = consultar.interpretar(ctx(Map.of("presupuesto", "2000000")));
+
+        assertThat(sinPresupuesto.textoRespuesta()).startsWith("Te recomiendo 3 productos por $118.720.");
+        assertThat(mismo.textoRespuesta()).startsWith("Te recomiendo 3 productos por $118.720.");
+        verify(recomendacionService, never()).generar(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("con recomendación de hoy de $2.000.000 y otro presupuesto → genera una nueva con ese presupuesto")
+    void consultar_conRecomendacionDeHoy_otroPresupuesto_generaNueva() {
+        hayRecomendacionPendiente();
+        when(recomendacionService.generar(new BigDecimal("500000"), OrigenRecomendacion.VOZ, usuario))
+                .thenReturn(new RecomendacionGeneradaDTO(recomendacionId, EstadoRecomendacion.GENERADA,
+                        OrigenRecomendacion.VOZ, new BigDecimal("500000"), new BigDecimal("33240"), BigDecimal.ZERO,
+                        false, 90, 30, null, List.of(limon), List.of()));
+
         VozResultado r = consultar.interpretar(ctx(Map.of("presupuesto", "500000")));
 
-        assertThat(r.textoRespuesta()).startsWith("Te recomiendo 3 productos por $118.720.");
-        verify(recomendacionService, never()).generar(any(), any(), any());
+        assertThat(r.textoRespuesta()).isEqualTo("Te recomiendo 1 producto por $33.240. "
+                + "Primero, crítico: Aloha Paleta Limón, 1 caja.");
+        verify(recomendacionService).generar(new BigDecimal("500000"), OrigenRecomendacion.VOZ, usuario);
     }
 
     @Test
