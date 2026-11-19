@@ -104,6 +104,10 @@ public class ClasificadorIntencion implements ProcesadorLenguaje {
         // Nivel 1 — modelo de PLN
         Optional<PrediccionIntencion> prediccion = modelo.predecir(normalizado);
         Double probabilidad = prediccion.map(PrediccionIntencion::probabilidad).orElse(null);
+
+        // Recomendaciones y consultas generales: el modelo no las conoce, se deciden con reglas.
+        Optional<ResultadoClasificacion> prioritaria = reglaPrioritaria(normalizado, probabilidad);
+        if (prioritaria.isPresent()) return prioritaria.get();
         if (prediccion.isPresent()
                 && !prediccion.get().esFueraDeDominio()
                 && prediccion.get().probabilidad() >= UMBRAL_INTENCION) {
@@ -120,6 +124,66 @@ public class ClasificadorIntencion implements ProcesadorLenguaje {
             }
         }
         return new ResultadoClasificacion(null, Map.of(), probabilidad, null);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Reglas que van antes del modelo: el modelo de PLN no conoce estas intenciones
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** "cuántas recomendaciones se hicieron ayer", "cuántos clientes tengo", "cuántos pedidos pendientes hay". */
+    private static final Pattern CONSULTA_GENERAL = Pattern.compile(
+            "\\bcuant[oa]s?\\s+(recomendaciones|clientes|comerciantes|productos|pedidos|usuarios|empleados)\\b"
+                    + "|\\b(numero|total|cantidad) de (recomendaciones|clientes|comerciantes|productos|pedidos|usuarios)\\b");
+    private static final Pattern RECOMENDACION = Pattern.compile("\\b(recomendacion\\w*|recomienda\\w*|recomiendas|recomiendame)\\b");
+    private static final Pattern VERBO_DECISION = Pattern.compile("\\b(aprueb\\w*|aprobar|rechaz\\w*|cambi\\w*|modific\\w*)");
+    private static final Pattern GENERAR_DESDE_RECOMENDACION = Pattern.compile(
+            "\\b(genera|generar|haz|hacer|crea|crear|convierte|convertir|pasa|pasar)\\w*\\b.*\\bpedido\\b");
+    private static final Pattern APRUEBA_TODO = Pattern.compile(
+            "\\baprueb\\w*\\s+(?:me\\s+)?(?:toda\\s+)?(?:la|esa|esta)\\s+recomendacion|\\b(todo|todos|todas|completa)\\b");
+    private static final Pattern PRODUCTO_DECISION = Pattern.compile(
+            "\\b(?:aprueb\\w*|aprobar|rechaz\\w*|cambi\\w*|modific\\w*)\\s+(?:el |la |los |las )?(.+?)"
+                    + "(?:\\s+(?:a|en)\\s+\\d+\\s+cajas?)?(?:\\s+(?:de|en|del)\\s+la\\s+recomendacion.*)?$");
+    private static final Pattern CAJAS_DECISION = Pattern.compile("\\ba\\s+(\\d+)\\s+cajas?\\b");
+    private static final Pattern MILLONES = Pattern.compile("\\b(\\d+)\\s+millon(?:es)?(?:\\s+(\\d{1,6}))?\\b");
+    private static final Pattern MONTO = Pattern.compile("\\b(\\d{4,})\\b");
+
+    private static Optional<ResultadoClasificacion> reglaPrioritaria(String normalizado, Double probabilidad) {
+        if (CONSULTA_GENERAL.matcher(normalizado).find()) {
+            return Optional.of(new ResultadoClasificacion(TipoIntencionVoz.CONSULTAR_GENERAL, Map.of(),
+                    probabilidad, MetodoClasificacion.REGLAS));
+        }
+        if (!RECOMENDACION.matcher(normalizado).find()) return Optional.empty();
+
+        Map<String, String> slots = new LinkedHashMap<>();
+        Matcher verbo = VERBO_DECISION.matcher(normalizado);
+        if (verbo.find()) {
+            String v = verbo.group(1);
+            String accion = v.startsWith("rechaz") ? "RECHAZAR"
+                    : v.startsWith("cambi") || v.startsWith("modific") ? "MODIFICAR"
+                    : APRUEBA_TODO.matcher(normalizado).find() ? "APROBAR_TODO" : "APROBAR";
+            slots.put("accion", accion);
+            if (!"APROBAR_TODO".equals(accion)) {
+                Matcher producto = PRODUCTO_DECISION.matcher(normalizado);
+                if (producto.find() && !producto.group(1).startsWith("recomendacion")) {
+                    slots.put("producto", producto.group(1).trim());
+                }
+                Matcher cajas = CAJAS_DECISION.matcher(normalizado);
+                if (cajas.find()) slots.put("cantidad", cajas.group(1));
+            }
+            return Optional.of(new ResultadoClasificacion(TipoIntencionVoz.DECIDIR_RECOMENDACION, slots,
+                    probabilidad, MetodoClasificacion.REGLAS));
+        }
+        if (GENERAR_DESDE_RECOMENDACION.matcher(normalizado).find()) {
+            slots.put("accion", "GENERAR_PEDIDO");
+            return Optional.of(new ResultadoClasificacion(TipoIntencionVoz.DECIDIR_RECOMENDACION, slots,
+                    probabilidad, MetodoClasificacion.REGLAS));
+        }
+        String conMillones = MILLONES.matcher(FechaVoz.quitarFechas(normalizado)).replaceAll(mr -> String.valueOf(
+                Long.parseLong(mr.group(1)) * 1_000_000L + (mr.group(2) == null ? 0 : Long.parseLong(mr.group(2)))));
+        Matcher monto = MONTO.matcher(conMillones);
+        if (monto.find()) slots.put("presupuesto", monto.group(1));
+        return Optional.of(new ResultadoClasificacion(TipoIntencionVoz.CONSULTAR_RECOMENDACION, slots,
+                probabilidad, MetodoClasificacion.REGLAS));
     }
 
     /** Intención según las reglas de patrones, sin consultar el modelo (texto sin normalizar). */

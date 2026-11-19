@@ -8,6 +8,7 @@ import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.PedidoProveedorService;
 import com.gelox.backend.voz.IntencionHandler;
 import com.gelox.backend.voz.NormalizadorVoz;
+import com.gelox.backend.voz.PreguntaVoz;
 import com.gelox.backend.voz.ResolvedorProducto;
 import com.gelox.backend.voz.VozContexto;
 import com.gelox.backend.voz.VozPendiente;
@@ -73,14 +74,14 @@ public class GenerarPedidoHandler implements IntencionHandler {
                     resolvedorProducto.resolver(extraido.fragmentoProducto());
 
             if (candidatos.isEmpty()) {
-                return new VozResultado(false,
+                return PreguntaVoz.reemplazando(
                         "No encontré el producto \"" + extraido.fragmentoProducto() + "\". ¿Puedes repetirlo?",
-                        Map.of(), null);
+                        extraido.fragmentoProducto(), null);
             }
             if (esAmbiguo(candidatos)) {
-                return new VozResultado(false,
+                return PreguntaVoz.reemplazando(
                         "¿" + candidatos.get(0).nombre() + " o " + candidatos.get(1).nombre() + "?",
-                        Map.of(), null);
+                        extraido.fragmentoProducto(), List.of(candidatos.get(0).nombre(), candidatos.get(1).nombre()));
             }
 
             ResolvedorProducto.ProductoCandidato producto = candidatos.get(0);

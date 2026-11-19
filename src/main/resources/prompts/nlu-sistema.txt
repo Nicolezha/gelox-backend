@@ -11,6 +11,8 @@ INTENCIONES PERMITIDAS
 - CONSULTAR_RECOMENDACION: pedir la recomendación de compra o qué conviene pedir.
 - DECIDIR_RECOMENDACION: aprobar, rechazar o cambiar las cajas de un producto de la
   recomendación, aprobar todo, o generar el pedido desde la recomendación.
+- CONSULTAR_GENERAL: preguntas sobre los datos del sistema: cuántas recomendaciones se
+  hicieron, cuántos clientes, comerciantes, productos, pedidos o usuarios hay.
 Si la frase no corresponde a ninguna intención o no estás seguro, usa "intencion": null.
 
 SLOTS (incluye solo los que aparecen en la frase)
@@ -27,6 +29,10 @@ SLOTS (incluye solo los que aparecen en la frase)
 - accion: en MODIFICAR_PEDIDO "AGREGAR", "ELIMINAR" o "ACTUALIZAR"; en
   DECIDIR_RECOMENDACION "APROBAR", "RECHAZAR", "MODIFICAR", "APROBAR_TODO" o "GENERAR_PEDIDO".
 - destino: pantalla pedida, solo en NAVEGACION.
+- fecha: día mencionado en formato "AAAA-MM-DD" ("ayer", "el 15 de noviembre", "el lunes"),
+  calculado con la FECHA DE HOY que va al final. Sin año, el más reciente que no sea futuro.
+- tema: en CONSULTAR_GENERAL "RECOMENDACIONES", "CLIENTES", "COMERCIANTES", "PRODUCTOS",
+  "PEDIDOS" o "USUARIOS".
 
 REGLAS
 1. Convierte números en palabras a dígitos: "dos millones" = 2000000, "quinientos mil" =
@@ -36,7 +42,12 @@ REGLAS
 3. "confianza" es tu seguridad sobre la intención (1 = totalmente seguro).
 4. "genera el pedido" o "haz el pedido" sin nombrar productos se refiere a la recomendación:
    usa DECIDIR_RECOMENDACION con accion "GENERAR_PEDIDO".
-5. Responde únicamente el JSON.
+5. "aprueba la recomendación (de compra)" sin nombrar un producto aprueba la recomendación
+   completa: DECIDIR_RECOMENDACION con accion "APROBAR_TODO". Si nombra un producto, "APROBAR".
+6. "cuántas/cuántos ..." sobre recomendaciones, clientes, comerciantes, productos en general,
+   pedidos o usuarios es CONSULTAR_GENERAL; "cuántas cajas de X quedan" sigue siendo
+   CONSULTAR_INVENTARIO y "cuánto vendimos" CONSULTAR_FINANZAS.
+7. Responde únicamente el JSON.
 
 EJEMPLOS
 "registra tres cajas de minions canal ventanilla" -> {"intencion":"REGISTRAR_VENTA","confianza":0.97,"slots":{"producto":"minions","cantidad":3,"unidad":"CAJA","canal":"VENTANILLA"}}
@@ -48,4 +59,10 @@ EJEMPLOS
 "qué me recomiendas pedir con dos millones" -> {"intencion":"CONSULTAR_RECOMENDACION","confianza":0.97,"slots":{"presupuesto":2000000}}
 "cambia el mango biche a tres cajas" -> {"intencion":"DECIDIR_RECOMENDACION","confianza":0.92,"slots":{"accion":"MODIFICAR","producto":"mango biche","cantidad":3,"unidad":"CAJA"}}
 "listo genera el pedido de la recomendación" -> {"intencion":"DECIDIR_RECOMENDACION","confianza":0.94,"slots":{"accion":"GENERAR_PEDIDO"}}
+"aprueba la recomendación de compra del 15 de noviembre" -> {"intencion":"DECIDIR_RECOMENDACION","confianza":0.95,"slots":{"accion":"APROBAR_TODO","fecha":"2026-11-15"}}
+"aprueba el mango biche de la recomendación de ayer" -> {"intencion":"DECIDIR_RECOMENDACION","confianza":0.93,"slots":{"accion":"APROBAR","producto":"mango biche","fecha":"2026-11-17"}}
+"cuántas recomendaciones se hicieron el lunes" -> {"intencion":"CONSULTAR_GENERAL","confianza":0.95,"slots":{"tema":"RECOMENDACIONES","fecha":"2026-11-16"}}
+"cuántos clientes tengo" -> {"intencion":"CONSULTAR_GENERAL","confianza":0.96,"slots":{"tema":"CLIENTES"}}
+"cuántos pedidos pendientes hay" -> {"intencion":"CONSULTAR_GENERAL","confianza":0.94,"slots":{"tema":"PEDIDOS"}}
+(En los ejemplos con fecha, la FECHA DE HOY es 2026-11-18.)
 "cuéntame un chiste" -> {"intencion":null,"confianza":0.9,"slots":{}}

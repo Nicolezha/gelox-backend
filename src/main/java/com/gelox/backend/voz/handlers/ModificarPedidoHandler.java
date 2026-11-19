@@ -12,6 +12,7 @@ import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.PedidoProveedorService;
 import com.gelox.backend.voz.IntencionHandler;
 import com.gelox.backend.voz.NormalizadorVoz;
+import com.gelox.backend.voz.PreguntaVoz;
 import com.gelox.backend.voz.ResolvedorProducto;
 import com.gelox.backend.voz.VozContexto;
 import com.gelox.backend.voz.VozPendiente;
@@ -111,11 +112,11 @@ public class ModificarPedidoHandler implements IntencionHandler {
                 if (pendientes.size() == 1) {
                     return sinCambios("Solo hay 1 pedido pendiente. Di por ejemplo 'al pedido 1' o directamente 'agrégale 10 cajas'.");
                 }
-                return sinCambios(listarPendientes(pendientes));
+                return PreguntaVoz.anexando(listarPendientes(pendientes), "pedido ");
             }
         } else {
             if (pendientes.size() > 1) {
-                return sinCambios(listarPendientes(pendientes));
+                return PreguntaVoz.anexando(listarPendientes(pendientes), "pedido ");
             }
             elegido = pendientes.get(0);
         }
@@ -133,10 +134,12 @@ public class ModificarPedidoHandler implements IntencionHandler {
 
         List<ResolvedorProducto.ProductoCandidato> candidatos = resolvedorProducto.resolver(fragmentoProducto);
         if (candidatos.isEmpty()) {
-            return sinCambios("No encontré el producto \"" + fragmentoProducto + "\". ¿Puedes repetirlo?");
+            return PreguntaVoz.reemplazando("No encontré el producto \"" + fragmentoProducto + "\". ¿Puedes repetirlo?",
+                    fragmentoProducto, null);
         }
         if (esAmbiguo(candidatos)) {
-            return sinCambios("¿" + candidatos.get(0).nombre() + " o " + candidatos.get(1).nombre() + "?");
+            return PreguntaVoz.reemplazando("¿" + candidatos.get(0).nombre() + " o " + candidatos.get(1).nombre() + "?",
+                    fragmentoProducto, List.of(candidatos.get(0).nombre(), candidatos.get(1).nombre()));
         }
         ResolvedorProducto.ProductoCandidato producto = candidatos.get(0);
 
@@ -233,7 +236,7 @@ public class ModificarPedidoHandler implements IntencionHandler {
                     + (productos.isEmpty() ? "" : " con " + productos));
         }
         return "Hay " + pendientes.size() + " pedidos pendientes: " + String.join("; ", descripciones)
-                + ". ¿A cuál? Di por ejemplo 'al pedido 1 agrégale 10 cajas de Minions'.";
+                + ". ¿A cuál? Responde con el número (por ejemplo 'el 1'), 'el primero' o la fecha.";
     }
 
     private VozResultado sinCambios(String mensaje) {

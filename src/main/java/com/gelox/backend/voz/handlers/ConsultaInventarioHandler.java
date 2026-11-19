@@ -7,6 +7,7 @@ import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.voz.IntencionHandler;
 import com.gelox.backend.voz.NormalizadorVoz;
+import com.gelox.backend.voz.PreguntaVoz;
 import com.gelox.backend.voz.ResolvedorProducto;
 import com.gelox.backend.voz.VozContexto;
 import com.gelox.backend.voz.VozPendiente;
@@ -92,9 +93,9 @@ public class ConsultaInventarioHandler implements IntencionHandler {
             return new VozResultado(false, "No encontré ese producto.", Map.of(), null);
         }
         if (esAmbiguo(candidatos)) {
-            return new VozResultado(false,
+            return PreguntaVoz.reemplazando(
                     "¿" + candidatos.get(0).nombre() + " o " + candidatos.get(1).nombre() + "?",
-                    Map.of(), null);
+                    fragmento, List.of(candidatos.get(0).nombre(), candidatos.get(1).nombre()));
         }
 
         Producto producto = productoRepository.findById(candidatos.get(0).id())

@@ -9,5 +9,7 @@ public enum TipoIntencionVoz {
     NAVEGACION,
     /** RF55 — FP-15 §2.11.5 */
     CONSULTAR_RECOMENDACION,
-    DECIDIR_RECOMENDACION
+    DECIDIR_RECOMENDACION,
+    /** Preguntas sobre los datos de la app: cuántas recomendaciones, clientes, productos… */
+    CONSULTAR_GENERAL
 }

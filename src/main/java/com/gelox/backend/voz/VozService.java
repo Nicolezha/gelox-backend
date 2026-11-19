@@ -22,9 +22,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -60,6 +63,22 @@ public class VozService {
     /** Sobre texto normalizado: "añade" → "anade", "también" → "tambien". */
     private static final Pattern ES_AGREGADO = Pattern.compile("^(agrega|anade|tambien)\\b");
 
+    /** Respuesta a una pregunta del asistente que la descarta. */
+    private static final Pattern ES_CANCELAR = Pattern.compile(
+            "(cancela\\w*|olvida\\w*|deja\\w*( asi)?|nada|no|ninguna|ninguno|no gracias|mejor no)");
+
+    /** "1", "el 2", "al numero 3": respuesta que es solo un número. */
+    private static final Pattern NUMERO_SUELTO = Pattern.compile("^(?:el |al |la |a la )?(?:numero )?(\\d{1,2})$");
+    private static final Pattern PRIMERA_OPCION = Pattern.compile("^(?:el |la )?(primer|primero|primera|1)\\b");
+    private static final Pattern SEGUNDA_OPCION = Pattern.compile("^(?:el |la )?(segundo|segunda|2|otro|otra|ultimo|ultima)\\b");
+    private static final Pattern RELLENO_RESPUESTA = Pattern.compile("\\b(el|la|los|las|de|del|es|esa|ese|por favor)\\b");
+
+    /** Arranque típico de un comando (texto normalizado), para no tomarlo como respuesta a una pregunta. */
+    private static final Pattern INICIO_COMANDO = Pattern.compile(
+            "^(?:oye |gelox |hola gelox )?(registra|vende|vendi|anota|aprueba|rechaza|cambia|modifica|genera|haz|hace"
+                    + "|crea|cuant[oa]s?|que|cual(es)?|muestra(me)?|abre|ve a|ir a|llevame|dime|consulta|agrega|anade"
+                    + "|quita|elimina|pide|recomienda|recomiendame|cierra)\\b");
+
     private final List<IntencionHandler> handlers;
     /** El LLM (ProcesadorLenguajeLlm, @Primary) con respaldo en el clasificador de la Iteración 1. */
     private final ProcesadorLenguaje procesador;
@@ -86,6 +105,24 @@ public class VozService {
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS", "ENCARGADO_INVENTARIO"})
     public VozInterpretarResponse interpretar(VozInterpretarRequest request, Usuario usuario) {
         ClasificadorIntencion.ResultadoClasificacion resultado = procesador.procesar(request.texto());
+
+        // El asistente hizo una pregunta ("¿cuál de las 3?", "¿qué producto?"): esta frase es la
+        // respuesta, salvo que sea claramente un comando nuevo.
+        Optional<VozPendienteStore.PreguntaPendiente> pregunta = pendienteStore.takePregunta(usuario.getId());
+        if (pregunta.isPresent()) {
+            String normalizado = NormalizadorVoz.normalizar(request.texto());
+            if (ES_CANCELAR.matcher(normalizado).matches()) {
+                ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
+                        pregunta.get().intencion(), EstadoComandoVoz.CANCELADO, MENSAJE_CANCELADO,
+                        resultado.probabilidadIntencion(), resultado.metodo());
+                return new VozInterpretarResponse(comando.getId(), true, pregunta.get().intencion().name(), false,
+                        null, MENSAJE_CANCELADO, Map.of());
+            }
+            if (!esComandoNuevo(resultado, pregunta.get(), normalizado)) {
+                return responderPregunta(pregunta.get(), request, usuario, resultado);
+            }
+        }
+
         Map<String, String> slots = resultado.slots();
 
         // T41-BE5 — "agrega/añade/también ..." continúa la venta que espera confirmación.
@@ -153,6 +190,9 @@ public class VozService {
         }
         VozResultado interpretado = handler.interpretar(ctx);
 
+        if (!interpretado.ok() && interpretado.payload() instanceof PreguntaVoz preguntaVoz) {
+            return preguntar(usuario, request, intencion, request.texto(), preguntaVoz, interpretado, resultado);
+        }
         if (!interpretado.ok()) {
             ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(),
                     intencion, EstadoComandoVoz.ERROR, interpretado.textoRespuesta(),
@@ -194,6 +234,121 @@ public class VozService {
                     resultado.probabilidadIntencion(), resultado.metodo());
         return new VozInterpretarResponse(comando.getId(), true, intencion.name(), false, null,
                 interpretado.textoRespuesta(), interpretado.datos());
+    }
+
+    /**
+     * La frase contesta la pregunta pendiente: se vuelve a llamar al mismo handler con la frase
+     * original, los slots que ya tenía y lo respondido en {@link PreguntaVoz#SLOT_RESPUESTA}.
+     */
+    private VozInterpretarResponse responderPregunta(VozPendienteStore.PreguntaPendiente pregunta,
+                                                     VozInterpretarRequest request, Usuario usuario,
+                                                     ClasificadorIntencion.ResultadoClasificacion resultado) {
+        if (pregunta.slots().containsKey(PreguntaVoz.SLOT_REEMPLAZAR) || pregunta.slots().containsKey(PreguntaVoz.SLOT_ANEXAR)) {
+            // La respuesta completa el comando original, que se interpreta de nuevo desde cero.
+            return interpretar(new VozInterpretarRequest(textoReinterpretado(pregunta, request.texto()),
+                    request.confianza()), usuario);
+        }
+        TipoIntencionVoz intencion = pregunta.intencion();
+        IntencionHandler handler = handlersPorTipo.get(intencion);
+        Map<String, String> slots = new LinkedHashMap<>(pregunta.slots());
+        slots.put(PreguntaVoz.SLOT_RESPUESTA, request.texto());
+        String textoComando = pregunta.textoOriginal() + " → " + request.texto();
+
+        VozContexto ctx = new VozContexto(pregunta.textoOriginal(), slots, request.confianza(), usuario,
+                LocalDate.now(ZONA_BOGOTA));
+        VozResultado interpretado = handler.interpretar(ctx);
+
+        if (!interpretado.ok() && interpretado.payload() instanceof PreguntaVoz otra) {
+            return preguntar(usuario, request, intencion, pregunta.textoOriginal(), otra, interpretado, resultado);
+        }
+        if (!interpretado.ok()) {
+            ComandoVoz comando = guardarComando(usuario, textoComando, request.confianza(),
+                    intencion, EstadoComandoVoz.ERROR, interpretado.textoRespuesta(),
+                    resultado.probabilidadIntencion(), resultado.metodo());
+            return new VozInterpretarResponse(comando.getId(), false, intencion.name(), false, null,
+                    interpretado.textoRespuesta(), interpretado.datos());
+        }
+        if (handler.requiereConfirmacion()) {
+            UUID comandoId = UUID.randomUUID();
+            pendienteStore.put(comandoId, usuario.getId(), intencion, new DatosPendientes(textoComando,
+                    request.confianza(), interpretado.payload(), resultado.probabilidadIntencion(), resultado.metodo()));
+            return new VozInterpretarResponse(comandoId, true, intencion.name(), true,
+                    VozPendienteStore.ttlSegundos(intencion), interpretado.textoRespuesta(), interpretado.datos());
+        }
+        ComandoVoz comando = guardarComando(usuario, textoComando, request.confianza(),
+                intencion, EstadoComandoVoz.PROCESADO, interpretado.textoRespuesta(),
+                resultado.probabilidadIntencion(), resultado.metodo());
+        return new VozInterpretarResponse(comando.getId(), true, intencion.name(), false, null,
+                interpretado.textoRespuesta(), interpretado.datos());
+    }
+
+    /**
+     * El comando original completado con la respuesta: reemplaza el fragmento por el que se
+     * preguntó (o por la opción elegida con "la primera" / "la segunda"), o se agrega al final.
+     */
+    static String textoReinterpretado(VozPendienteStore.PreguntaPendiente pregunta, String respuesta) {
+        Map<String, String> s = pregunta.slots();
+        String original = NormalizadorVoz.normalizar(pregunta.textoOriginal());
+        String dicho = NormalizadorVoz.normalizar(respuesta);
+        if (s.containsKey(PreguntaVoz.SLOT_ANEXAR)) {
+            String prefijo = s.get(PreguntaVoz.SLOT_ANEXAR);
+            Matcher numero = NUMERO_SUELTO.matcher(dicho);
+            String anexo = numero.matches() && !prefijo.isEmpty() ? prefijo + numero.group(1) : dicho;
+            return original + " " + anexo;
+        }
+        String elegido = opcionElegida(s.get(PreguntaVoz.SLOT_OPCIONES), dicho);
+        String fragmento = s.getOrDefault(PreguntaVoz.SLOT_REEMPLAZAR, "");
+        if (!fragmento.isBlank() && original.contains(fragmento)) {
+            return original.replaceFirst(Pattern.quote(fragmento), Matcher.quoteReplacement(elegido));
+        }
+        return original + " " + elegido;
+    }
+
+    /** "la primera" / "la segunda" / "la de limón" → la opción; si no, lo dicho sin artículos. */
+    private static String opcionElegida(String opcionesSlot, String dicho) {
+        String limpio = RELLENO_RESPUESTA.matcher(dicho).replaceAll(" ").replaceAll("\\s+", " ").trim();
+        if (opcionesSlot == null || opcionesSlot.isBlank()) return limpio.isEmpty() ? dicho : limpio;
+        List<String> opciones = java.util.Arrays.stream(opcionesSlot.split("\\|")).map(NormalizadorVoz::normalizar).toList();
+        if (PRIMERA_OPCION.matcher(dicho).find()) return opciones.get(0);
+        if (SEGUNDA_OPCION.matcher(dicho).find() && opciones.size() > 1) return opciones.get(1);
+        if (!limpio.isEmpty()) {
+            for (String opcion : opciones) {
+                if (opcion.contains(limpio)) return opcion;
+            }
+        }
+        return limpio.isEmpty() ? dicho : limpio;
+    }
+
+    /**
+     * El handler preguntó algo: se recuerda la pregunta y el frontend vuelve a abrir el micrófono
+     * ({@code datos.esperaRespuesta}) para que el usuario conteste ahí mismo.
+     */
+    private VozInterpretarResponse preguntar(Usuario usuario, VozInterpretarRequest request, TipoIntencionVoz intencion,
+                                             String textoOriginal, PreguntaVoz pregunta, VozResultado interpretado,
+                                             ClasificadorIntencion.ResultadoClasificacion resultado) {
+        pendienteStore.putPregunta(usuario.getId(), intencion, textoOriginal, pregunta.slots());
+        Map<String, Object> datos = new LinkedHashMap<>(interpretado.datos());
+        datos.put("esperaRespuesta", true);
+        ComandoVoz comando = guardarComando(usuario, request.texto(), request.confianza(), intencion,
+                EstadoComandoVoz.PROCESADO, interpretado.textoRespuesta(),
+                resultado.probabilidadIntencion(), resultado.metodo());
+        return new VozInterpretarResponse(comando.getId(), false, intencion.name(), false, null,
+                interpretado.textoRespuesta(), datos);
+    }
+
+    /**
+     * Con una pregunta pendiente, la frase se toma como comando nuevo solo si arranca como un
+     * comando ("cuántos clientes tengo"); "la de las 3", "el mango biche" o "la última" son respuestas.
+     */
+    private static boolean esComandoNuevo(ClasificadorIntencion.ResultadoClasificacion resultado,
+                                          VozPendienteStore.PreguntaPendiente pregunta, String normalizado) {
+        if (resultado.intencion() == null) return false;
+        if (normalizado.split(" ").length < 3 || !INICIO_COMANDO.matcher(normalizado).find()) return false;
+        // Repetir el comando completo de la misma intención ("vende 2 cajas de Aloha Limón") lo reemplaza;
+        // en las preguntas que se responden por slot ("aprueba la de las 3") sigue siendo la respuesta.
+        boolean reinterpreta = pregunta.slots().containsKey(PreguntaVoz.SLOT_REEMPLAZAR)
+                || pregunta.slots().containsKey(PreguntaVoz.SLOT_ANEXAR);
+        return resultado.intencion() != pregunta.intencion() || reinterpreta;
     }
 
     private boolean hayAprobadosHoy() {

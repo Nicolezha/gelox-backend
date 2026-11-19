@@ -285,7 +285,8 @@ class RecomendacionVozHandlerTest {
         VozResultado r = decidir.interpretar(ctx(Map.of("accion", "APROBAR", "producto", "festival")));
 
         assertThat(r.ok()).isFalse();
-        assertThat(r.textoRespuesta()).isEqualTo("Ese producto no está en la recomendación de hoy.");
+        assertThat(r.textoRespuesta()).startsWith("Ese producto no está en la recomendación de hoy.");
+        assertThat(r.payload()).isInstanceOf(com.gelox.backend.voz.PreguntaVoz.class);
     }
 
     @Test

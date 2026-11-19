@@ -14,7 +14,10 @@ import com.gelox.backend.recomendacion.dto.RecomendacionDTO;
 import com.gelox.backend.repositories.RecomendacionCompraRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
+import com.gelox.backend.voz.FechaVoz;
 import com.gelox.backend.voz.IntencionHandler;
+import com.gelox.backend.voz.NormalizadorVoz;
+import com.gelox.backend.voz.PreguntaVoz;
 import com.gelox.backend.voz.ResolvedorProducto;
 import com.gelox.backend.voz.VozContexto;
 import com.gelox.backend.voz.VozPendiente;
@@ -26,12 +29,15 @@ import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +60,17 @@ public class RecomendacionVozHandler implements IntencionHandler {
 
     public enum Accion { APROBAR, RECHAZAR, MODIFICAR, APROBAR_TODO, GENERAR_PEDIDO }
 
+    private static final List<EstadoRecomendacion> ABIERTAS =
+            List.of(EstadoRecomendacion.GENERADA, EstadoRecomendacion.EN_REVISION);
+
+    /** "aprueba la recomendación", "aprueba toda la recomendación de compra del lunes". */
+    private static final Pattern APROBAR_RECOMENDACION =
+            Pattern.compile("\\baprueb\\w*\\s+(?:me\\s+)?(?:toda\\s+)?(?:la|esa|esta)\\s+recomendacion");
+    private static final Pattern TODOS = Pattern.compile("\\b(todo|todos|todas|toda|completa|completo)\\b");
+    private static final Pattern NUMERO = Pattern.compile("\\b(\\d+)\\b");
+    private static final Pattern RELLENO_RESPUESTA = Pattern.compile(
+            "\\b(el|la|los|las|de|del|producto|aprueba\\w*|rechaza\\w*|cambia\\w*|quiero|ese|esa|este|esta|por favor|cajas?|\\d+)\\b");
+
     /** Lo que se ejecuta al confirmar. itemId y cajas solo en las decisiones por producto. */
     public record Payload(UUID recomendacionId, Accion accion, UUID itemId, Integer cajas) {}
 
@@ -75,21 +92,75 @@ public class RecomendacionVozHandler implements IntencionHandler {
     @Override
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     public VozResultado interpretar(VozContexto ctx) {
-        Optional<RecomendacionDTO> delDia = recomendacionService.recomendacionDelDia();
-        if (delDia.isEmpty()) {
-            return error(hoyYaHayPedido() ? YA_CONVERTIDA : SIN_RECOMENDACION);
-        }
-        RecomendacionDTO recomendacion = delDia.get();
+        Map<String, String> slots = new LinkedHashMap<>(ctx.slots());
+        // Lo que el usuario respondió a la última pregunta; lo consume la primera pieza que falte.
+        String respuesta = slots.remove(PreguntaVoz.SLOT_RESPUESTA);
+        LocalDate hoy = ctx.hoy() != null ? ctx.hoy() : LocalDate.now(ZONA_BOGOTA);
+        String normalizado = NormalizadorVoz.normalizar(ctx.texto());
 
-        Accion accion = accion(ctx.slots().get("accion"));
+        // Primero lo dicho (determinista); el slot del LLM cubre formas como "hace tres días".
+        LocalDate fecha = FechaVoz.de(normalizado, hoy)
+                .or(() -> FechaVoz.deSlot(slots.get("fecha")))
+                .orElse(hoy);
+        slots.put("fecha", fecha.toString());
+
+        Accion accion = accion(slots.get("accion"));
+        // "aprueba la recomendación (de compra) del 15 de noviembre": toda la recomendación.
+        if (accion == Accion.APROBAR && esBlanco(slots.get("producto"))
+                && APROBAR_RECOMENDACION.matcher(normalizado).find()) {
+            accion = Accion.APROBAR_TODO;
+        }
         if (accion == null) {
             return error("No entendí qué hacer con la recomendación. Di por ejemplo 'aprueba el Mango Biche' o 'genera el pedido'.");
         }
+        slots.put("accion", accion.name());
+
+        List<RecomendacionDTO> abiertas = abiertas(fecha, hoy);
+        if (abiertas.isEmpty()) {
+            boolean convertida = yaHayPedido(fecha);
+            if (fecha.equals(hoy)) return error(convertida ? YA_CONVERTIDA : SIN_RECOMENDACION);
+            return error(convertida
+                    ? "La recomendación " + SelectorRecomendacion.deFecha(fecha, hoy) + " ya se convirtió en pedido; no se puede modificar."
+                    : "No hay recomendaciones pendientes " + SelectorRecomendacion.deFecha(fecha, hoy) + ".");
+        }
+
+        RecomendacionDTO recomendacion;
+        Optional<RecomendacionDTO> elegida =
+                SelectorRecomendacion.porId(abiertas, slots.get(SelectorRecomendacion.SLOT_ELEGIDA));
+        if (elegida.isPresent()) {
+            recomendacion = elegida.get();
+        } else if (abiertas.size() == 1) {
+            recomendacion = abiertas.get(0);
+        } else {
+            List<RecomendacionDTO> opciones =
+                    SelectorRecomendacion.opciones(abiertas, slots.get(SelectorRecomendacion.SLOT_OPCIONES));
+            boolean filtradas = opciones.size() != abiertas.size();
+            String verbo = verbo(accion);
+            if (respuesta == null) {
+                return SelectorRecomendacion.preguntarCual(null, opciones, fecha, hoy, verbo, slots, filtradas);
+            }
+            SelectorRecomendacion.Resultado seleccion = SelectorRecomendacion.elegir(respuesta, opciones);
+            respuesta = null; // ya se usó para elegir la recomendación
+            if (seleccion.coincidencias().size() == 1) {
+                recomendacion = seleccion.coincidencias().get(0);
+            } else if (!seleccion.conCriterio() || seleccion.coincidencias().isEmpty()) {
+                return SelectorRecomendacion.preguntarCual("No identifiqué cuál. ", opciones, fecha, hoy, verbo, slots, filtradas);
+            } else {
+                return SelectorRecomendacion.preguntarCual(null, seleccion.coincidencias(), fecha, hoy, verbo, slots, true);
+            }
+        }
+        slots.put(SelectorRecomendacion.SLOT_ELEGIDA, recomendacion.id().toString());
+        slots.remove(SelectorRecomendacion.SLOT_OPCIONES);
+
+        // Se aclara de cuál se habla cuando no es la única de hoy.
+        String referencia = fecha.equals(hoy) && abiertas.size() == 1 ? ""
+                : " de la recomendación " + SelectorRecomendacion.deFecha(fecha, hoy)
+                + (abiertas.size() > 1 ? " de las " + SelectorRecomendacion.hora(recomendacion.createdAt()) : "");
 
         return switch (accion) {
-            case APROBAR_TODO -> aprobarTodo(recomendacion);
-            case GENERAR_PEDIDO -> generarPedido(recomendacion);
-            default -> decidirProducto(recomendacion, accion, ctx.slots());
+            case APROBAR_TODO -> aprobarTodo(recomendacion, referencia);
+            case GENERAR_PEDIDO -> generarPedido(recomendacion, referencia);
+            default -> decidirProducto(recomendacion, accion, slots, respuesta, referencia);
         };
     }
 
@@ -129,61 +200,81 @@ public class RecomendacionVozHandler implements IntencionHandler {
     // Interpretación por acción
     // ══════════════════════════════════════════════════════════════════════
 
-    private VozResultado decidirProducto(RecomendacionDTO recomendacion, Accion accion, Map<String, String> slots) {
+    private VozResultado decidirProducto(RecomendacionDTO recomendacion, Accion accion, Map<String, String> slots,
+                                         String respuesta, String referencia) {
         String fragmento = slots.get("producto");
-        if (fragmento == null || fragmento.isBlank()) {
-            return error("¿Qué producto de la recomendación?");
+        if (esBlanco(fragmento)) {
+            if (respuesta == null) {
+                String pregunta = accion == Accion.APROBAR
+                        ? "¿Qué producto" + referencia + " apruebo? Di el nombre o 'todos' para aprobarla completa."
+                        : "¿Qué producto" + referencia + " quieres " + (accion == Accion.RECHAZAR ? "rechazar" : "cambiar") + "?";
+                return pregunta(pregunta, slots);
+            }
+            if (accion == Accion.APROBAR && TODOS.matcher(NormalizadorVoz.normalizar(respuesta)).find()) {
+                return aprobarTodo(recomendacion, referencia);
+            }
+            fragmento = limpiarProducto(respuesta);
+            respuesta = null; // ya se usó como el producto
+            if (fragmento.isEmpty()) return pregunta("¿Qué producto?", slots);
         }
         Optional<ItemDTO> encontrado = buscarItem(recomendacion, fragmento);
-        if (encontrado.isEmpty()) return error(NO_ESTA);
+        if (encontrado.isEmpty()) {
+            Map<String, String> sinProducto = new LinkedHashMap<>(slots);
+            sinProducto.remove("producto");
+            return pregunta(NO_ESTA + " ¿Qué producto?", sinProducto);
+        }
         ItemDTO item = encontrado.get();
         String nombre = item.productoNombre();
+        Map<String, String> conProducto = new LinkedHashMap<>(slots);
+        conProducto.put("producto", fragmento);
 
         return switch (accion) {
             case APROBAR -> {
                 if (!tieneCajasSugeridas(item)) {
-                    yield error(nombre + " no cupo en el presupuesto. Di a cuántas cajas lo cambio.");
+                    conProducto.put("accion", Accion.MODIFICAR.name());
+                    yield pregunta(nombre + " no cupo en el presupuesto. ¿A cuántas cajas lo cambio?", conProducto);
                 }
-                yield confirmar("Aprobar " + nombre + ", " + cajas(item.cajasSugeridas()) + " por "
+                yield confirmar("Aprobar " + nombre + referencia + ", " + cajas(item.cajasSugeridas()) + " por "
                                 + pesos(item.costoEstimado()) + ". ¿Confirmas?",
                         new Payload(recomendacion.id(), accion, item.id(), null), item);
             }
-            case RECHAZAR -> confirmar("Rechazar " + nombre + ". ¿Confirmas?",
+            case RECHAZAR -> confirmar("Rechazar " + nombre + referencia + ". ¿Confirmas?",
                     new Payload(recomendacion.id(), accion, item.id(), null), item);
             default -> {
                 Integer nuevas = entero(slots.get("cantidad"));
+                if (nuevas == null && respuesta != null) nuevas = primerNumero(respuesta);
                 if (nuevas == null || nuevas < 0) {
-                    yield error("¿A cuántas cajas cambio " + nombre + "?");
+                    yield pregunta("¿A cuántas cajas cambio " + nombre + "?", conProducto);
                 }
                 int actuales = item.cajasAprobadas() != null ? item.cajasAprobadas()
                         : item.cajasSugeridas() != null ? item.cajasSugeridas() : 0;
-                yield confirmar("Cambiar " + nombre + " de " + actuales + " a " + cajas(nuevas) + ". ¿Confirmas?",
+                yield confirmar("Cambiar " + nombre + referencia + " de " + actuales + " a " + cajas(nuevas) + ". ¿Confirmas?",
                         new Payload(recomendacion.id(), accion, item.id(), nuevas), item);
             }
         };
     }
 
-    private VozResultado aprobarTodo(RecomendacionDTO recomendacion) {
+    private VozResultado aprobarTodo(RecomendacionDTO recomendacion, String referencia) {
         List<ItemDTO> pendientes = recomendacion.items().stream()
                 .filter(i -> i.decision() == DecisionItem.PENDIENTE && tieneCajasSugeridas(i))
                 .toList();
-        if (pendientes.isEmpty()) return error("No quedan productos pendientes por aprobar.");
+        if (pendientes.isEmpty()) return error("No quedan productos pendientes por aprobar" + referencia + ".");
 
         BigDecimal costo = pendientes.stream().map(ItemDTO::costoEstimado)
                 .map(c -> c == null ? BigDecimal.ZERO : c)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new VozResultado(true,
-                "Aprobar " + productos(pendientes.size(), "los ") + " por " + pesos(costo) + ". ¿Confirmas?",
+                "Aprobar " + productos(pendientes.size(), "los ") + referencia + " por " + pesos(costo) + ". ¿Confirmas?",
                 Map.of("recomendacionId", recomendacion.id()),
                 new Payload(recomendacion.id(), Accion.APROBAR_TODO, null, null));
     }
 
-    private VozResultado generarPedido(RecomendacionDTO recomendacion) {
+    private VozResultado generarPedido(RecomendacionDTO recomendacion, String referencia) {
         List<ItemDTO> aprobados = aprobados(recomendacion);
         if (aprobados.isEmpty()) return error(SIN_APROBADOS);
         return new VozResultado(true,
-                "Generar el pedido con " + productos(aprobados.size(), "") + " aprobado" + (aprobados.size() == 1 ? "" : "s")
-                        + " por " + pesos(recomendacion.costoAprobado()) + ". ¿Confirmas?",
+                "Generar el pedido" + referencia + " con " + productos(aprobados.size(), "") + " aprobado"
+                        + (aprobados.size() == 1 ? "" : "s") + " por " + pesos(recomendacion.costoAprobado()) + ". ¿Confirmas?",
                 Map.of("recomendacionId", recomendacion.id()),
                 new Payload(recomendacion.id(), Accion.GENERAR_PEDIDO, null, null));
     }
@@ -211,10 +302,49 @@ public class RecomendacionVozHandler implements IntencionHandler {
                 .map(c -> porProducto.get(c.id()));
     }
 
-    private boolean hoyYaHayPedido() {
-        LocalDate hoy = LocalDate.now(ZONA_BOGOTA);
+    /**
+     * Recomendaciones abiertas (GENERADA o EN_REVISION) de la fecha, de la más antigua a la más nueva.
+     * Para hoy, si la consulta por día no trae nada, se usa la del día (misma regla que la pantalla).
+     */
+    private List<RecomendacionDTO> abiertas(LocalDate fecha, LocalDate hoy) {
+        List<RecomendacionDTO> delDia = recomendacionService.recomendacionesDelDia(fecha, ABIERTAS);
+        if (delDia.isEmpty() && fecha.equals(hoy)) {
+            return recomendacionService.recomendacionDelDia().map(List::of).orElse(List.of());
+        }
+        return delDia;
+    }
+
+    private boolean yaHayPedido(LocalDate fecha) {
         return recomendacionRepo.buscarUltima(TenantContext.requerido(), List.of(EstadoRecomendacion.PEDIDO_GENERADO),
-                hoy.atStartOfDay(), hoy.plusDays(1).atStartOfDay()).isPresent();
+                fecha.atStartOfDay(), fecha.plusDays(1).atStartOfDay()).isPresent();
+    }
+
+    private static String verbo(Accion accion) {
+        return switch (accion) {
+            case APROBAR, APROBAR_TODO -> "aprobar";
+            case RECHAZAR -> "usar para rechazar el producto";
+            case MODIFICAR -> "modificar";
+            case GENERAR_PEDIDO -> "convertir en pedido";
+        };
+    }
+
+    /** "el mango biche", "apruébame el de mango biche" → "mango biche". */
+    private static String limpiarProducto(String respuesta) {
+        return RELLENO_RESPUESTA.matcher(NormalizadorVoz.normalizar(respuesta)).replaceAll(" ")
+                .replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
+    }
+
+    private static Integer primerNumero(String respuesta) {
+        Matcher m = NUMERO.matcher(NormalizadorVoz.normalizar(respuesta));
+        return m.find() ? Integer.parseInt(m.group(1)) : null;
+    }
+
+    private static boolean esBlanco(String s) {
+        return s == null || s.isBlank();
+    }
+
+    private static VozResultado pregunta(String texto, Map<String, String> slots) {
+        return new VozResultado(false, texto, Map.of(), new PreguntaVoz(slots));
     }
 
     private static Accion accion(String slot) {
