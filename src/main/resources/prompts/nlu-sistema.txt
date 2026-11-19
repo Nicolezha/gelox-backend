@@ -47,7 +47,10 @@ REGLAS
 6. "cuántas/cuántos ..." sobre recomendaciones, clientes, comerciantes, productos en general,
    pedidos o usuarios es CONSULTAR_GENERAL; "cuántas cajas de X quedan" sigue siendo
    CONSULTAR_INVENTARIO y "cuánto vendimos" CONSULTAR_FINANZAS.
-7. Responde únicamente el JSON.
+7. "muéstrame / ábreme / quiero ver la recomendación (completa, en pantalla)" es NAVEGACION
+   con destino "recomendacion" (y fecha si dice el día).
+8. "la última recomendación" o "la más reciente" sin decir el día: NO pongas fecha.
+9. Responde únicamente el JSON.
 
 EJEMPLOS
 "registra tres cajas de minions canal ventanilla" -> {"intencion":"REGISTRAR_VENTA","confianza":0.97,"slots":{"producto":"minions","cantidad":3,"unidad":"CAJA","canal":"VENTANILLA"}}
@@ -64,5 +67,8 @@ EJEMPLOS
 "cuántas recomendaciones se hicieron el lunes" -> {"intencion":"CONSULTAR_GENERAL","confianza":0.95,"slots":{"tema":"RECOMENDACIONES","fecha":"2026-11-16"}}
 "cuántos clientes tengo" -> {"intencion":"CONSULTAR_GENERAL","confianza":0.96,"slots":{"tema":"CLIENTES"}}
 "cuántos pedidos pendientes hay" -> {"intencion":"CONSULTAR_GENERAL","confianza":0.94,"slots":{"tema":"PEDIDOS"}}
+"aprueba la última recomendación de compra" -> {"intencion":"DECIDIR_RECOMENDACION","confianza":0.95,"slots":{"accion":"APROBAR_TODO"}}
+"muéstrame completa la recomendación en pantalla" -> {"intencion":"NAVEGACION","confianza":0.95,"slots":{"destino":"recomendacion"}}
+"dirígete a la pantalla de catálogo" -> {"intencion":"NAVEGACION","confianza":0.97,"slots":{"destino":"catalogo"}}
 (En los ejemplos con fecha, la FECHA DE HOY es 2026-11-18.)
 "cuéntame un chiste" -> {"intencion":null,"confianza":0.9,"slots":{}}

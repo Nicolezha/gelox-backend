@@ -62,7 +62,7 @@ public class ClasificadorIntencion implements ProcesadorLenguaje {
      */
     private static final List<Regla> REGLAS = List.of(
             new Regla(TipoIntencionVoz.NAVEGACION, Pattern.compile(
-                    "\\b(ve a|ir a|ve a la|abre|ir al|llevame a|llévame a|navega a|pasa a|muestrame|abre la|pantalla de|pestana de|modulo de)\\b.*"
+                    "\\b(ve a|ir a|ve a la|abre|ir al|llevame a|llévame a|navega a|pasa a|muestrame|abre la|pantalla de|pestana de|modulo de|dirigete a|dirijete a|vamos a|anda a|vete a)\\b.*"
                             + "\\b(ventanilla|ventas|rural|comerciante|comerciantes|cliente|clientes|inventario|inventarios|catalogo|pedidos|pedido|reporte|reportes|cierre|cierres|usuario|usuarios|dashboard|inicio|ajustes|merma|entrada)\\b")),
             new Regla(TipoIntencionVoz.CONSULTAR_FINANZAS, Pattern.compile(
                     "cuant[oa]s?\\b.*\\b(ganamos|ganado|vendimos|vendido|vendio|vendieron|facturamos|hicimos|entro|entraron|llevamos)\\b"
@@ -139,7 +139,7 @@ public class ClasificadorIntencion implements ProcesadorLenguaje {
     private static final Pattern GENERAR_DESDE_RECOMENDACION = Pattern.compile(
             "\\b(genera|generar|haz|hacer|crea|crear|convierte|convertir|pasa|pasar)\\w*\\b.*\\bpedido\\b");
     private static final Pattern APRUEBA_TODO = Pattern.compile(
-            "\\baprueb\\w*\\s+(?:me\\s+)?(?:toda\\s+)?(?:la|esa|esta)\\s+recomendacion|\\b(todo|todos|todas|completa)\\b");
+            "\\baprueb\\w*\\s+(?:me\\s+)?(?:toda\\s+)?(?:la|esa|esta)\\s+(?:\\w+\\s+)?recomendacion|\\b(todo|todos|todas|completa)\\b");
     private static final Pattern PRODUCTO_DECISION = Pattern.compile(
             "\\b(?:aprueb\\w*|aprobar|rechaz\\w*|cambi\\w*|modific\\w*)\\s+(?:el |la |los |las )?(.+?)"
                     + "(?:\\s+(?:a|en)\\s+\\d+\\s+cajas?)?(?:\\s+(?:de|en|del)\\s+la\\s+recomendacion.*)?$");
@@ -153,6 +153,10 @@ public class ClasificadorIntencion implements ProcesadorLenguaje {
                     probabilidad, MetodoClasificacion.REGLAS));
         }
         if (!RECOMENDACION.matcher(normalizado).find()) return Optional.empty();
+        if (com.gelox.backend.voz.handlers.NavegacionHandler.esMostrarRecomendacion(normalizado)) {
+            return Optional.of(new ResultadoClasificacion(TipoIntencionVoz.NAVEGACION, Map.of(),
+                    probabilidad, MetodoClasificacion.REGLAS));
+        }
 
         Map<String, String> slots = new LinkedHashMap<>();
         Matcher verbo = VERBO_DECISION.matcher(normalizado);

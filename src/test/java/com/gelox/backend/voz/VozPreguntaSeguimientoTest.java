@@ -144,6 +144,49 @@ class VozPreguntaSeguimientoTest {
     }
 
     @Test
+    @DisplayName("Regresión: 'dirígete a la pantalla de catálogo' tras la pregunta es navegación, no respuesta")
+    void navegacionTrasPregunta() {
+        HandlerQuePregunta decidir = new HandlerQuePregunta(TipoIntencionVoz.DECIDIR_RECOMENDACION);
+        HandlerQuePregunta navegar = new HandlerQuePregunta(TipoIntencionVoz.NAVEGACION);
+        VozService voz = servicio(decidir, navegar);
+        voz.interpretar(new VozInterpretarRequest("aprueba la última recomendación de compra", 0.95), usuario);
+
+        // Aunque el micrófono se haya abierto solo para responder.
+        VozInterpretarResponse r = voz.interpretar(
+                new VozInterpretarRequest("dirígete a la pantalla de catálogo", 0.95, true), usuario);
+
+        assertThat(r.intencion()).isEqualTo("NAVEGACION");
+        assertThat(decidir.contextos).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Micrófono abierto por el usuario (continuacion=false): descarta la pregunta aunque parezca respuesta")
+    void continuacionFalseDescartaPregunta() {
+        HandlerQuePregunta decidir = new HandlerQuePregunta(TipoIntencionVoz.DECIDIR_RECOMENDACION);
+        VozService voz = servicio(decidir);
+        voz.interpretar(new VozInterpretarRequest("aprueba la recomendación de ayer", 0.95), usuario);
+
+        voz.interpretar(new VozInterpretarRequest("la segunda", 0.95, false), usuario);
+
+        assertThat(decidir.contextos).hasSize(1);
+        assertThat(store.takePregunta(usuario.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("'muéstrame completa la recomendación en pantalla' va a navegación")
+    void mostrarRecomendacionEsNavegacion() {
+        HandlerQuePregunta navegar = new HandlerQuePregunta(TipoIntencionVoz.NAVEGACION);
+        HandlerQuePregunta consultar = new HandlerQuePregunta(TipoIntencionVoz.CONSULTAR_RECOMENDACION);
+        VozService voz = servicio(navegar, consultar);
+
+        VozInterpretarResponse r = voz.interpretar(
+                new VozInterpretarRequest("muéstrame completa la recomendación en pantalla", 0.95), usuario);
+
+        assertThat(r.intencion()).isEqualTo("NAVEGACION");
+        assertThat(consultar.contextos).isEmpty();
+    }
+
+    @Test
     @DisplayName("Pregunta que reemplaza un fragmento: '¿Festival o Festival Mini?' → 'la segunda'")
     void reemplazarFragmento() {
         store.putPregunta(usuario.getId(), TipoIntencionVoz.GENERAR_PEDIDO, "genera un pedido con 5 cajas de festival",

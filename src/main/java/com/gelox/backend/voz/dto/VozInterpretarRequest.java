@@ -19,5 +19,16 @@ public record VozInterpretarRequest(
         @NotNull(message = "La confianza es obligatoria")
         @DecimalMin(value = "0.0", message = "La confianza debe estar entre 0 y 1")
         @DecimalMax(value = "1.0", message = "La confianza debe estar entre 0 y 1")
-        Double confianza
-) {}
+        Double confianza,
+
+        /*
+         * true: la frase responde la pregunta que el asistente acaba de hacer (el micrófono se abrió
+         * solo tras la pregunta). false: comando nuevo (el usuario abrió el micrófono), descarta la
+         * pregunta pendiente. null: lo decide el backend por el contenido.
+         */
+        Boolean continuacion
+) {
+    public VozInterpretarRequest(String texto, Double confianza) {
+        this(texto, confianza, null);
+    }
+}

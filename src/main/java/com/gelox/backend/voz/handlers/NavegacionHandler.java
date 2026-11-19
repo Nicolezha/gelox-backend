@@ -1,15 +1,28 @@
 package com.gelox.backend.voz.handlers;
 
+import com.gelox.backend.entities.EstadoRecomendacion;
 import com.gelox.backend.entities.TipoIntencionVoz;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.recomendacion.RecomendacionCompraService;
+import com.gelox.backend.recomendacion.dto.RecomendacionDTO;
+import com.gelox.backend.voz.FechaVoz;
 import com.gelox.backend.voz.IntencionHandler;
 import com.gelox.backend.voz.NormalizadorVoz;
+import com.gelox.backend.voz.VozPendienteStore;
 import com.gelox.backend.voz.VozContexto;
 import com.gelox.backend.voz.VozPendiente;
 import com.gelox.backend.voz.VozResultado;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Manejador de navegación por voz ("ve a la pestaña de ventas", "abre inventarios").
@@ -17,7 +30,29 @@ import java.util.Map;
  * para que el cliente web navegue automáticamente.
  */
 @Component
+@RequiredArgsConstructor
 public class NavegacionHandler implements IntencionHandler {
+
+    private static final ZoneId ZONA_BOGOTA = ZoneId.of("America/Bogota");
+    private static final String RUTA_RECOMENDACIONES = "/inventarios/recomendaciones";
+
+    /** "muéstrame la recomendación completa", "ábreme la recomendación en pantalla", "ver la recomendación del 15". */
+    private static final Pattern MOSTRAR = Pattern.compile(
+            "\\b(muestra\\w*|ensena\\w*|abre\\w*|ver|veamos|llevame|lleva\\w*|pon\\w*|despliega\\w*|dirigete|ir|ve|vamos)\\b.*\\brecomendacion"
+                    + "|\\brecomendacion\\w*\\b.*\\b(completa|en pantalla|pantalla|entera|detalle)\\b");
+    /** "cuántas recomendaciones…", "aprueba…", "genera el pedido…": son otra cosa. */
+    private static final Pattern NO_ES_MOSTRAR = Pattern.compile(
+            "\\b(cuant\\w*|aprueb\\w*|aprobar|rechaz\\w*|cambi\\w*|modific\\w*|genera\\w*|recomiendas|recomiendame)\\b");
+    private static final Pattern RECOMENDACION = Pattern.compile("\\brecomendacion");
+    private static final Pattern ULTIMA = Pattern.compile("\\b(ultima|mas reciente)\\b");
+
+    private final RecomendacionCompraService recomendacionService;
+    private final VozPendienteStore pendienteStore;
+
+    /** Lo usa VozService para mandar aquí "muéstrame la recomendación…" aunque se clasifique como consulta. */
+    public static boolean esMostrarRecomendacion(String normalizado) {
+        return MOSTRAR.matcher(normalizado).find() && !NO_ES_MOSTRAR.matcher(normalizado).find();
+    }
 
     @Override
     public TipoIntencionVoz tipo() {
@@ -35,6 +70,9 @@ public class NavegacionHandler implements IntencionHandler {
         String ruta = "/ventas/pedidos-ventanilla";
         String nombre = "Pedidos Ventanilla";
 
+        if (RECOMENDACION.matcher(texto).find()) {
+            return mostrarRecomendacion(texto, ctx);
+        }
         if (texto.contains("inventario")) {
             ruta = "/inventarios/gestion";
             nombre = "Gestión de Inventarios";
@@ -85,6 +123,41 @@ public class NavegacionHandler implements IntencionHandler {
                 Map.of("ruta", ruta, "pantalla", nombre),
                 null
         );
+    }
+
+    /**
+     * La recomendación a mostrar: la del día dicho, "la última" que se hizo, la última de la que se
+     * habló por voz o, si no, la más reciente.
+     */
+    private VozResultado mostrarRecomendacion(String texto, VozContexto ctx) {
+        LocalDate hoy = ctx.hoy() != null ? ctx.hoy() : LocalDate.now(ZONA_BOGOTA);
+        List<EstadoRecomendacion> todas = List.of(EstadoRecomendacion.values());
+        Optional<LocalDate> fecha = FechaVoz.de(texto, hoy);
+        Optional<RecomendacionDTO> rec;
+        if (fecha.isPresent()) {
+            List<RecomendacionDTO> delDia = recomendacionService.recomendacionesDelDia(fecha.get(), todas);
+            rec = delDia.isEmpty() ? Optional.empty() : Optional.of(delDia.get(delDia.size() - 1));
+        } else if (ULTIMA.matcher(texto).find()) {
+            rec = recomendacionService.ultimaRecomendacion(todas);
+        } else {
+            Optional<UUID> recordada = ctx.usuario() == null ? Optional.empty()
+                    : pendienteStore.ultimaRecomendacion(ctx.usuario().getId());
+            rec = recordada.map(id -> new RecomendacionDTO(id, null, null, null, null, null, null, null, null,
+                            null, null, null, List.of()))
+                    .or(() -> recomendacionService.ultimaRecomendacion(todas));
+        }
+
+        Map<String, Object> datos = new LinkedHashMap<>();
+        datos.put("pantalla", "Recomendación de Compras");
+        if (rec.isEmpty()) {
+            datos.put("ruta", RUTA_RECOMENDACIONES);
+            String msg = fecha.map(f -> "No hay recomendaciones " + SelectorRecomendacion.deFecha(f, hoy)
+                    + ". Abro la pantalla de recomendaciones.").orElse("Abro la pantalla de recomendaciones.");
+            return new VozResultado(true, msg, datos, null);
+        }
+        datos.put("ruta", RUTA_RECOMENDACIONES + "?id=" + rec.get().id());
+        datos.put("recomendacionId", rec.get().id());
+        return new VozResultado(true, "Te muestro la recomendación completa en pantalla.", datos, null);
     }
 
     @Override

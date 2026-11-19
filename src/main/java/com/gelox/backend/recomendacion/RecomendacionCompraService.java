@@ -145,6 +145,15 @@ public class RecomendacionCompraService {
                 .toList();
     }
 
+    /** La recomendación más reciente del tenant con alguno de los estados, sin importar el día ("la última que hice"). */
+    @Transactional(readOnly = true)
+    public Optional<RecomendacionDTO> ultimaRecomendacion(List<EstadoRecomendacion> estados) {
+        LocalDate manana = LocalDate.now(ZONA_BOGOTA).plusDays(1);
+        return recomendacionRepo.buscarUltima(TenantContext.requerido(), estados,
+                        LocalDate.of(2000, 1, 1).atStartOfDay(), manana.atStartOfDay())
+                .map(RecomendacionCompraService::toDTO);
+    }
+
     private static RecomendacionDTO toDTO(RecomendacionCompra r) {
         return new RecomendacionDTO(
                 r.getId(), r.getEstado(), r.getOrigen(), r.getPresupuesto(), r.getCostoTotal(),

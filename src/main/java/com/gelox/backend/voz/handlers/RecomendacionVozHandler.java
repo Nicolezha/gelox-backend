@@ -65,7 +65,13 @@ public class RecomendacionVozHandler implements IntencionHandler {
 
     /** "aprueba la recomendación", "aprueba toda la recomendación de compra del lunes". */
     private static final Pattern APROBAR_RECOMENDACION =
-            Pattern.compile("\\baprueb\\w*\\s+(?:me\\s+)?(?:toda\\s+)?(?:la|esa|esta)\\s+recomendacion");
+            Pattern.compile("\\baprueb\\w*\\s+(?:me\\s+)?(?:toda\\s+)?(?:la|esa|esta)\\s+(?:\\w+\\s+)?recomendacion");
+    /** "la última recomendación", "la más reciente", "la que acabo de hacer". */
+    private static final Pattern ULTIMA_RECOMENDACION = Pattern.compile(
+            "\\b(ultima|mas reciente|acabo de (hacer|generar|crear))\\b");
+    /** Verbos del comando, para buscar en el resto "la primera", "la de las 3"… */
+    private static final Pattern VERBOS_COMANDO = Pattern.compile(
+            "\\b(aprueb\\w*|aprobar|rechaz\\w*|cambi\\w*|modific\\w*|genera\\w*|recomendacion\\w*|de compra|compra)\\b");
     private static final Pattern TODOS = Pattern.compile("\\b(todo|todos|todas|toda|completa|completo)\\b");
     private static final Pattern NUMERO = Pattern.compile("\\b(\\d+)\\b");
     private static final Pattern RELLENO_RESPUESTA = Pattern.compile(
@@ -99,10 +105,13 @@ public class RecomendacionVozHandler implements IntencionHandler {
         String normalizado = NormalizadorVoz.normalizar(ctx.texto());
 
         // Primero lo dicho (determinista); el slot del LLM cubre formas como "hace tres días".
-        LocalDate fecha = FechaVoz.de(normalizado, hoy)
-                .or(() -> FechaVoz.deSlot(slots.get("fecha")))
+        Optional<LocalDate> fechaDicha = FechaVoz.de(normalizado, hoy);
+        // "aprueba la última recomendación" sin decir el día: la más reciente que se hizo, de cualquier día.
+        boolean laUltima = fechaDicha.isEmpty() && !slots.containsKey(SelectorRecomendacion.SLOT_ELEGIDA)
+                && ULTIMA_RECOMENDACION.matcher(normalizado).find();
+        LocalDate fecha = fechaDicha
+                .or(() -> laUltima ? Optional.empty() : FechaVoz.deSlot(slots.get("fecha")))
                 .orElse(hoy);
-        slots.put("fecha", fecha.toString());
 
         Accion accion = accion(slots.get("accion"));
         // "aprueba la recomendación (de compra) del 15 de noviembre": toda la recomendación.
@@ -115,7 +124,16 @@ public class RecomendacionVozHandler implements IntencionHandler {
         }
         slots.put("accion", accion.name());
 
-        List<RecomendacionDTO> abiertas = abiertas(fecha, hoy);
+        List<RecomendacionDTO> abiertas;
+        if (laUltima) {
+            Optional<RecomendacionDTO> ultima = recomendacionService.ultimaRecomendacion(ABIERTAS);
+            if (ultima.isEmpty()) return error("No hay recomendaciones pendientes por aprobar.");
+            abiertas = List.of(ultima.get());
+            if (ultima.get().createdAt() != null) fecha = ultima.get().createdAt().toLocalDate();
+        } else {
+            abiertas = abiertas(fecha, hoy);
+        }
+        slots.put("fecha", fecha.toString());
         if (abiertas.isEmpty()) {
             boolean convertida = yaHayPedido(fecha);
             if (fecha.equals(hoy)) return error(convertida ? YA_CONVERTIDA : SIN_RECOMENDACION);
@@ -136,10 +154,16 @@ public class RecomendacionVozHandler implements IntencionHandler {
                     SelectorRecomendacion.opciones(abiertas, slots.get(SelectorRecomendacion.SLOT_OPCIONES));
             boolean filtradas = opciones.size() != abiertas.size();
             String verbo = verbo(accion);
-            if (respuesta == null) {
-                return SelectorRecomendacion.preguntarCual(null, opciones, fecha, hoy, verbo, slots, filtradas);
+            // El comando mismo puede decir cuál: "aprueba la primera recomendación del 15", "la de las 3".
+            String criterio = respuesta;
+            if (criterio == null) {
+                SelectorRecomendacion.Resultado enComando = SelectorRecomendacion.elegir(sinVerbos(normalizado), opciones);
+                if (!enComando.conCriterio() || enComando.coincidencias().isEmpty()) {
+                    return SelectorRecomendacion.preguntarCual(null, opciones, fecha, hoy, verbo, slots, filtradas);
+                }
+                criterio = sinVerbos(normalizado);
             }
-            SelectorRecomendacion.Resultado seleccion = SelectorRecomendacion.elegir(respuesta, opciones);
+            SelectorRecomendacion.Resultado seleccion = SelectorRecomendacion.elegir(criterio, opciones);
             respuesta = null; // ya se usó para elegir la recomendación
             if (seleccion.coincidencias().size() == 1) {
                 recomendacion = seleccion.coincidencias().get(0);
@@ -153,9 +177,9 @@ public class RecomendacionVozHandler implements IntencionHandler {
         slots.remove(SelectorRecomendacion.SLOT_OPCIONES);
 
         // Se aclara de cuál se habla cuando no es la única de hoy.
-        String referencia = fecha.equals(hoy) && abiertas.size() == 1 ? ""
+        String referencia = fecha.equals(hoy) && abiertas.size() == 1 && !laUltima ? ""
                 : " de la recomendación " + SelectorRecomendacion.deFecha(fecha, hoy)
-                + (abiertas.size() > 1 ? " de las " + SelectorRecomendacion.hora(recomendacion.createdAt()) : "");
+                + (abiertas.size() > 1 || laUltima ? " de las " + SelectorRecomendacion.hora(recomendacion.createdAt()) : "");
 
         return switch (accion) {
             case APROBAR_TODO -> aprobarTodo(recomendacion, referencia);
@@ -337,6 +361,10 @@ public class RecomendacionVozHandler implements IntencionHandler {
     private static Integer primerNumero(String respuesta) {
         Matcher m = NUMERO.matcher(NormalizadorVoz.normalizar(respuesta));
         return m.find() ? Integer.parseInt(m.group(1)) : null;
+    }
+
+    private static String sinVerbos(String normalizado) {
+        return VERBOS_COMANDO.matcher(normalizado).replaceAll(" ").replaceAll("\\s+", " ").trim();
     }
 
     private static boolean esBlanco(String s) {

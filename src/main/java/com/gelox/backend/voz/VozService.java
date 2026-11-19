@@ -9,6 +9,7 @@ import com.gelox.backend.recomendacion.RecomendacionCompraService;
 import com.gelox.backend.repositories.ComandoVozRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.voz.dto.VozConfirmarRequest;
+import com.gelox.backend.voz.handlers.NavegacionHandler;
 import com.gelox.backend.voz.handlers.PendienteAclaracion;
 import com.gelox.backend.voz.handlers.RecomendacionVozHandler;
 import com.gelox.backend.voz.dto.VozConfirmarResponse;
@@ -73,11 +74,16 @@ public class VozService {
     private static final Pattern SEGUNDA_OPCION = Pattern.compile("^(?:el |la )?(segundo|segunda|2|otro|otra|ultimo|ultima)\\b");
     private static final Pattern RELLENO_RESPUESTA = Pattern.compile("\\b(el|la|los|las|de|del|es|esa|ese|por favor)\\b");
 
+    /** Arranque típico de una respuesta corta: "la de las 3", "el mango biche", "la segunda", "todos". */
+    private static final Pattern PARECE_RESPUESTA = Pattern.compile(
+            "^(?:si |no )?(?:la|el|los|las|lo|al|a la|de|del|con|por|esa|ese|esta|este|primer\\w*|segund\\w*|tercer\\w*"
+                    + "|ultim\\w*|penultim\\w*|todos?|todas?|codigo|numero|opcion|\\d+)\\b");
+
     /** Arranque típico de un comando (texto normalizado), para no tomarlo como respuesta a una pregunta. */
     private static final Pattern INICIO_COMANDO = Pattern.compile(
             "^(?:oye |gelox |hola gelox )?(registra|vende|vendi|anota|aprueba|rechaza|cambia|modifica|genera|haz|hace"
                     + "|crea|cuant[oa]s?|que|cual(es)?|muestra(me)?|abre|ve a|ir a|llevame|dime|consulta|agrega|anade"
-                    + "|quita|elimina|pide|recomienda|recomiendame|cierra)\\b");
+                    + "|quita|elimina|pide|recomienda|recomiendame|cierra|dirigete|vamos|anda|navega|llevame|pon|ponme|ensename)\\b");
 
     private final List<IntencionHandler> handlers;
     /** El LLM (ProcesadorLenguajeLlm, @Primary) con respaldo en el clasificador de la Iteración 1. */
@@ -104,11 +110,19 @@ public class VozService {
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS", "ENCARGADO_INVENTARIO"})
     public VozInterpretarResponse interpretar(VozInterpretarRequest request, Usuario usuario) {
+        VozInterpretarResponse respuesta = interpretarComando(request, usuario);
+        recordarRecomendacion(usuario, respuesta.datos());
+        return respuesta;
+    }
+
+    private VozInterpretarResponse interpretarComando(VozInterpretarRequest request, Usuario usuario) {
         ClasificadorIntencion.ResultadoClasificacion resultado = procesador.procesar(request.texto());
 
         // El asistente hizo una pregunta ("¿cuál de las 3?", "¿qué producto?"): esta frase es la
-        // respuesta, salvo que sea claramente un comando nuevo.
+        // respuesta, salvo que el usuario haya abierto el micrófono para un comando nuevo
+        // (continuacion=false) o que la frase sea claramente otro comando.
         Optional<VozPendienteStore.PreguntaPendiente> pregunta = pendienteStore.takePregunta(usuario.getId());
+        if (Boolean.FALSE.equals(request.continuacion())) pregunta = Optional.empty();
         if (pregunta.isPresent()) {
             String normalizado = NormalizadorVoz.normalizar(request.texto());
             if (ES_CANCELAR.matcher(normalizado).matches()) {
@@ -124,6 +138,14 @@ public class VozService {
         }
 
         Map<String, String> slots = resultado.slots();
+
+        // "Muéstrame la recomendación completa (en pantalla)": abre la pantalla de esa recomendación.
+        TipoIntencionVoz intencionMostrar = resultado.intencion();
+        if (intencionMostrar != TipoIntencionVoz.NAVEGACION && handlersPorTipo.containsKey(TipoIntencionVoz.NAVEGACION)
+                && NavegacionHandler.esMostrarRecomendacion(NormalizadorVoz.normalizar(request.texto()))) {
+            resultado = new ClasificadorIntencion.ResultadoClasificacion(TipoIntencionVoz.NAVEGACION, slots,
+                    resultado.probabilidadIntencion(), resultado.metodo());
+        }
 
         // T41-BE5 — "agrega/añade/también ..." continúa la venta que espera confirmación.
         TipoIntencionVoz intencion = resultado.intencion();
@@ -343,12 +365,22 @@ public class VozService {
     private static boolean esComandoNuevo(ClasificadorIntencion.ResultadoClasificacion resultado,
                                           VozPendienteStore.PreguntaPendiente pregunta, String normalizado) {
         if (resultado.intencion() == null) return false;
-        if (normalizado.split(" ").length < 3 || !INICIO_COMANDO.matcher(normalizado).find()) return false;
+        if (normalizado.split(" ").length < 3 || PARECE_RESPUESTA.matcher(normalizado).find()) return false;
+        // Otra intención que no arranca como respuesta ("dirígete a la pantalla de catálogo"): comando nuevo.
+        if (resultado.intencion() != pregunta.intencion()) return true;
+        if (!INICIO_COMANDO.matcher(normalizado).find()) return false;
         // Repetir el comando completo de la misma intención ("vende 2 cajas de Aloha Limón") lo reemplaza;
         // en las preguntas que se responden por slot ("aprueba la de las 3") sigue siendo la respuesta.
         boolean reinterpreta = pregunta.slots().containsKey(PreguntaVoz.SLOT_REEMPLAZAR)
                 || pregunta.slots().containsKey(PreguntaVoz.SLOT_ANEXAR);
-        return resultado.intencion() != pregunta.intencion() || reinterpreta;
+        return reinterpreta;
+    }
+
+    /** La última recomendación de la que se habló por voz, para "muéstramela completa". */
+    private void recordarRecomendacion(Usuario usuario, Map<String, Object> datos) {
+        if (datos != null && datos.get("recomendacionId") instanceof UUID id) {
+            pendienteStore.recordarRecomendacion(usuario.getId(), id);
+        }
     }
 
     private boolean hayAprobadosHoy() {
@@ -384,6 +416,7 @@ public class VozService {
             guardarComando(usuario, datos.texto(), datos.confianza(), pendiente.intencion(),
                     EstadoComandoVoz.PROCESADO, resultado.textoRespuesta(),
                     datos.probabilidadIntencion(), datos.metodo());
+            recordarRecomendacion(usuario, resultado.datos());
             return new VozConfirmarResponse(EstadoComandoVoz.PROCESADO.name(), resultado.textoRespuesta(), resultado.datos());
         } catch (RuntimeException e) {
             guardarComando(usuario, datos.texto(), datos.confianza(), pendiente.intencion(),

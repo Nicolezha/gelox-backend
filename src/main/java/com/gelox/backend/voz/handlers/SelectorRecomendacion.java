@@ -143,28 +143,32 @@ final class SelectorRecomendacion {
     static VozResultado preguntarCual(String prefijo, List<RecomendacionDTO> opciones, LocalDate fecha, LocalDate hoy,
                                       String verbo, Map<String, String> slots, boolean filtradas) {
         StringBuilder sb = new StringBuilder(prefijo == null ? "" : prefijo);
-        sb.append(filtradas ? "Coinciden " + opciones.size() + " recomendaciones" :
-                        "Hay " + opciones.size() + " recomendaciones pendientes " + deFecha(fecha, hoy))
-                .append(": ");
+        // Lo que se narra es corto (sin códigos ni instrucciones): el detalle va en las tarjetas del panel,
+        // y así el micrófono se abre enseguida para responder.
+        String titulo = filtradas ? "Coinciden " + opciones.size() + " recomendaciones"
+                : "Hay " + opciones.size() + " recomendaciones pendientes " + deFecha(fecha, hoy);
+        sb.append(titulo).append(": ");
         List<Map<String, Object>> listado = new ArrayList<>();
         for (int i = 0; i < opciones.size(); i++) {
             RecomendacionDTO r = opciones.get(i);
-            if (i > 0) sb.append("; ");
+            if (i > 0) sb.append(i == opciones.size() - 1 ? " y " : "; ");
             sb.append("la ").append(ordinal(i + 1)).append(", de las ").append(hora(r.createdAt()))
-                    .append(", código ").append(codigo(r.id()))
                     .append(", por ").append(RecomendacionVozHandler.pesos(r.costoTotal()));
 
             Map<String, Object> opcion = new LinkedHashMap<>();
             opcion.put("numero", i + 1);
+            opcion.put("ordinal", capitalizar(ordinal(i + 1)));
             opcion.put("recomendacionId", r.id());
             opcion.put("codigo", codigo(r.id()));
             opcion.put("hora", hora(r.createdAt()));
             opcion.put("costoTotal", r.costoTotal());
             opcion.put("presupuesto", r.presupuesto());
+            opcion.put("productos", r.items() == null ? 0 : r.items().stream()
+                    .filter(it -> it.cajasSugeridas() != null && it.cajasSugeridas() > 0).count());
+            opcion.put("respuesta", "la " + ordinal(i + 1));
             listado.add(opcion);
         }
-        sb.append(". ¿Cuál quieres ").append(verbo)
-                .append("? Responde con la hora, el código, el precio o di 'la primera', 'la segunda' o 'la última'.");
+        sb.append(". ¿Cuál quieres ").append(verbo).append("?");
 
         Map<String, String> siguientes = new LinkedHashMap<>(slots);
         siguientes.remove(SLOT_ELEGIDA);
@@ -174,8 +178,18 @@ final class SelectorRecomendacion {
             siguientes.remove(SLOT_OPCIONES);
         }
         Map<String, Object> datos = new LinkedHashMap<>();
+        datos.put("tipoPregunta", "ELEGIR_RECOMENDACION");
+        datos.put("titulo", filtradas ? titulo : "Recomendaciones pendientes " + deFecha(fecha, hoy));
+        datos.put("fecha", fecha.toString());
+        datos.put("pregunta", "¿Cuál quieres " + verbo + "?");
+        datos.put("ayuda", "Di la hora, el código, el precio o \"la primera\", \"la segunda\", \"la última\"… o toca una.");
+        if (prefijo != null && !prefijo.isBlank()) datos.put("aviso", prefijo.trim());
         datos.put("opciones", listado);
         return new VozResultado(false, sb.toString(), datos, new PreguntaVoz(siguientes));
+    }
+
+    private static String capitalizar(String s) {
+        return s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
     /** Las candidatas restringidas a las del slot {@value #SLOT_OPCIONES}, si lo hay. */

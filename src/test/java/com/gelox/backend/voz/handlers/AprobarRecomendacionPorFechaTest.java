@@ -134,9 +134,17 @@ class AprobarRecomendacionPorFechaTest {
         assertThat(r.payload()).isInstanceOf(PreguntaVoz.class);
         assertThat(r.textoRespuesta())
                 .startsWith("Hay 3 recomendaciones pendientes del 15 de noviembre")
-                .contains("la primera, de las 9:05 a. m., código AAAA1111, por $118.720")
-                .contains("la tercera, de las 7:10 p. m., código CCCC3333")
-                .contains("¿Cuál quieres aprobar?");
+                .contains("la primera, de las 9:05 a. m., por $118.720")
+                .contains("y la tercera, de las 7:10 p. m.")
+                .endsWith("¿Cuál quieres aprobar?")
+                .doesNotContain("código");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> opciones = (List<Map<String, Object>>) r.datos().get("opciones");
+        assertThat(opciones).hasSize(3);
+        assertThat(opciones.get(0)).containsEntry("codigo", "AAAA1111").containsEntry("hora", "9:05 a. m.")
+                .containsEntry("ordinal", "Primera").containsEntry("respuesta", "la primera");
+        assertThat(r.datos()).containsEntry("titulo", "Recomendaciones pendientes del 15 de noviembre")
+                .containsEntry("pregunta", "¿Cuál quieres aprobar?");
         assertThat(r.datos()).containsKey("opciones");
     }
 
@@ -173,7 +181,7 @@ class AprobarRecomendacionPorFechaTest {
         VozResultado otra = responder(FRASE, pregunta, "la de 250 mil");
         assertThat(otra.ok()).isFalse();
         assertThat(otra.textoRespuesta()).startsWith("Coinciden 2 recomendaciones")
-                .contains("código BBBB2222").contains("código CCCC3333").doesNotContain("AAAA1111");
+                .contains("3:40 p. m.").contains("7:10 p. m.").doesNotContain("9:05");
 
         assertThat(recomendacionDe(responder(FRASE, otra, "la última"))).isEqualTo(noche.id());
         assertThat(recomendacionDe(responder(FRASE, otra, "la primera"))).isEqualTo(tarde.id());
@@ -215,6 +223,30 @@ class AprobarRecomendacionPorFechaTest {
         assertThat(r.ok()).isTrue();
         assertThat(((RecomendacionVozHandler.Payload) r.payload()).accion()).isEqualTo(RecomendacionVozHandler.Accion.APROBAR_TODO);
         assertThat(recomendacionDe(r)).isEqualTo(deHoy.id());
+    }
+
+    @Test
+    @DisplayName("'Aprueba la última recomendación' usa la más reciente que se hizo, no lista las de hoy")
+    void laUltima_esLaMasReciente() {
+        when(recomendacionService.recomendacionesDelDia(eq(HOY), any())).thenReturn(List.of(deHoy, manana));
+        when(recomendacionService.ultimaRecomendacion(any())).thenReturn(java.util.Optional.of(noche));
+
+        VozResultado r = decir("aprueba la última recomendación de compra", Map.of("accion", "APROBAR"));
+
+        assertThat(r.ok()).isTrue();
+        assertThat(recomendacionDe(r)).isEqualTo(noche.id());
+        assertThat(r.textoRespuesta()).contains("del 15 de noviembre de las 7:10 p. m.");
+    }
+
+    @Test
+    @DisplayName("El comando ya dice cuál ('la primera del 15 de noviembre'): no pregunta")
+    void criterioEnElComando() {
+        when(recomendacionService.recomendacionesDelDia(eq(DIA_15), any())).thenReturn(List.of(manana, tarde, noche));
+
+        VozResultado r = decir("aprueba la primera recomendación del 15 de noviembre", Map.of("accion", "APROBAR_TODO"));
+
+        assertThat(r.ok()).isTrue();
+        assertThat(recomendacionDe(r)).isEqualTo(manana.id());
     }
 
     @Test

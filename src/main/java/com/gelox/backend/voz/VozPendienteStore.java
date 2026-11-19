@@ -109,4 +109,18 @@ public class VozPendienteStore {
     public void descartarPregunta(UUID usuarioId) {
         preguntas.remove(usuarioId);
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Última recomendación de la que se habló por voz ("muéstramela completa")
+    // ══════════════════════════════════════════════════════════════════════
+
+    private final ConcurrentHashMap<UUID, UUID> ultimaRecomendacion = new ConcurrentHashMap<>();
+
+    public void recordarRecomendacion(UUID usuarioId, UUID recomendacionId) {
+        ultimaRecomendacion.put(usuarioId, recomendacionId);
+    }
+
+    public Optional<UUID> ultimaRecomendacion(UUID usuarioId) {
+        return Optional.ofNullable(ultimaRecomendacion.get(usuarioId));
+    }
 }
