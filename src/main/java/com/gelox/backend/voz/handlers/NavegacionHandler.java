@@ -49,6 +49,20 @@ public class NavegacionHandler implements IntencionHandler {
     private final RecomendacionCompraService recomendacionService;
     private final VozPendienteStore pendienteStore;
 
+    /**
+     * "déjame modificar (la recomendación)", "quiero editarla", "modifícala": abre la recomendación
+     * para cambiarla en pantalla. Anclado al final: "quiero cambiar el mango biche a 3 cajas" es una decisión.
+     */
+    private static final Pattern EDITAR = Pattern.compile(
+            "^(?:(?:no|si|bueno|mejor|espera)\\s+)*(?:(?:dejame|quiero|voy a|vamos a|necesito|prefiero|mejor)\\s+)?"
+                    + "(?:modificar|editar|cambiar|revisar|ajustar)(?:la|lo|las|los)?"
+                    + "(?:\\s+(?:la recomendacion|esa recomendacion|esa|eso|algo|algunas cosas|unas cosas|un poco|primero|en pantalla))?$"
+                    + "|^(?:modificala|editala|cambiala|modifiquemosla|editemosla)$");
+
+    public static boolean esEditarRecomendacion(String normalizado) {
+        return EDITAR.matcher(normalizado).find();
+    }
+
     /** Lo usa VozService para mandar aquí "muéstrame la recomendación…" aunque se clasifique como consulta. */
     public static boolean esMostrarRecomendacion(String normalizado) {
         return MOSTRAR.matcher(normalizado).find() && !NO_ES_MOSTRAR.matcher(normalizado).find();
@@ -70,6 +84,11 @@ public class NavegacionHandler implements IntencionHandler {
         String ruta = "/ventas/pedidos-ventanilla";
         String nombre = "Pedidos Ventanilla";
 
+        if (esEditarRecomendacion(texto)) {
+            VozResultado r = mostrarRecomendacion(texto, ctx);
+            return new VozResultado(true, r.datos().containsKey("recomendacionId")
+                    ? "Te abro la recomendación para que la modifiques." : r.textoRespuesta(), r.datos(), null);
+        }
         if (RECOMENDACION.matcher(texto).find()) {
             return mostrarRecomendacion(texto, ctx);
         }

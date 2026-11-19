@@ -152,6 +152,14 @@ public class ClasificadorIntencion implements ProcesadorLenguaje {
             return Optional.of(new ResultadoClasificacion(TipoIntencionVoz.CONSULTAR_GENERAL, Map.of(),
                     probabilidad, MetodoClasificacion.REGLAS));
         }
+        if (com.gelox.backend.voz.handlers.NavegacionHandler.esEditarRecomendacion(normalizado)) {
+            return Optional.of(new ResultadoClasificacion(TipoIntencionVoz.NAVEGACION, Map.of(),
+                    probabilidad, MetodoClasificacion.REGLAS));
+        }
+        if (com.gelox.backend.voz.handlers.RecomendacionVozHandler.APROBAR_REFERIDA.matcher(normalizado).find()) {
+            return Optional.of(new ResultadoClasificacion(TipoIntencionVoz.DECIDIR_RECOMENDACION,
+                    Map.of("accion", "APROBAR_TODO"), probabilidad, MetodoClasificacion.REGLAS));
+        }
         if (!RECOMENDACION.matcher(normalizado).find()) return Optional.empty();
         if (com.gelox.backend.voz.handlers.NavegacionHandler.esMostrarRecomendacion(normalizado)) {
             return Optional.of(new ResultadoClasificacion(TipoIntencionVoz.NAVEGACION, Map.of(),

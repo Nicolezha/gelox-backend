@@ -66,6 +66,12 @@ public class RecomendacionVozHandler implements IntencionHandler {
     /** "aprueba la recomendación", "aprueba toda la recomendación de compra del lunes". */
     private static final Pattern APROBAR_RECOMENDACION =
             Pattern.compile("\\baprueb\\w*\\s+(?:me\\s+)?(?:toda\\s+)?(?:la|esa|esta)\\s+(?:\\w+\\s+)?recomendacion");
+    /** "apruébala", "sí, aprueba esa", "apruébala toda": la recomendación de la que se viene hablando. */
+    public static final Pattern APROBAR_REFERIDA = Pattern.compile(
+            "\\b(apruebal[ao]s?|aprobarla|aprueba(?:me)? (?:esa|eso|esta|la misma|todo eso|esa recomendacion|esta recomendacion))\\b");
+    /** Slot con la recomendación de la que se venía hablando por voz (lo pone VozService). */
+    public static final String SLOT_REFERIDA = "recomendacionReferida";
+
     /** "la última recomendación", "la más reciente", "la que acabo de hacer". */
     private static final Pattern ULTIMA_RECOMENDACION = Pattern.compile(
             "\\b(ultima|mas reciente|acabo de (hacer|generar|crear))\\b");
@@ -115,8 +121,9 @@ public class RecomendacionVozHandler implements IntencionHandler {
 
         Accion accion = accion(slots.get("accion"));
         // "aprueba la recomendación (de compra) del 15 de noviembre": toda la recomendación.
-        if (accion == Accion.APROBAR && esBlanco(slots.get("producto"))
-                && APROBAR_RECOMENDACION.matcher(normalizado).find()) {
+        boolean referida = APROBAR_REFERIDA.matcher(normalizado).find();
+        if ((accion == Accion.APROBAR || accion == null) && esBlanco(slots.get("producto"))
+                && (APROBAR_RECOMENDACION.matcher(normalizado).find() || referida)) {
             accion = Accion.APROBAR_TODO;
         }
         if (accion == null) {
@@ -125,7 +132,12 @@ public class RecomendacionVozHandler implements IntencionHandler {
         slots.put("accion", accion.name());
 
         List<RecomendacionDTO> abiertas;
-        if (laUltima) {
+        Optional<RecomendacionDTO> laReferida = fechaDicha.isEmpty() && referida
+                ? buscarReferida(slots.get(SLOT_REFERIDA)) : Optional.empty();
+        if (laReferida.isPresent()) {
+            abiertas = List.of(laReferida.get());
+            if (laReferida.get().createdAt() != null) fecha = laReferida.get().createdAt().toLocalDate();
+        } else if (laUltima) {
             Optional<RecomendacionDTO> ultima = recomendacionService.ultimaRecomendacion(ABIERTAS);
             if (ultima.isEmpty()) return error("No hay recomendaciones pendientes por aprobar.");
             abiertas = List.of(ultima.get());
@@ -177,7 +189,7 @@ public class RecomendacionVozHandler implements IntencionHandler {
         slots.remove(SelectorRecomendacion.SLOT_OPCIONES);
 
         // Se aclara de cuál se habla cuando no es la única de hoy.
-        String referencia = fecha.equals(hoy) && abiertas.size() == 1 && !laUltima ? ""
+        String referencia = fecha.equals(hoy) && abiertas.size() == 1 && !laUltima && laReferida.isEmpty() ? ""
                 : " de la recomendación " + SelectorRecomendacion.deFecha(fecha, hoy)
                 + (abiertas.size() > 1 || laUltima ? " de las " + SelectorRecomendacion.hora(recomendacion.createdAt()) : "");
 
@@ -361,6 +373,17 @@ public class RecomendacionVozHandler implements IntencionHandler {
     private static Integer primerNumero(String respuesta) {
         Matcher m = NUMERO.matcher(NormalizadorVoz.normalizar(respuesta));
         return m.find() ? Integer.parseInt(m.group(1)) : null;
+    }
+
+    /** La recomendación recordada, si sigue abierta (GENERADA o EN_REVISION). */
+    private Optional<RecomendacionDTO> buscarReferida(String id) {
+        if (esBlanco(id)) return Optional.empty();
+        try {
+            RecomendacionDTO r = decisionService.obtener(UUID.fromString(id));
+            return r != null && ABIERTAS.contains(r.estado()) ? Optional.of(r) : Optional.empty();
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
     }
 
     private static String sinVerbos(String normalizado) {

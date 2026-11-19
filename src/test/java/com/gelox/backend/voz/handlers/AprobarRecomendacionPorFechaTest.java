@@ -250,6 +250,30 @@ class AprobarRecomendacionPorFechaTest {
     }
 
     @Test
+    @DisplayName("'Sí, apruébala' aprueba la recomendación de la que se venía hablando, aunque sea de otro día")
+    void apruebalaUsaLaReferida() {
+        when(decisionService.obtener(tarde.id())).thenReturn(tarde);
+
+        VozResultado r = decir("si apruebala", Map.of(RecomendacionVozHandler.SLOT_REFERIDA, tarde.id().toString()));
+
+        assertThat(r.ok()).isTrue();
+        assertThat(recomendacionDe(r)).isEqualTo(tarde.id());
+        assertThat(((RecomendacionVozHandler.Payload) r.payload()).accion()).isEqualTo(RecomendacionVozHandler.Accion.APROBAR_TODO);
+        assertThat(r.textoRespuesta()).contains("del 15 de noviembre");
+    }
+
+    @Test
+    @DisplayName("'Déjame modificar' abre la recomendación; 'cambia el mango biche a 3 cajas' sigue siendo decisión")
+    void editarRecomendacion() {
+        assertThat(NavegacionHandler.esEditarRecomendacion("dejame modificar")).isTrue();
+        assertThat(NavegacionHandler.esEditarRecomendacion("no mejor dejame modificarla")).isTrue();
+        assertThat(NavegacionHandler.esEditarRecomendacion("quiero editar la recomendacion")).isTrue();
+        assertThat(NavegacionHandler.esEditarRecomendacion("modificala")).isTrue();
+        assertThat(NavegacionHandler.esEditarRecomendacion("cambia el mango biche a 3 cajas")).isFalse();
+        assertThat(NavegacionHandler.esEditarRecomendacion("quiero cambiar el mango biche a 3 cajas")).isFalse();
+    }
+
+    @Test
     @DisplayName("FechaVoz — fechas dichas de varias formas, nunca en el futuro")
     void fechaVoz() {
         assertThat(FechaVoz.de("15 de noviembre", HOY)).contains(DIA_15);

@@ -141,10 +141,23 @@ public class VozService {
 
         // "Muéstrame la recomendación completa (en pantalla)": abre la pantalla de esa recomendación.
         TipoIntencionVoz intencionMostrar = resultado.intencion();
+        String normalizadoMostrar = NormalizadorVoz.normalizar(request.texto());
         if (intencionMostrar != TipoIntencionVoz.NAVEGACION && handlersPorTipo.containsKey(TipoIntencionVoz.NAVEGACION)
-                && NavegacionHandler.esMostrarRecomendacion(NormalizadorVoz.normalizar(request.texto()))) {
+                && (NavegacionHandler.esMostrarRecomendacion(normalizadoMostrar)
+                || NavegacionHandler.esEditarRecomendacion(normalizadoMostrar))) {
             resultado = new ClasificadorIntencion.ResultadoClasificacion(TipoIntencionVoz.NAVEGACION, slots,
                     resultado.probabilidadIntencion(), resultado.metodo());
+        }
+
+        // "Apruébala" / "aprueba esa": la recomendación de la que se venía hablando por voz.
+        if (resultado.intencion() == TipoIntencionVoz.DECIDIR_RECOMENDACION
+                && RecomendacionVozHandler.APROBAR_REFERIDA.matcher(NormalizadorVoz.normalizar(request.texto())).find()) {
+            Optional<UUID> recordada = pendienteStore.ultimaRecomendacion(usuario.getId());
+            if (recordada.isPresent()) {
+                Map<String, String> conReferida = new LinkedHashMap<>(slots);
+                conReferida.put(RecomendacionVozHandler.SLOT_REFERIDA, recordada.get().toString());
+                slots = conReferida;
+            }
         }
 
         // T41-BE5 — "agrega/añade/también ..." continúa la venta que espera confirmación.
