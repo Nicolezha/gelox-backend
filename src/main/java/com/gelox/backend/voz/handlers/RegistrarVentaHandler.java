@@ -16,6 +16,7 @@ import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.VentaService;
 import com.gelox.backend.voz.IntencionHandler;
 import com.gelox.backend.voz.NormalizadorVoz;
+import com.gelox.backend.voz.PreguntaVoz;
 import com.gelox.backend.voz.ResolvedorProducto;
 import com.gelox.backend.voz.VozContexto;
 import com.gelox.backend.voz.VozPendiente;
@@ -128,7 +129,8 @@ public class RegistrarVentaHandler implements IntencionHandler {
                     resolvedorProducto.resolver(extraido.fragmentoProducto());
 
             if (candidatos.isEmpty()) {
-                return error("No encontré el producto \"" + extraido.fragmentoProducto() + "\". ¿Puedes repetirlo?");
+                return PreguntaVoz.reemplazando("No encontré el producto \"" + extraido.fragmentoProducto() + "\". ¿Puedes repetirlo?",
+                        extraido.fragmentoProducto(), null);
             }
             if (esAmbiguo(candidatos)) {
                 // ok=true: queda el contexto guardado y el usuario responde solo cuál producto es.
@@ -169,7 +171,8 @@ public class RegistrarVentaHandler implements IntencionHandler {
 
             if (producto == null) {
                 String nombre = nombresDichos.getOrDefault(productoId, productoId.toString());
-                return error("No encontré el producto \"" + nombre + "\". ¿Puedes repetirlo?");
+                return PreguntaVoz.reemplazando("No encontré el producto \"" + nombre + "\". ¿Puedes repetirlo?",
+                        nombre, null);
             }
 
             int upC = producto.unidadesPorCaja() != null ? producto.unidadesPorCaja() : 0;

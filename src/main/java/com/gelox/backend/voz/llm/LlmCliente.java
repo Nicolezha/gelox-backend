@@ -14,6 +14,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -29,6 +31,7 @@ import java.util.Map;
 public class LlmCliente {
 
     private static final String PROMPT = "prompts/nlu-sistema.txt";
+    private static final ZoneId ZONA_BOGOTA = ZoneId.of("America/Bogota");
 
     private final LlmProperties propiedades;
     private final ObjectMapper objectMapper;
@@ -59,7 +62,8 @@ public class LlmCliente {
                 "temperature", 0,
                 "response_format", Map.of("type", "json_object"),
                 "messages", List.of(
-                        Map.of("role", "system", "content", promptSistema),
+                        Map.of("role", "system", "content", promptSistema
+                                + "\n\nFECHA DE HOY: " + LocalDate.now(ZONA_BOGOTA) + " (hora de Colombia)."),
                         Map.of("role", "user", "content", texto)));
 
         JsonNode respuesta = restClient.post()

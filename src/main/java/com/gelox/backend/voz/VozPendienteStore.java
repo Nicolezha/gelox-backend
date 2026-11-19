@@ -7,6 +7,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -71,5 +72,41 @@ public class VozPendienteStore {
     private void limpiarVencidos() {
         Instant ahora = Instant.now();
         pendientes.values().removeIf(p -> ahora.isAfter(p.expiraEn()));
+        preguntas.values().removeIf(p -> ahora.isAfter(p.expiraEn()));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Preguntas del asistente a la espera de respuesta (una por usuario)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** Plazo para contestar una pregunta del asistente sin repetir el comando. */
+    public static final int TTL_PREGUNTA_SEGUNDOS = 90;
+
+    /**
+     * Pregunta que el asistente le hizo al usuario: con qué intención, sobre qué frase
+     * original y con qué slots ya resueltos se debe volver a llamar al handler.
+     */
+    public record PreguntaPendiente(UUID usuarioId, TipoIntencionVoz intencion, String textoOriginal,
+                                    Map<String, String> slots, Instant expiraEn) {}
+
+    private final ConcurrentHashMap<UUID, PreguntaPendiente> preguntas = new ConcurrentHashMap<>();
+
+    /** Una sola por usuario: la nueva reemplaza a la anterior. */
+    public void putPregunta(UUID usuarioId, TipoIntencionVoz intencion, String textoOriginal,
+                            Map<String, String> slots) {
+        limpiarVencidos();
+        preguntas.put(usuarioId, new PreguntaPendiente(usuarioId, intencion, textoOriginal,
+                Map.copyOf(slots), Instant.now().plusSeconds(TTL_PREGUNTA_SEGUNDOS)));
+    }
+
+    /** Quita y devuelve la pregunta vigente del usuario, si hay. */
+    public Optional<PreguntaPendiente> takePregunta(UUID usuarioId) {
+        PreguntaPendiente pregunta = preguntas.remove(usuarioId);
+        if (pregunta == null || Instant.now().isAfter(pregunta.expiraEn())) return Optional.empty();
+        return Optional.of(pregunta);
+    }
+
+    public void descartarPregunta(UUID usuarioId) {
+        preguntas.remove(usuarioId);
     }
 }

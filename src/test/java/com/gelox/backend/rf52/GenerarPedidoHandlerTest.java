@@ -92,7 +92,8 @@ class GenerarPedidoHandlerTest {
         VozResultado resultado = handler.interpretar(ctx("genera un pedido con 5 cajas de marciano"));
 
         assertThat(resultado.ok()).isFalse();
-        assertThat(resultado.payload()).isNull();
+        // Se puede responder ahí mismo: la respuesta reemplaza "marciano" en el comando.
+        assertThat(resultado.payload()).isInstanceOf(com.gelox.backend.voz.PreguntaVoz.class);
         verifyNoInteractions(pedidoProveedorService);
     }
 
@@ -119,7 +120,8 @@ class GenerarPedidoHandlerTest {
 
         assertThat(resultado.ok()).isFalse();
         assertThat(resultado.textoRespuesta()).endsWith("?");
-        assertThat(resultado.payload()).isNull();
+        assertThat(resultado.payload()).isInstanceOf(com.gelox.backend.voz.PreguntaVoz.class);
+        assertThat(resultado.datos()).containsKey("opciones");
         verifyNoInteractions(pedidoProveedorService);
     }
 

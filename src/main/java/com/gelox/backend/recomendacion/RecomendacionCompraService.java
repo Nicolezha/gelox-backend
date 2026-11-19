@@ -124,11 +124,33 @@ public class RecomendacionCompraService {
                         TenantContext.requerido(),
                         List.of(EstadoRecomendacion.GENERADA, EstadoRecomendacion.EN_REVISION),
                         hoy.atStartOfDay(), hoy.plusDays(1).atStartOfDay())
-                .map(r -> new RecomendacionDTO(
-                        r.getId(), r.getEstado(), r.getOrigen(), r.getPresupuesto(), r.getCostoTotal(),
-                        r.getCostoAprobado(), r.getConfianzaBaja(), r.getDiasHistorial(), r.getDiasConVentas(),
-                        r.getPedidoProveedor() != null ? r.getPedidoProveedor().getId() : null,
-                        r.getCreatedAt(), r.getUpdatedAt(), itemsDTO(r)));
+                .map(RecomendacionCompraService::toDTO);
+    }
+
+    /**
+     * Recomendaciones de la fecha con alguno de los estados, de la más antigua a la más nueva
+     * (voz: "aprueba la recomendación del 15 de noviembre", "cuántas recomendaciones se hicieron ayer").
+     */
+    @Transactional(readOnly = true)
+    public List<RecomendacionDTO> recomendacionesDelDia(LocalDate fecha, List<EstadoRecomendacion> estados) {
+        return recomendacionesEntre(fecha, fecha, estados);
+    }
+
+    /** Igual que {@link #recomendacionesDelDia} pero en el rango de fechas [desde, hasta], ambos incluidos. */
+    @Transactional(readOnly = true)
+    public List<RecomendacionDTO> recomendacionesEntre(LocalDate desde, LocalDate hasta, List<EstadoRecomendacion> estados) {
+        return recomendacionRepo.buscarEnRango(TenantContext.requerido(), estados,
+                        desde.atStartOfDay(), hasta.plusDays(1).atStartOfDay()).stream()
+                .map(RecomendacionCompraService::toDTO)
+                .toList();
+    }
+
+    private static RecomendacionDTO toDTO(RecomendacionCompra r) {
+        return new RecomendacionDTO(
+                r.getId(), r.getEstado(), r.getOrigen(), r.getPresupuesto(), r.getCostoTotal(),
+                r.getCostoAprobado(), r.getConfianzaBaja(), r.getDiasHistorial(), r.getDiasConVentas(),
+                r.getPedidoProveedor() != null ? r.getPedidoProveedor().getId() : null,
+                r.getCreatedAt(), r.getUpdatedAt(), itemsDTO(r));
     }
 
     // ══════════════════════════════════════════════════════════════════════

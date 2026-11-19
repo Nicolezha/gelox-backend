@@ -54,4 +54,17 @@ public interface RecomendacionCompraRepository extends JpaRepository<Recomendaci
                                                @Param("estados") Collection<EstadoRecomendacion> estados,
                                                @Param("desde") LocalDateTime desde,
                                                @Param("hasta") LocalDateTime hasta);
+
+    /** Recomendaciones del tenant en el rango [desde, hasta) con alguno de los estados, de la más antigua a la más nueva (voz). */
+    @Query("""
+            SELECT r FROM RecomendacionCompra r
+            WHERE r.tenantId = :tenantId
+              AND r.estado IN :estados
+              AND r.createdAt >= :desde AND r.createdAt < :hasta
+            ORDER BY r.createdAt ASC
+            """)
+    List<RecomendacionCompra> buscarEnRango(@Param("tenantId") UUID tenantId,
+                                            @Param("estados") Collection<EstadoRecomendacion> estados,
+                                            @Param("desde") LocalDateTime desde,
+                                            @Param("hasta") LocalDateTime hasta);
 }
