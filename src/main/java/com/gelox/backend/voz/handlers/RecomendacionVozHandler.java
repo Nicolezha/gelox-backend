@@ -226,8 +226,18 @@ public class RecomendacionVozHandler implements IntencionHandler {
             }
             case GENERAR_PEDIDO -> {
                 PedidoGeneradoDTO pedido = decisionService.generarPedido(p.recomendacionId(), usuario);
-                yield new VozResultado(true, PEDIDO_REGISTRADO,
-                        Map.of("pedidoId", pedido.pedidoId(), "exportUrl", pedido.exportUrl()), null);
+                // RF63 — un pedido por proveedor: se dice cuántos y las advertencias de monto mínimo
+                List<PedidoGeneradoDTO.PedidoDeProveedorDTO> pedidos =
+                        pedido.pedidos() == null ? List.of() : pedido.pedidos();
+                StringBuilder texto = new StringBuilder(pedidos.size() > 1
+                        ? "Se registraron " + pedidos.size() + " pedidos, uno por proveedor. Ya puedes descargar los archivos."
+                        : PEDIDO_REGISTRADO);
+                pedidos.stream()
+                        .map(PedidoGeneradoDTO.PedidoDeProveedorDTO::advertenciaMontoMinimo)
+                        .filter(java.util.Objects::nonNull)
+                        .forEach(a -> texto.append(" Ojo: ").append(a));
+                yield new VozResultado(true, texto.toString(),
+                        Map.of("pedidoId", pedido.pedidoId(), "exportUrl", pedido.exportUrl(), "pedidos", pedidos), null);
             }
         };
     }

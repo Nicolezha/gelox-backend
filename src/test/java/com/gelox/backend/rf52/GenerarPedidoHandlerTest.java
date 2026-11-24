@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -164,7 +165,8 @@ class GenerarPedidoHandlerTest {
         UUID pedidoId = UUID.randomUUID();
         CrearPedidoRequest payload = new CrearPedidoRequest(List.of(), "Generado por voz");
         when(pedidoProveedorService.crearPedido(payload, usuario))
-                .thenReturn(Map.of("pedidoId", pedidoId, "excel", new byte[]{1, 2, 3}));
+                .thenReturn(List.of(new PedidoProveedorService.PedidoCreado(pedidoId, UUID.randomUUID(), "Nutresa",
+                        new BigDecimal("1000.00"), "Pedido_Nutresa.xlsx", new byte[]{1, 2, 3}, List.of(), List.of(), null)));
 
         VozPendiente pendiente = new VozPendiente(
                 UUID.randomUUID(), usuario.getId(), TipoIntencionVoz.GENERAR_PEDIDO, payload, Instant.now());

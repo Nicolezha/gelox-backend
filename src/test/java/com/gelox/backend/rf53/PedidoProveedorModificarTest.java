@@ -71,7 +71,7 @@ class PedidoProveedorModificarTest {
     @BeforeEach
     void setUp() {
         service = new PedidoProveedorService(pedidoRepo, null, productoRepo, null, null, eventoService,
-                TestHelper.exportador(mock(IdentidadDistribuidoraService.class)), null);
+                TestHelper.exportador(mock(IdentidadDistribuidoraService.class)), null, null);
 
         usuario = TestHelper.buildUsuario("uid-1", "voz@gelox-test.com", RolUsuario.ADMINISTRADOR, true);
 

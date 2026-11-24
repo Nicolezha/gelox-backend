@@ -14,10 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
-import java.util.NoSuchElementException;
 
 @Service
 @RequiredArgsConstructor
@@ -32,64 +34,155 @@ public class PedidoProveedorService {
     private final EventoSistemaService          eventoService;
     private final ExportadorPedido             exportador;                // RF67
     private final ConversionUnidadService      conversionUnidadService;   // RF64
+    private final ProveedorRepository           proveedorRepo;             // RF63
+
+    /** Proveedor de los productos sin proveedor (FP-15 D6). */
+    static final String PROVEEDOR_POR_DEFECTO = "Nutresa";
 
     // ══════════════════════════════════════════════════════════════════════
-    // RF21 — Crear pedido + generar Excel Nutresa
+    // RF21 + RF63 — Crear los pedidos (uno por proveedor) y su archivo
     // ══════════════════════════════════════════════════════════════════════
+
+    /** Proveedor al que va un producto: el suyo o, si no tiene, Nutresa (FP-15 D6). */
+    public record ProveedorPedido(UUID id, String nombre) {
+    }
 
     /**
-     * Registra un pedido con estado PENDIENTE y genera el archivo Excel
-     * con el formato de orden de compra requerido por Nutresa.
-     *
-     * @return mapa con "pedidoId" (UUID) y "excel" (byte[])
+     * Un pedido creado por {@link #crearPedido}. {@code total} es el costo estimado (cajas × precio_costo
+     * + unidades × precio_costo ÷ unidades_por_caja). {@code advertenciaMontoMinimo} es nula si el total
+     * alcanza el monto mínimo del proveedor: el pedido se crea igual (T194).
      */
-    public Map<String, Object> crearPedido(CrearPedidoRequest req, Usuario usuarioActual) {
+    public record PedidoCreado(UUID pedidoId, UUID proveedorId, String proveedorNombre, BigDecimal total,
+                               String nombreArchivo, byte[] excel,
+                               List<String> productosSinCodigo, List<String> productosNoUbicados,
+                               String advertenciaMontoMinimo) {
+        public String exportUrl() {
+            return "/api/inventario/pedidos/" + pedidoId + "/exportar";
+        }
+    }
 
-        // 1. Construir la entidad pedido
-        PedidoProveedor pedido = PedidoProveedor.builder()
-                .usuario(usuarioActual)
-                .fecha(LocalDate.now(ZoneId.of("America/Bogota")))
-                .estado(EstadoPedido.PENDIENTE)
-                .notas(req.notas())
-                .build();
+    /**
+     * Registra un pedido PENDIENTE por cada proveedor de los productos, en el orden en que aparecen,
+     * y arma el archivo de cada uno con la plantilla de su proveedor (RF67).
+     */
+    public List<PedidoCreado> crearPedido(CrearPedidoRequest req, Usuario usuarioActual) {
+        LocalDate hoy = LocalDate.now(ZoneId.of("America/Bogota"));
 
-        // 2. Resolver productos y construir ítems
-        List<ItemPedidoProveedor> items = new ArrayList<>();
+        // 1. Resolver productos y agruparlos por proveedor
+        Map<UUID, Proveedor> proveedores = new LinkedHashMap<>();
+        Map<UUID, List<ItemPedidoProveedor>> itemsPorProveedor = new LinkedHashMap<>();
+        Proveedor[] porDefecto = new Proveedor[1];
         for (ItemPedidoRequest ir : req.items()) {
             Producto producto = productoRepo.findById(ir.productoId())
                     .filter(TenantContext::pertenece)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Producto no encontrado: " + ir.productoId()));
-
-            ItemPedidoProveedor item = ItemPedidoProveedor.builder()
-                    .pedido(pedido)
-                    .producto(producto)
-                    .cantidadCajas(ir.cantidadCajas())
-                    .cantidadUnidades(ir.cantidadUnidades())
-                    .cantidadRecibida(0)
-                    .precioUnitario(producto.getPrecioCosto())
-                    .build();
-            items.add(item);
+            Proveedor proveedor = proveedorDelProducto(producto, porDefecto);
+            proveedores.putIfAbsent(proveedor.getId(), proveedor);
+            itemsPorProveedor.computeIfAbsent(proveedor.getId(), k -> new ArrayList<>())
+                    .add(ItemPedidoProveedor.builder()
+                            .producto(producto)
+                            .cantidadCajas(ir.cantidadCajas())
+                            .cantidadUnidades(ir.cantidadUnidades())
+                            .cantidadRecibida(0)
+                            .precioUnitario(producto.getPrecioCosto())
+                            .build());
         }
-        pedido.setItems(items);
 
-        // 3. Persistir
-        PedidoProveedor guardado = pedidoRepo.save(pedido);
+        // 2. Un pedido por proveedor
+        List<PedidoCreado> creados = new ArrayList<>();
+        for (Map.Entry<UUID, List<ItemPedidoProveedor>> grupo : itemsPorProveedor.entrySet()) {
+            Proveedor proveedor = proveedores.get(grupo.getKey());
+            PedidoProveedor pedido = PedidoProveedor.builder()
+                    .usuario(usuarioActual)
+                    .proveedor(proveedor)
+                    .fecha(hoy)
+                    .estado(EstadoPedido.PENDIENTE)
+                    .notas(req.notas())
+                    .build();
+            grupo.getValue().forEach(i -> i.setPedido(pedido));
+            pedido.setItems(grupo.getValue());
 
-        // 4. Registrar evento en bitácora
-        eventoService.registrarEvento(
-                TipoEvento.PEDIDO_PROVEEDOR,
-                String.format("Pedido #%s generado: %d referencias. Estado: PENDIENTE.",
-                        guardado.getId().toString().substring(0, 8).toUpperCase(),
-                        items.size()),
-                usuarioActual.getId());
+            PedidoProveedor guardado = pedidoRepo.save(pedido);
 
-        // 5. Generar Excel llenando la plantilla catálogo
-        ExportadorPedido.Resultado archivo = exportar(guardado);
+            eventoService.registrarEvento(
+                    TipoEvento.PEDIDO_PROVEEDOR,
+                    String.format("Pedido #%s a %s generado: %d referencias. Estado: PENDIENTE.",
+                            guardado.getId().toString().substring(0, 8).toUpperCase(),
+                            proveedor.getNombre(), grupo.getValue().size()),
+                    usuarioActual.getId());
 
-        return Map.of("pedidoId", guardado.getId(), "excel", archivo.contenido(),
-                "productosSinCodigo", archivo.productosSinCodigo(),
-                "productosNoUbicados", archivo.productosNoUbicados());
+            BigDecimal total = totalEstimado(guardado);
+            ExportadorPedido.Resultado archivo = exportador.generar(guardado, proveedor);
+            creados.add(new PedidoCreado(guardado.getId(), proveedor.getId(), proveedor.getNombre(), total,
+                    nombreArchivo(guardado, proveedor), archivo.contenido(),
+                    archivo.productosSinCodigo(), archivo.productosNoUbicados(),
+                    advertenciaMontoMinimo(proveedor, total)));
+        }
+        return creados;
+    }
+
+    /**
+     * Proveedor al que iría cada producto, sin crear nada: la voz lo usa para decir cuántos pedidos
+     * se van a generar antes de confirmar.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, ProveedorPedido> proveedoresDe(Collection<UUID> productoIds) {
+        Map<UUID, ProveedorPedido> resultado = new LinkedHashMap<>();
+        Proveedor[] porDefecto = new Proveedor[1];
+        for (UUID id : productoIds) {
+            productoRepo.findById(id).filter(TenantContext::pertenece).ifPresent(p -> {
+                Proveedor proveedor = proveedorDelProducto(p, porDefecto);
+                resultado.put(id, new ProveedorPedido(proveedor.getId(), proveedor.getNombre()));
+            });
+        }
+        return resultado;
+    }
+
+    /**
+     * El proveedor del producto; si no tiene (productos creados sin proveedor), el proveedor
+     * «Nutresa» de la distribuidora. Sin ninguno de los dos → 400: el pedido necesita proveedor
+     * (pedido_proveedor.proveedor_id es NOT NULL desde V10).
+     */
+    private Proveedor proveedorDelProducto(Producto producto, Proveedor[] porDefecto) {
+        if (producto.getProveedor() != null) return producto.getProveedor();
+        if (porDefecto[0] == null) {
+            porDefecto[0] = proveedorRepo.findFirstByNombreIgnoreCaseAndActivoTrue(PROVEEDOR_POR_DEFECTO)
+                    .filter(TenantContext::pertenece)
+                    .orElse(null);
+        }
+        if (porDefecto[0] == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El producto " + producto.getNombre() + " no tiene proveedor asignado");
+        }
+        return porDefecto[0];
+    }
+
+    /** Costo estimado del pedido con el precio de cada ítem (por caja). */
+    static BigDecimal totalEstimado(PedidoProveedor pedido) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (ItemPedidoProveedor i : pedido.getItems()) {
+            BigDecimal precioCaja = i.getPrecioUnitario() != null ? i.getPrecioUnitario() : BigDecimal.ZERO;
+            Integer porCaja = i.getProducto().getUnidadesPorCaja();
+            int unidadesCaja = porCaja != null && porCaja > 0 ? porCaja : 1;
+            total = total.add(precioCaja.multiply(BigDecimal.valueOf(valorOrCero(i.getCantidadCajas()))))
+                    .add(precioCaja.multiply(BigDecimal.valueOf(valorOrCero(i.getCantidadUnidades())))
+                            .divide(BigDecimal.valueOf(unidadesCaja), 2, RoundingMode.HALF_UP));
+        }
+        return total.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** «El pedido a Nutresa suma $ 250.000 y su monto mínimo es $ 300.000.» o null si lo alcanza. */
+    static String advertenciaMontoMinimo(Proveedor proveedor, BigDecimal total) {
+        BigDecimal minimo = proveedor.getMontoMinimoPedido();
+        if (minimo == null || minimo.signum() <= 0 || total.compareTo(minimo) >= 0) return null;
+        return "El pedido a " + proveedor.getNombre() + " suma " + pesos(total)
+                + " y su monto mínimo es " + pesos(minimo) + ".";
+    }
+
+    private static String pesos(BigDecimal valor) {
+        DecimalFormat formato = new DecimalFormat("#,##0", DecimalFormatSymbols.getInstance(Locale.forLanguageTag("es-CO")));
+        return "$ " + formato.format(valor.setScale(0, RoundingMode.HALF_UP));
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -316,14 +409,15 @@ public class PedidoProveedorService {
     }
 
     /**
-     * Arma el .xlsx del pedido con la plantilla de su proveedor ({@link ExportadorPedido}). El proveedor
-     * es el de los productos del pedido; sin proveedor se usa la plantilla estándar de Nutresa.
+     * Arma el .xlsx del pedido con la plantilla de su proveedor ({@link ExportadorPedido}): el del
+     * pedido (RF63) o, en pedidos sin él, el de sus productos; sin ninguno, la plantilla de Nutresa.
      */
     private ExportadorPedido.Resultado exportar(PedidoProveedor pedido) {
         return exportador.generar(pedido, proveedorDe(pedido));
     }
 
     private static Proveedor proveedorDe(PedidoProveedor pedido) {
+        if (pedido.getProveedor() != null) return pedido.getProveedor();
         return pedido.getItems().stream()
                 .map(i -> i.getProducto().getProveedor())
                 .filter(Objects::nonNull)
@@ -491,6 +585,15 @@ public class PedidoProveedorService {
                 .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Producto no encontrado: " + req.productoId()));
+
+        // RF63 — un pedido es de un solo proveedor
+        if (req.accion() == AccionPedido.AGREGAR && pedido.getProveedor() != null
+                && producto.getProveedor() != null
+                && !producto.getProveedor().getId().equals(pedido.getProveedor().getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    producto.getNombre() + " es de " + producto.getProveedor().getNombre()
+                            + " y el pedido es de " + pedido.getProveedor().getNombre());
+        }
 
         switch (req.accion()) {
             case AGREGAR    -> agregarItemPedido(pedido, producto, req);

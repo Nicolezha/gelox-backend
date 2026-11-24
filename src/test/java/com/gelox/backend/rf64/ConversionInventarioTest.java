@@ -91,7 +91,7 @@ class ConversionInventarioTest {
         InventarioService inventario = new InventarioService(productoRepository, movimientoRepository, eventoSistemaService);
         pedidoService = new PedidoProveedorService(pedidoRepository, itemPedidoRepository, productoRepository,
                 movimientoRepository, perdidaRepository, eventoSistemaService,
-                TestHelper.exportador(mock(IdentidadDistribuidoraService.class)), conversion);
+                TestHelper.exportador(mock(IdentidadDistribuidoraService.class)), conversion, null);
         ventaService = new VentaService(ventaRepository, itemVentaRepository, productoRepository,
                 eventoSistemaService, inventario, conversion);
 

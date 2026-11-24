@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ProveedorRepository extends JpaRepository<Proveedor, UUID> {
@@ -21,6 +22,9 @@ public interface ProveedorRepository extends JpaRepository<Proveedor, UUID> {
     List<Proveedor> buscar(@Param("q") String q, @Param("activo") Boolean activo);
 
     boolean existsByNit(String nit);
+
+    /** RF63 — proveedor por defecto (Nutresa) de los productos sin proveedor. */
+    Optional<Proveedor> findFirstByNombreIgnoreCaseAndActivoTrue(String nombre);
 
     boolean existsByNitAndIdNot(String nit, UUID id);
 }

@@ -49,7 +49,7 @@ class PedidoProveedorServiceExportarTest {
     @BeforeEach
     void armarServicio() {
         service = new PedidoProveedorService(pedidoRepo, null, null, null, null, null,
-                TestHelper.exportador(identidadService), null);
+                TestHelper.exportador(identidadService), null, null);
     }
 
     @Test

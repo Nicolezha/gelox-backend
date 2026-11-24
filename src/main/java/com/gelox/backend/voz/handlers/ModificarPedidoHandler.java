@@ -19,6 +19,7 @@ import com.gelox.backend.voz.VozPendiente;
 import com.gelox.backend.voz.VozResultado;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -33,8 +34,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * RF53 — "al pedido pendiente agrégale 10 de Festival". Opera siempre sobre
- * el pedido PENDIENTE más reciente.
+ * RF53 — "al pedido pendiente agrégale 10 de Festival". Con varios pendientes se dice a cuál o,
+ * desde RF63, se infiere el del proveedor del producto.
  */
 @Component
 @RequiredArgsConstructor
@@ -116,9 +117,17 @@ public class ModificarPedidoHandler implements IntencionHandler {
             }
         } else {
             if (pendientes.size() > 1) {
-                return PreguntaVoz.anexando(listarPendientes(pendientes), "pedido ");
+                // RF63 — sin decir cuál, se infiere por el proveedor del producto: si un solo
+                // pendiente es de ese proveedor, es ese; si no, se pregunta entre los suyos
+                List<PedidoProveedor> delProveedor = pendientesDelProveedor(pendientes, texto);
+                if (delProveedor.size() != 1) {
+                    return PreguntaVoz.anexando(
+                            listarPendientes(delProveedor.isEmpty() ? pendientes : delProveedor), "pedido ");
+                }
+                elegido = delProveedor.get(0);
+            } else {
+                elegido = pendientes.get(0);
             }
-            elegido = pendientes.get(0);
         }
 
         // Los ítems y productos son lazy y aquí no hay sesión: se cargan con JOIN FETCH.
@@ -150,6 +159,17 @@ public class ModificarPedidoHandler implements IntencionHandler {
 
         if (accion != AccionPedido.AGREGAR && itemActual == null) {
             return sinCambios("El producto " + producto.nombre() + " no está en el pedido pendiente.");
+        }
+
+        // RF63 — un pedido es de un solo proveedor: no se agrega un producto de otro
+        if (accion == AccionPedido.AGREGAR && itemActual == null && pedido.getProveedor() != null) {
+            PedidoProveedorService.ProveedorPedido delProducto = proveedorDe(producto.id());
+            if (delProducto != null && !delProducto.id().equals(pedido.getProveedor().getId())) {
+                return sinCambios(producto.nombre() + " es de " + delProducto.nombre() + " y el pedido #"
+                        + pedido.getId().toString().substring(0, 8).toUpperCase() + " es de "
+                        + pedido.getProveedor().getNombre() + ". Genera un pedido nuevo para "
+                        + delProducto.nombre() + ".");
+            }
         }
 
         String pedidoCorto = pedido.getId().toString().substring(0, 8).toUpperCase();
@@ -224,7 +244,32 @@ public class ModificarPedidoHandler implements IntencionHandler {
         return new VozResultado(true, "Pedido modificado. Ya puedes descargar el archivo actualizado.", datos, null);
     }
 
-    /** "Hay 2 pedidos pendientes: 1) del 10 de octubre: 20 cajas de Solo Lack…; 2) …. ¿A cuál?" */
+    /**
+     * Pendientes del proveedor del producto dicho. Vacío si el producto no se resuelve sin ambigüedad
+     * o no se conoce su proveedor: entonces se pregunta entre todos, como antes de RF63.
+     */
+    private List<PedidoProveedor> pendientesDelProveedor(List<PedidoProveedor> pendientes, String texto) {
+        String fragmento = extraerProducto(texto);
+        if (fragmento.isEmpty()) return List.of();
+        List<ResolvedorProducto.ProductoCandidato> candidatos = resolvedorProducto.resolver(fragmento);
+        if (candidatos.isEmpty() || esAmbiguo(candidatos)) return List.of();
+        PedidoProveedorService.ProveedorPedido proveedor = proveedorDe(candidatos.get(0).id());
+        if (proveedor == null) return List.of();
+        return pendientes.stream()
+                .filter(p -> p.getProveedor() != null && proveedor.id().equals(p.getProveedor().getId()))
+                .toList();
+    }
+
+    /** Proveedor del producto (el suyo o Nutresa); null si no tiene ninguno. */
+    private PedidoProveedorService.ProveedorPedido proveedorDe(UUID productoId) {
+        try {
+            return pedidoProveedorService.proveedoresDe(List.of(productoId)).get(productoId);
+        } catch (ResponseStatusException e) {
+            return null;
+        }
+    }
+
+    /** "Hay 2 pedidos pendientes: 1) del 10 de octubre a Nutresa con Solo Lack…; 2) …. ¿A cuál?" */
     private String listarPendientes(List<PedidoProveedor> pendientes) {
         List<String> descripciones = new ArrayList<>();
         for (int i = 0; i < pendientes.size(); i++) {
@@ -232,7 +277,8 @@ public class ModificarPedidoHandler implements IntencionHandler {
             String productos = p.getItems() == null ? "" : p.getItems().stream().limit(2)
                     .map(item -> item.getProducto().getNombre())
                     .collect(Collectors.joining(" y "));
-            descripciones.add((i + 1) + ") del " + p.getFecha().format(FECHA_CORTA)
+            String proveedor = p.getProveedor() != null ? " a " + p.getProveedor().getNombre() : "";
+            descripciones.add((i + 1) + ") del " + p.getFecha().format(FECHA_CORTA) + proveedor
                     + (productos.isEmpty() ? "" : " con " + productos));
         }
         return "Hay " + pendientes.size() + " pedidos pendientes: " + String.join("; ", descripciones)
