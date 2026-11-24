@@ -1,11 +1,12 @@
 package com.gelox.backend.rf61;
 
 import com.gelox.backend.controllers.LandingController;
-import com.gelox.backend.entities.CategoriaProducto;
+import com.gelox.backend.entities.Categoria;
 import com.gelox.backend.entities.Distribuidora;
 import com.gelox.backend.entities.EstadoDistribuidora;
 import com.gelox.backend.entities.Producto;
 import com.gelox.backend.exceptions.GlobalExceptionHandler;
+import com.gelox.backend.repositories.CategoriaRepository;
 import com.gelox.backend.repositories.DistribuidoraRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.services.LandingService;
@@ -56,6 +57,9 @@ class LandingSubdominioTest {
     @Autowired
     ProductoRepository productoRepository;
 
+    @Autowired
+    CategoriaRepository categoriaRepository;
+
     LandingController landingController;
     MockMvc mockMvc;
 
@@ -73,10 +77,10 @@ class LandingSubdominioTest {
         Distribuidora otra = distribuidora("heladosnorte", "Helados Norte", EstadoDistribuidora.PRUEBA, null);
         Distribuidora suspendida = distribuidora("suspendida", "Suspendida SAS", EstadoDistribuidora.SUSPENDIDO, "573000000000");
 
-        producto("MS-1", "Paleta Mora", CategoriaProducto.PALETAS, piloto);
-        producto("MS-2", "Cono Vainilla", CategoriaProducto.CONOS, piloto);
-        producto("HN-1", "Paleta Limón Norte", CategoriaProducto.PALETAS, otra);
-        producto("SU-1", "Paleta Suspendida", CategoriaProducto.PALETAS, suspendida);
+        producto("MS-1", "Paleta Mora", "PALETAS", piloto);
+        producto("MS-2", "Cono Vainilla", "CONOS", piloto);
+        producto("HN-1", "Paleta Limón Norte", "PALETAS", otra);
+        producto("SU-1", "Paleta Suspendida", "PALETAS", suspendida);
     }
 
     @AfterEach
@@ -106,11 +110,19 @@ class LandingSubdominioTest {
                 .build());
     }
 
-    private void producto(String codigo, String nombre, CategoriaProducto categoria, Distribuidora d) {
+    /** RF64 — la categoría es una fila de la tabla, una por distribuidora. */
+    private Categoria categoriaDe(String nombre, Distribuidora d) {
+        Categoria c = new Categoria();
+        c.setNombre(nombre);
+        c.setTenantId(d.getId());
+        return categoriaRepository.saveAndFlush(c);
+    }
+
+    private void producto(String codigo, String nombre, String categoria, Distribuidora d) {
         Producto p = new Producto();
         p.setCodigoTecnico(codigo);
         p.setNombre(nombre);
-        p.setCategoria(categoria);
+        p.setCategoria(categoriaDe(categoria, d));
         p.setPrecioVenta(BigDecimal.valueOf(3000));
         p.setPrecioCosto(BigDecimal.valueOf(2000));
         p.setTenantId(d.getId());

@@ -3,9 +3,13 @@ package com.gelox.backend.catalogo;
 import com.gelox.backend.catalogo.dto.CatalogoProductoDTO;
 import com.gelox.backend.catalogo.dto.CrearProductoRequest;
 import com.gelox.backend.catalogo.dto.EditarProductoRequest;
+import com.gelox.backend.catalogo.dto.FactorConversionRequest;
 import com.gelox.backend.catalogo.dto.PagedResponse;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.services.SupabaseStorageService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,7 +19,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.springframework.web.server.ResponseStatusException;
+
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -31,17 +38,19 @@ public class CatalogoController {
 
     private final CatalogoService        catalogoService;
     private final SupabaseStorageService storageService;
+    private final ObjectMapper           objectMapper;
 
     // ── RF18 ──────────────────────────────────────────────────────────────────
     @GetMapping
     public ResponseEntity<PagedResponse<CatalogoProductoDTO>> listar(
             @RequestParam(required = false) String categoria,
+            @RequestParam(required = false) UUID   categoriaId,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Usuario usuario) {
 
         return ResponseEntity.ok(
-                catalogoService.listarProductos(categoria, page, size, usuario));
+                catalogoService.listarProductos(categoria, categoriaId, page, size, usuario));
     }
 
     // ── RF19 — crear (JSON) ───────────────────────────────────────────────────
@@ -59,7 +68,8 @@ public class CatalogoController {
     public ResponseEntity<CatalogoProductoDTO> crearConImagen(
             @RequestParam                    String        codigoTecnico,
             @RequestParam                    String        nombre,
-            @RequestParam                    String        categoria,
+            @RequestParam(required = false)  String        categoria,
+            @RequestParam(required = false)  UUID          categoriaId,
             @RequestParam                    BigDecimal    precioVenta,
             @RequestParam(required = false)  BigDecimal    precioCosto,
             @RequestParam(required = false)  String        descripcion,
@@ -68,6 +78,11 @@ public class CatalogoController {
             @RequestParam(required = false)  Integer       unidadesPorCaja,
             @RequestParam(required = false)  String        unidadMedida,
             @RequestParam(required = false)  BigDecimal    precioComerciente,
+            @RequestParam(required = false)  String        sku,
+            @RequestParam(required = false)  String        marca,
+            @RequestParam(required = false)  UUID          proveedorId,
+            @RequestParam(required = false)  UUID          unidadBaseId,
+            @RequestParam(required = false)  String        factores,   // JSON: [{"unidadOrigenId":"…","factor":12}]
             @RequestParam(required = false)  MultipartFile imagen,
             @AuthenticationPrincipal         Usuario       usuario) {
 
@@ -83,6 +98,12 @@ public class CatalogoController {
         request.setUnidadesPorCaja(unidadesPorCaja);
         request.setUnidadMedida(unidadMedida);
         request.setPrecioComerciente(precioComerciente);
+        request.setSku(sku);
+        request.setMarca(marca);
+        request.setProveedorId(proveedorId);
+        request.setCategoriaId(categoriaId);
+        request.setUnidadBaseId(unidadBaseId);
+        request.setFactores(parsearFactores(factores));
 
         if (imagen != null && !imagen.isEmpty()) {
             request.setImagenUrl(storageService.subirImagen(imagen, "productos"));
@@ -108,6 +129,7 @@ public class CatalogoController {
             @PathVariable                    UUID          id,
             @RequestParam(required = false)  String        nombre,
             @RequestParam(required = false)  String        categoria,
+            @RequestParam(required = false)  UUID          categoriaId,
             @RequestParam(required = false)  BigDecimal    precioVenta,
             @RequestParam(required = false)  BigDecimal    precioCosto,
             @RequestParam(required = false)  String        descripcion,
@@ -116,6 +138,11 @@ public class CatalogoController {
             @RequestParam(required = false)  Integer       unidadesPorCaja,
             @RequestParam(required = false)  String        unidadMedida,
             @RequestParam(required = false)  BigDecimal    precioComerciente,
+            @RequestParam(required = false)  String        sku,
+            @RequestParam(required = false)  String        marca,
+            @RequestParam(required = false)  UUID          proveedorId,
+            @RequestParam(required = false)  UUID          unidadBaseId,
+            @RequestParam(required = false)  String        factores,   // JSON: [{"unidadOrigenId":"…","factor":12}]
             @RequestParam(required = false)  MultipartFile imagen,
             @AuthenticationPrincipal         Usuario       usuario) {
 
@@ -130,6 +157,12 @@ public class CatalogoController {
         request.setUnidadesPorCaja(unidadesPorCaja);
         request.setUnidadMedida(unidadMedida);
         request.setPrecioComerciente(precioComerciente);
+        request.setSku(sku);
+        request.setMarca(marca);
+        request.setProveedorId(proveedorId);
+        request.setCategoriaId(categoriaId);
+        request.setUnidadBaseId(unidadBaseId);
+        request.setFactores(parsearFactores(factores));
 
         if (imagen != null && !imagen.isEmpty()) {
             request.setImagenUrl(storageService.subirImagen(imagen, "productos"));
@@ -154,5 +187,15 @@ public class CatalogoController {
 
         catalogoService.eliminarProducto(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Los factores llegan como texto JSON en el multipart; null = no se envían. */
+    private List<FactorConversionRequest> parsearFactores(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<FactorConversionRequest>>() {});
+        } catch (JsonProcessingException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El campo factores no es un JSON válido");
+        }
     }
 }

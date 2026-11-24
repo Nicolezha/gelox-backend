@@ -38,6 +38,7 @@ public class PedidoProveedorService {
     private final PerdidaRepository             perdidaRepo;
     private final EventoSistemaService          eventoService;
     private final IdentidadDistribuidoraService identidadService;
+    private final ConversionUnidadService      conversionUnidadService;   // RF64
 
     @Value("classpath:templates/catalogo.xlsx")
     private Resource plantillaExcel;
@@ -140,7 +141,9 @@ public class PedidoProveedorService {
 
             // RF23 — convertir cajas a unidades y actualizar stock
             int upC          = producto.getUnidadesPorCaja() != null ? producto.getUnidadesPorCaja() : 1;
-            int totalEntrada = ir.cantidadUnidades() + ir.cantidadCajas() * upC;
+            // CJ → UN con unidades_por_caja; otra unidad (p. ej. BOL) con factor_conversion. Stock en unidad base.
+            int otras        = conversionUnidadService.aUnidadBase(producto, ir.unidad(), ir.cantidadUnidad());
+            int totalEntrada = ir.cantidadUnidades() + ir.cantidadCajas() * upC + otras;
             int stockAntes   = producto.getStockActual();
             int stockDespues = stockAntes + totalEntrada;
             producto.setStockActual(stockDespues);

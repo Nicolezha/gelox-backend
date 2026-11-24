@@ -3,7 +3,6 @@ package com.gelox.backend.services;
 import com.gelox.backend.dto.CatalogoProductoPublicoDTO;
 import com.gelox.backend.dto.IdentidadDTO;
 import com.gelox.backend.dto.InfoNegocioDTO;
-import com.gelox.backend.entities.CategoriaProducto;
 import com.gelox.backend.entities.Distribuidora;
 import com.gelox.backend.entities.EstadoDistribuidora;
 import com.gelox.backend.entities.Producto;
@@ -84,9 +83,9 @@ public class LandingService {
     }
 
     /** Productos activos de una sola categoría (rutas /productos/paletas, /conos y /familiares). */
-    public List<CatalogoProductoPublicoDTO> productos(String subdominio, CategoriaProducto categoria) {
+    public List<CatalogoProductoPublicoDTO> productos(String subdominio, String categoria) {
         return conTenantDe(resolver(subdominio),
-                () -> productoRepository.findByActivoTrueAndCategoria(categoria))
+                () -> productoRepository.findByActivoTrueAndCategoriaNombreIgnoreCase(categoria))
                 .stream().filter(this::tienePrecio).map(this::toDTO).toList();
     }
 
@@ -127,7 +126,7 @@ public class LandingService {
                 p.getImagenUrl(),
                 p.getPrecioVenta(),
                 p.getDescripcion(),
-                p.getCategoria() != null ? p.getCategoria().name() : null
+                p.getCategoria() != null ? p.getCategoria().getNombre() : null
         );
     }
 }
