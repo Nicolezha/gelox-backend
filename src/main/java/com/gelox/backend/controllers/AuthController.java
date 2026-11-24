@@ -2,6 +2,7 @@ package com.gelox.backend.controllers;
 
 import com.gelox.backend.dto.UsuarioDTO;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.gobierno.Auditable;
 import com.gelox.backend.services.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,7 @@ public class AuthController {
 
     private final AuthService authService;
 
+    @Auditable(accion = "SESION_INICIAR", entidad = "Usuario")
     @PostMapping("/verificar")
     public ResponseEntity<UsuarioDTO> verificar(@AuthenticationPrincipal Usuario usuario) {
         UsuarioDTO dto = authService.autenticarUsuario(usuario.getFirebaseUid());
@@ -33,6 +35,7 @@ public class AuthController {
         return ResponseEntity.ok(dto);
     }
 
+    @Auditable(accion = "SESION_CERRAR", entidad = "Usuario")
     @PostMapping("/cerrar-sesion")
     public ResponseEntity<Map<String, String>> cerrarSesion(@AuthenticationPrincipal Usuario usuario) {
         authService.cerrarSesion(usuario.getFirebaseUid());

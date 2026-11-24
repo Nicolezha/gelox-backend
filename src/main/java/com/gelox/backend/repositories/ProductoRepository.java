@@ -22,6 +22,9 @@ public interface ProductoRepository extends JpaRepository<Producto, UUID> {
 
     boolean existsByCodigoTecnico(String codigoTecnico);
 
+    /** RF70 — productos activos de la distribuidora, para la cuota del plan. */
+    long countByTenantIdAndActivoTrue(UUID tenantId);
+
     /** RF24 — solo productos con stock mínimo configurado (> 0); sin mínimo no hay alerta. */
     @Query("SELECT p FROM Producto p WHERE p.activo = true AND p.stockMinimo > 0 AND p.stockActual <= p.stockMinimo ORDER BY p.nombre ASC")
     List<Producto> findProductosBajoStock();

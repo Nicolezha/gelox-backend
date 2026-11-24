@@ -5,6 +5,9 @@ import com.gelox.backend.entities.EstadoDistribuidora;
 import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.gobierno.Auditable;
+import com.gelox.backend.gobierno.PlanSuscripcion;
+import com.gelox.backend.gobierno.PlanSuscripcionRepository;
 import com.gelox.backend.plataforma.dto.CambiarEstadoRequest;
 import com.gelox.backend.plataforma.dto.CrearDistribuidoraRequest;
 import com.gelox.backend.plataforma.dto.DistribuidoraDTO;
@@ -61,11 +64,13 @@ public class DistribuidoraService {
     private final EventoSistemaService eventoSistemaService;
     private final EmailService emailService;
     private final DistribuidoraEstadoCache distribuidoraEstadoCache;
+    private final PlanSuscripcionRepository planRepository;   // RF70 — distribuidora.plan_id
 
     // ─────────────────────────────────────────────────────────────────
     // RF58 — Aprovisionamiento
     // ─────────────────────────────────────────────────────────────────
 
+    @Auditable(accion = "DISTRIBUIDORA_APROVISIONAR", entidad = "Distribuidora")
     @Transactional
     @RequiereRol("SUPERADMINISTRADOR")
     public DistribuidoraDTO aprovisionar(CrearDistribuidoraRequest req) {
@@ -82,6 +87,9 @@ public class DistribuidoraService {
         if (usuarioRepository.existsByCorreo(correo) || existeEnFirebase(correo)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un usuario con ese correo");
         }
+        // RF70 — el texto del plan (BASICO, ESTANDAR, PREMIUM…) debe existir en plan_suscripcion
+        PlanSuscripcion plan = planRepository.findByNombreIgnoreCase(req.plan().trim())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "El plan no existe"));
 
         Distribuidora distribuidora = distribuidoraRepository.save(Distribuidora.builder()
                 .razonSocial(req.razonSocial().trim())
@@ -91,7 +99,8 @@ public class DistribuidoraService {
                 .correoGerente(correo)
                 .telefono(req.telefono())
                 .direccion(req.direccion())
-                .plan(req.plan().trim())
+                .plan(plan.getNombre())
+                .planId(plan.getId())
                 .estado(EstadoDistribuidora.PRUEBA)
                 .colorPrimario(COLOR_PRIMARIO_DEFECTO)
                 .colorSecundario(COLOR_SECUNDARIO_DEFECTO)
@@ -144,6 +153,7 @@ public class DistribuidoraService {
     // RF59 — Ciclo de vida
     // ─────────────────────────────────────────────────────────────────
 
+    @Auditable(accion = "DISTRIBUIDORA_CAMBIAR_ESTADO", entidad = "Distribuidora")
     @Transactional
     @RequiereRol("SUPERADMINISTRADOR")
     public DistribuidoraDTO cambiarEstado(UUID id, CambiarEstadoRequest req) {
@@ -174,6 +184,7 @@ public class DistribuidoraService {
         return DistribuidoraDTO.from(distribuidora, null);
     }
 
+    @Auditable(accion = "DISTRIBUIDORA_REENVIAR_ACCESO", entidad = "Distribuidora")
     @Transactional
     @RequiereRol("SUPERADMINISTRADOR")
     public DistribuidoraDTO reenviarAcceso(UUID id) {

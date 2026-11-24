@@ -78,8 +78,13 @@ public class Distribuidora {
     @Column(name = "ciudad", length = 80)
     private String ciudad;
 
+    /** Nombre del plan; se conserva por compatibilidad. La referencia es planId. */
     @Column(name = "plan", nullable = false, length = 30)
     private String plan;
+
+    /** RF70 — plan de suscripción (plan_suscripcion.id) con las cuotas de la distribuidora. */
+    @Column(name = "plan_id", nullable = false)
+    private UUID planId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "estado", nullable = false, length = 20)

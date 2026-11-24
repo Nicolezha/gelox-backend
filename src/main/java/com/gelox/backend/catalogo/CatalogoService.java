@@ -8,6 +8,9 @@ import com.gelox.backend.entities.CategoriaProducto;
 import com.gelox.backend.entities.Producto;
 import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.gobierno.Auditable;
+import com.gelox.backend.gobierno.CuotaService;
+import com.gelox.backend.gobierno.TipoCuota;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,7 @@ import java.util.UUID;
 public class CatalogoService {
 
     private final CatalogoRepository catalogoRepository;
+    private final CuotaService cuotaService;   // RF70 — cuotas del plan
 
     // ─────────────────────────── RF18 ────────────────────────────
 
@@ -65,6 +69,7 @@ public class CatalogoService {
 
     // ─────────────────────────── RF19 ────────────────────────────
 
+    @Auditable(accion = "PRODUCTO_CREAR", entidad = "Producto")
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     public CatalogoProductoDTO crearProducto(CrearProductoRequest req, Usuario usuario) {
 
@@ -85,6 +90,9 @@ public class CatalogoService {
                     HttpStatus.CONFLICT,
                     "El código ya está registrado en el catálogo");
         }
+
+        // RF70 — con la cuota de productos del plan alcanzada no se guarda nada
+        cuotaService.validar(TipoCuota.PRODUCTOS);
 
         Producto producto = new Producto();
         producto.setCodigoTecnico(req.getCodigoTecnico());
@@ -159,6 +167,10 @@ public class CatalogoService {
                 .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Producto no encontrado"));
+        // RF70 — reactivar un producto también ocupa un cupo del plan
+        if (!Boolean.TRUE.equals(producto.getActivo())) {
+            cuotaService.validar(TipoCuota.PRODUCTOS);
+        }
         producto.setActivo(true);
         Producto actualizado = catalogoRepository.save(producto);
         boolean esAdmin = usuario.getRol() == RolUsuario.ADMINISTRADOR;

@@ -5,6 +5,7 @@ import com.gelox.backend.dto.IdentidadDTO;
 import com.gelox.backend.entities.Distribuidora;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.gobierno.Auditable;
 import com.gelox.backend.repositories.DistribuidoraRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.EventoSistemaService;
@@ -68,6 +69,7 @@ public class IdentidadDistribuidoraService {
      * Todo se valida antes de subir archivos, para no dejar imágenes huérfanas en el storage.
      * Sin @Transactional: la subida a Supabase no debe retener una conexión de la base.
      */
+    @Auditable(accion = "IDENTIDAD_ACTUALIZAR", entidad = "Distribuidora")
     @RequiereRol("ADMINISTRADOR")
     public IdentidadDTO actualizar(ActualizarIdentidadRequest datos, MultipartFile logo, MultipartFile favicon) {
         String nombre = datos == null || datos.nombreComercial() == null ? "" : datos.nombreComercial().trim();

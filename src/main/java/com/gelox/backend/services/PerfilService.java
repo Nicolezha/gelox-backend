@@ -4,6 +4,7 @@ import com.gelox.backend.dto.ActualizarPerfilDTO;
 import com.gelox.backend.dto.CambioContrasenaDTO;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.gobierno.Auditable;
 import com.gelox.backend.exceptions.ContrasenaActualIncorrectaException;
 import com.gelox.backend.exceptions.ContrasenaNoCoincideException;
 import com.gelox.backend.exceptions.CorreoDuplicadoException;
@@ -74,6 +75,7 @@ public class PerfilService {
         return actualizado;
     }
 
+    @Auditable(accion = "CONTRASENA_CAMBIAR", entidad = "Usuario")
     public void cambiarContrasena(String firebaseUid, CambioContrasenaDTO dto) {
         if (!dto.getNuevaContrasena().equals(dto.getConfirmacion())) {
             throw new ContrasenaNoCoincideException("La nueva contraseña y su confirmación no coinciden");

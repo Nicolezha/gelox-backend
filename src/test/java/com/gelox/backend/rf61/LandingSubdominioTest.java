@@ -92,6 +92,7 @@ class LandingSubdominioTest {
                 .subdominio(subdominio)
                 .correoGerente("gerente@" + subdominio + ".test")
                 .plan("PILOTO")
+                .planId(UUID.randomUUID())   // RF70 — plan_id NOT NULL (sin FK en H2)
                 .estado(estado)
                 .colorPrimario("#9E2016")
                 .colorSecundario("#7C0202")

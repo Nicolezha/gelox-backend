@@ -3,6 +3,8 @@ package com.gelox.backend.voz.llm;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.gelox.backend.entities.MetodoClasificacion;
 import com.gelox.backend.entities.TipoIntencionVoz;
+import com.gelox.backend.gobierno.CuotaService;
+import com.gelox.backend.gobierno.TipoCuota;
 import com.gelox.backend.voz.ClasificadorIntencion;
 import com.gelox.backend.voz.ClasificadorIntencion.ResultadoClasificacion;
 import com.gelox.backend.voz.ProcesadorLenguaje;
@@ -22,6 +24,9 @@ import java.util.Map;
  * Respaldo ante: LLM sin configurar, error de red, tiempo excedido, JSON inválido,
  * intención fuera del enumerado o null, y confianza fuera de [0, 1] o menor a
  * {@link ClasificadorIntencion#UMBRAL_INTENCION}.
+ * <p>
+ * RF70 — también usa el respaldo, sin 409, cuando la distribuidora agotó su cuota
+ * LLAMADAS_IA_MES (comandos clasificados por el LLM en el mes calendario).
  */
 @Slf4j
 @Primary
@@ -31,10 +36,15 @@ public class ProcesadorLenguajeLlm implements ProcesadorLenguaje {
 
     private final LlmCliente cliente;
     private final ClasificadorIntencion respaldo;
+    private final CuotaService cuotaService;
 
     @Override
     public ResultadoClasificacion procesar(String texto) {
         if (!cliente.configurado()) return respaldo.clasificar(texto);
+        if (!cuotaService.disponible(TipoCuota.LLAMADAS_IA_MES)) {
+            log.info("Cuota de llamadas IA del mes agotada, se usa el clasificador anterior");
+            return respaldo.clasificar(texto);
+        }
 
         JsonNode json;
         try {

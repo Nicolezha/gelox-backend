@@ -6,6 +6,9 @@ import com.gelox.backend.dto.UsuarioResponseDTO;
 import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.gobierno.Auditable;
+import com.gelox.backend.gobierno.CuotaService;
+import com.gelox.backend.gobierno.TipoCuota;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
@@ -32,13 +35,17 @@ public class UsuarioService {
     private final UsuarioRepository usuarioRepository;
     private final EventoSistemaService eventoSistemaService;
     private final EmailService emailService;   // RF03 — notificaciones por correo
+    private final CuotaService cuotaService;   // RF70 — cuotas del plan
 
+    @Auditable(accion = "USUARIO_CREAR", entidad = "Usuario")
     @RequiereRol("ADMINISTRADOR")
     public UsuarioResponseDTO crearUsuario(CrearUsuarioDTO dto) throws Exception {
         validarRol(dto.getRol());
         dto.setCorreo(normalizarCorreo(dto.getCorreo()));
         // Antes de crear la cuenta en Firebase: sin distribuidora no se crea nada
         UUID tenantId = TenantContext.requerido();
+        // RF70 — con la cuota de usuarios alcanzada no se crea en Firebase ni en la base
+        cuotaService.validar(TipoCuota.USUARIOS);
 
         // RF03 — el correo no se puede repetir
         if (usuarioRepository.existsByCorreo(dto.getCorreo())) {
@@ -94,6 +101,7 @@ public class UsuarioService {
         return toDTO(saved);
     }
 
+    @Auditable(accion = "USUARIO_EDITAR", entidad = "Usuario")
     @RequiereRol("ADMINISTRADOR")
     public UsuarioResponseDTO editarUsuario(UUID id, EditarUsuarioDTO dto) throws Exception {
         // RF62 — usuario de otra distribuidora: 404, sin revelar que existe
@@ -149,6 +157,7 @@ public class UsuarioService {
         return toDTO(actualizado, titularId);
     }
 
+    @Auditable(accion = "USUARIO_DESHABILITAR", entidad = "Usuario")
     @RequiereRol("ADMINISTRADOR")
     public void deshabilitarUsuario(UUID id) throws Exception {
         Usuario usuario = buscarDelTenant(id);
@@ -234,9 +243,14 @@ public class UsuarioService {
         return dto;
     }
 
+    @Auditable(accion = "USUARIO_HABILITAR", entidad = "Usuario")
     @RequiereRol("ADMINISTRADOR")
     public void habilitarUsuario(UUID id) throws Exception {
         Usuario usuario = buscarDelTenant(id);
+        // RF70 — reactivar a un usuario también ocupa un cupo del plan
+        if (!Boolean.TRUE.equals(usuario.getActivo())) {
+            cuotaService.validar(TipoCuota.USUARIOS);
+        }
 
         FirebaseAuth.getInstance().updateUser(
                 new UserRecord.UpdateRequest(usuario.getFirebaseUid()).setDisabled(false)

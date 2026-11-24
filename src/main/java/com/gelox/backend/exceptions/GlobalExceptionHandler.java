@@ -1,5 +1,6 @@
 package com.gelox.backend.exceptions;
 
+import com.gelox.backend.gobierno.CuotaAlcanzadaException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -13,6 +14,12 @@ import java.util.NoSuchElementException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /** RF70 — 409 {error, codigo: CUOTA_PLAN_ALCANZADA, cuota, limite, usado} (FP-15 §2.16.2). */
+    @ExceptionHandler(CuotaAlcanzadaException.class)
+    public ResponseEntity<Map<String, Object>> handleCuotaAlcanzada(CuotaAlcanzadaException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.cuerpo());
+    }
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> handleResponseStatus(ResponseStatusException ex) {

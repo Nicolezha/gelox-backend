@@ -63,8 +63,19 @@ class AprovisionamientoTest {
     @Mock
     DistribuidoraEstadoCache distribuidoraEstadoCache;
 
+    @Mock
+    com.gelox.backend.gobierno.PlanSuscripcionRepository planRepository;
+
     @InjectMocks
     DistribuidoraService distribuidoraService;
+
+    /** RF70 — el plan BASICO del formulario existe en plan_suscripcion (V9). */
+    @org.junit.jupiter.api.BeforeEach
+    void planBasicoExiste() {
+        org.mockito.Mockito.lenient().when(planRepository.findByNombreIgnoreCase("BASICO"))
+                .thenReturn(java.util.Optional.of(com.gelox.backend.gobierno.PlanSuscripcion.builder()
+                        .id(UUID.randomUUID()).nombre("BASICO").build()));
+    }
 
     private CrearDistribuidoraRequest requestValido() {
         return new CrearDistribuidoraRequest(

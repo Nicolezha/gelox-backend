@@ -144,7 +144,7 @@ class LoginTest {
                 .thenThrow(mock(FirebaseAuthException.class));
 
         FirebaseAuthFilter filtro = new FirebaseAuthFilter(firebaseAuth, usuarioRepository,
-                mock(DistribuidoraEstadoCache.class));
+                mock(DistribuidoraEstadoCache.class), mock(com.gelox.backend.gobierno.AuditoriaService.class));
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer token-invalido");
         MockHttpServletResponse response = new MockHttpServletResponse();
