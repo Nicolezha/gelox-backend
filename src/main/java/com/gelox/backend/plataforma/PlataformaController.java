@@ -1,5 +1,6 @@
 package com.gelox.backend.plataforma;
 
+import com.gelox.backend.plataforma.dto.AsignarPlanRequest;
 import com.gelox.backend.plataforma.dto.CambiarEstadoRequest;
 import com.gelox.backend.plataforma.dto.CrearDistribuidoraRequest;
 import com.gelox.backend.plataforma.dto.DistribuidoraDTO;
@@ -52,6 +53,14 @@ public class PlataformaController {
             @PathVariable UUID id,
             @Valid @RequestBody CambiarEstadoRequest req) {
         return ResponseEntity.ok(distribuidoraService.cambiarEstado(id, req));
+    }
+
+    /** RF70 — {planId, motivo}; si el uso ya supera el plan nuevo se asigna igual con advertencias. */
+    @PatchMapping("/{id}/plan")
+    public ResponseEntity<DistribuidoraDTO> asignarPlan(
+            @PathVariable UUID id,
+            @RequestBody AsignarPlanRequest req) {
+        return ResponseEntity.ok(distribuidoraService.asignarPlan(id, req));
     }
 
     @PostMapping("/{id}/reenviar-acceso")

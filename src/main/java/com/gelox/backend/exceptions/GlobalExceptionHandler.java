@@ -21,6 +21,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.cuerpo());
     }
 
+    /** {error, campo}: la pantalla marca el campo con el error (planes, alta de distribuidora). */
+    @ExceptionHandler(CampoInvalidoException.class)
+    public ResponseEntity<Map<String, String>> handleCampoInvalido(CampoInvalidoException ex) {
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(Map.of("error", ex.getReason(), "campo", ex.getCampo()));
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> handleResponseStatus(ResponseStatusException ex) {
         return ResponseEntity.status(ex.getStatusCode())

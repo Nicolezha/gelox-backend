@@ -2,7 +2,10 @@ package com.gelox.backend.plataforma.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+
+import java.util.UUID;
 
 /**
  * RF58 — Datos del formulario de aprovisionamiento de una distribuidora nueva.
@@ -33,6 +36,7 @@ public record CrearDistribuidoraRequest(
 
         String direccion,
 
-        @NotBlank(message = "El plan es obligatorio")
-        String plan
+        /** RF70 — plan_suscripcion.id (antes: el nombre del plan en texto). */
+        @NotNull(message = "El plan es obligatorio")
+        UUID planId
 ) {}

@@ -20,6 +20,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -78,6 +82,52 @@ public class CuotaService {
         Integer limite = limite(tipo, tenantId);
         if (limite == null) return true;
         return contarUsado(tipo, tenantId) + 1 <= enUnidades(tipo, limite);
+    }
+
+    // ── Uso para el panel de la plataforma (FP-15 §2.16.2) ───────────────
+
+    /** Uso de una cuota: {usado, limite}; limite null = sin límite. Almacenamiento en MB. */
+    public record UsoCuota(Number usado, Integer limite) {
+    }
+
+    /** Cuota del plan que el uso actual ya supera (advertencia al asignar un plan). */
+    public record CuotaExcedida(TipoCuota cuota, Number usado, Integer limite) {
+    }
+
+    /** Lo usado por la distribuidora, por clave del contrato (usuarios, productos, …, almacenamientoMb en MB). */
+    @Transactional(readOnly = true)
+    public Map<String, Number> usados(UUID tenantId) {
+        Map<String, Number> usados = new LinkedHashMap<>();
+        for (TipoCuota tipo : TipoCuota.values()) {
+            usados.put(tipo.clave(), usadoParaRespuesta(tipo, contarUsado(tipo, tenantId)));
+        }
+        return usados;
+    }
+
+    /** {usado, limite} por clave del contrato, contra el plan dado (null = sin límites). */
+    @Transactional(readOnly = true)
+    public Map<String, UsoCuota> uso(UUID tenantId, PlanSuscripcion plan) {
+        Map<String, UsoCuota> uso = new LinkedHashMap<>();
+        for (TipoCuota tipo : TipoCuota.values()) {
+            uso.put(tipo.clave(), new UsoCuota(usadoParaRespuesta(tipo, contarUsado(tipo, tenantId)),
+                    plan == null ? null : plan.limite(tipo)));
+        }
+        return uso;
+    }
+
+    /** Cuotas del plan que el uso actual de la distribuidora ya supera (usado &gt; límite). */
+    @Transactional(readOnly = true)
+    public List<CuotaExcedida> excedidas(UUID tenantId, PlanSuscripcion plan) {
+        List<CuotaExcedida> excedidas = new ArrayList<>();
+        for (TipoCuota tipo : TipoCuota.values()) {
+            Integer limite = plan.limite(tipo);
+            if (limite == null) continue;
+            long usado = contarUsado(tipo, tenantId);
+            if (usado > enUnidades(tipo, limite)) {
+                excedidas.add(new CuotaExcedida(tipo, usadoParaRespuesta(tipo, usado), limite));
+            }
+        }
+        return excedidas;
     }
 
     // ──────────────────────────────────────────────────────────────────────

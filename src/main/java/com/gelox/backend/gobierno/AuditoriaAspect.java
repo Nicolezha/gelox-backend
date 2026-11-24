@@ -8,7 +8,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -17,8 +16,10 @@ import java.util.UUID;
  * (si falla no queda fila, CP-71-03). La fila se guarda en una transacción nueva con la IP,
  * el usuario autenticado, su rol y TenantContext, tomados antes de ejecutar el método.
  * <p>
- * entidad_id: el primer argumento UUID del método (editar(id, …)) o, si no hay, el id
- * del resultado (DTO con getId()/id(), también dentro de un ResponseEntity).
+ * detalle: lo que el método puso con {@link AuditoriaDetalle#poner(Object)} o, si no puso
+ * nada, {"metodo": "Clase.metodo"}.
+ * entidad_id: {@link AuditoriaDetalle#entidadId(UUID)}, el primer argumento UUID del método
+ * (editar(id, …)) o el id del resultado (DTO con getId()/id(), también dentro de un ResponseEntity).
  */
 @Aspect
 @Component
@@ -32,13 +33,24 @@ public class AuditoriaAspect {
         // Antes de ejecutar: el método puede limpiar el contexto (p. ej. cerrar sesión)
         AuditoriaService.Contexto contexto = AuditoriaService.contextoActual();
 
-        Object resultado = joinPoint.proceed();
+        Object resultado;
+        Object detalle;
+        UUID entidadIdFijado;
+        AuditoriaDetalle.limpiar();
+        try {
+            resultado = joinPoint.proceed();
+            detalle = AuditoriaDetalle.detalle();
+            entidadIdFijado = AuditoriaDetalle.entidadId();
+        } finally {
+            AuditoriaDetalle.limpiar();
+        }
 
-        Map<String, Object> detalle = new LinkedHashMap<>();
-        detalle.put("metodo", joinPoint.getSignature().getDeclaringType().getSimpleName()
-                + "." + joinPoint.getSignature().getName());
-        auditoriaService.registrar(auditable.accion(), auditable.entidad(),
-                entidadId(joinPoint.getArgs(), resultado), detalle, contexto);
+        if (detalle == null) {
+            detalle = Map.of("metodo", joinPoint.getSignature().getDeclaringType().getSimpleName()
+                    + "." + joinPoint.getSignature().getName());
+        }
+        UUID entidadId = entidadIdFijado != null ? entidadIdFijado : entidadId(joinPoint.getArgs(), resultado);
+        auditoriaService.registrar(auditable.accion(), auditable.entidad(), entidadId, detalle, contexto);
         return resultado;
     }
 

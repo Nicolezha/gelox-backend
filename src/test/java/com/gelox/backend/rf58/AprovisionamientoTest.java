@@ -66,21 +66,29 @@ class AprovisionamientoTest {
     @Mock
     com.gelox.backend.gobierno.PlanSuscripcionRepository planRepository;
 
+    @Mock
+    com.gelox.backend.gobierno.CuotaService cuotaService;
+
+    @Mock
+    com.gelox.backend.gobierno.AuditoriaRepository auditoriaRepository;
+
     @InjectMocks
     DistribuidoraService distribuidoraService;
+
+    private static final UUID PLAN_BASICO = UUID.randomUUID();
 
     /** RF70 — el plan BASICO del formulario existe en plan_suscripcion (V9). */
     @org.junit.jupiter.api.BeforeEach
     void planBasicoExiste() {
-        org.mockito.Mockito.lenient().when(planRepository.findByNombreIgnoreCase("BASICO"))
+        org.mockito.Mockito.lenient().when(planRepository.findById(PLAN_BASICO))
                 .thenReturn(java.util.Optional.of(com.gelox.backend.gobierno.PlanSuscripcion.builder()
-                        .id(UUID.randomUUID()).nombre("BASICO").build()));
+                        .id(PLAN_BASICO).nombre("BASICO").build()));
     }
 
     private CrearDistribuidoraRequest requestValido() {
         return new CrearDistribuidoraRequest(
                 "Helados Prueba S.A.S.", "900123456-7", "Helados Prueba", "helados-prueba",
-                "Ayde Prueba", "gerente@heladosprueba.com", "3001234567", "Calle 1 #2-3", "BASICO");
+                "Ayde Prueba", "gerente@heladosprueba.com", "3001234567", "Calle 1 #2-3", PLAN_BASICO);
     }
 
     private Distribuidora distribuidoraGuardada(UUID id) {

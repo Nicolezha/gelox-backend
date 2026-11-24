@@ -62,6 +62,15 @@ class CicloVidaDistribuidoraTest {
     @Mock
     DistribuidoraEstadoCache distribuidoraEstadoCache;
 
+    @Mock
+    com.gelox.backend.gobierno.PlanSuscripcionRepository planRepository;
+
+    @Mock
+    com.gelox.backend.gobierno.CuotaService cuotaService;
+
+    @Mock
+    com.gelox.backend.gobierno.AuditoriaRepository auditoriaRepository;
+
     @InjectMocks
     DistribuidoraService distribuidoraService;
 
