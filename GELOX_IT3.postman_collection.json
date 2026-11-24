@@ -2069,6 +2069,1587 @@
 					]
 				}
 			]
+		},
+		{
+			"name": "Proveedores y catálogo",
+			"description": "T188 — RF63 proveedores y RF64 catálogo multimarca (sku, marca, proveedor, categoría de tabla, unidades y factores de conversión). Corre en orden: la carpeta crea su proveedor, categoría y productos con un sufijo {{sufijoQA}} para poder repetirse. Requiere V10.\n\nVariables: {{token}} Gerente de Mágico Sabor, {{tokenGerenteB}} Gerente de la distribuidora B (otra distribuidora: 404), {{tokenVentas}} un ENCARGADO_VENTAS (403).\n\nAuditoría: PROVEEDOR_CREAR, PROVEEDOR_EDITAR y PROVEEDOR_ACTIVAR quedan en /api/plataforma/auditoria.",
+			"item": [
+				{
+					"name": "Proveedores (RF63)",
+					"item": [
+						{
+							"name": "01 - POST proveedor → 201 (PROVEEDOR_CREAR)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"QA Proveedor {{sufijoQA}}\",\n  \"nit\": \"QA-{{sufijoQA}}\",\n  \"contactoNombre\": \"Ana QA\",\n  \"telefono\": \"3001112233\",\n  \"correo\": \"qa@proveedor.test\",\n  \"tiempoEntregaDias\": 2,\n  \"diasHabiles\": true,\n  \"montoMinimoPedido\": 150000\n}"
+								},
+								"description": "Deja una fila PROVEEDOR_CREAR en auditoria con entidad_id = el id devuelto."
+							},
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (!pm.collectionVariables.get('sufijoQA')) pm.collectionVariables.set('sufijoQA', String(Date.now()).slice(-8));"
+										]
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('201 Created', () => pm.response.to.have.status(201));",
+											"const b = pm.response.json();",
+											"pm.test('devuelve id, nombre y valores', () => {",
+											"  pm.expect(b.id).to.be.a('string');",
+											"  pm.expect(b.nombre).to.eql('QA Proveedor ' + pm.collectionVariables.get('sufijoQA'));",
+											"  pm.expect(b.tiempoEntregaDias).to.eql(2);",
+											"  pm.expect(b.montoMinimoPedido).to.eql(150000);",
+											"  pm.expect(b.activo).to.eql(true);",
+											"});",
+											"pm.collectionVariables.set('proveedorId', b.id);",
+											"pm.collectionVariables.set('proveedorNombre', b.nombre);"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "02 - POST proveedor sin nombre → 400",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"  \",\n  \"tiempoEntregaDias\": 1\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+											"pm.test('dice que el nombre es obligatorio', () => pm.expect(pm.response.json().nombre).to.eql('El nombre es obligatorio'));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "03 - POST proveedor con tiempo de entrega negativo → 400",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"QA tiempo negativo\",\n  \"tiempoEntregaDias\": -1\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+											"pm.test('campo tiempoEntregaDias', () => pm.expect(pm.response.json()).to.have.property('tiempoEntregaDias'));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "04 - POST proveedor con monto mínimo negativo → 400",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"QA monto negativo\",\n  \"montoMinimoPedido\": -5\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+											"pm.test('campo montoMinimoPedido', () => pm.expect(pm.response.json()).to.have.property('montoMinimoPedido'));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "05 - POST proveedor con el mismo NIT → 409",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"QA NIT repetido\",\n  \"nit\": \"QA-{{sufijoQA}}\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "06 - GET proveedores?q= busca por nombre",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores?q=QA Proveedor {{sufijoQA}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores"
+									],
+									"query": [
+										{
+											"key": "q",
+											"value": "QA Proveedor {{sufijoQA}}"
+										}
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"const lista = pm.response.json();",
+											"pm.test('incluye el proveedor creado', () => pm.expect(lista.map(p => p.id)).to.include(pm.collectionVariables.get('proveedorId')));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "07 - GET proveedores/{id} → 200",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}"
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"pm.test('mismo id', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('proveedorId')));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "08 - PUT proveedores/{id} → 200 (PROVEEDOR_EDITAR)",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"QA Proveedor {{sufijoQA}}\",\n  \"nit\": \"QA-{{sufijoQA}}\",\n  \"tiempoEntregaDias\": 3,\n  \"montoMinimoPedido\": 200000\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"pm.test('monto actualizado', () => pm.expect(pm.response.json().montoMinimoPedido).to.eql(200000));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "09 - PATCH proveedores/{id}/activar?activo=false → inactiva (PROVEEDOR_ACTIVAR)",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/activar?activo=false",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"activar"
+									],
+									"query": [
+										{
+											"key": "activo",
+											"value": "false"
+										}
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"pm.test('activo = false', () => pm.expect(pm.response.json().activo).to.eql(false));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "10 - PATCH proveedores/{id}/activar → reactiva",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/activar",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"activar"
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"pm.test('activo = true', () => pm.expect(pm.response.json().activo).to.eql(true));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "11 - GET proveedor de otra distribuidora → 404",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tokenGerenteB}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}"
+									]
+								},
+								"description": "El Gerente de la distribuidora B no ve el proveedor de Mágico Sabor."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "12 - PUT proveedor de otra distribuidora → 404",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tokenGerenteB}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"Intento ajeno\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "13 - PATCH activar proveedor de otra distribuidora → 404",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tokenGerenteB}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/activar",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"activar"
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "14 - GET proveedores con ENCARGADO_VENTAS → 403",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tokenVentas}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores"
+									]
+								},
+								"description": "Solo ADMINISTRADOR y ENCARGADO_INVENTARIO."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+										]
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Categorías y unidades (RF64)",
+					"item": [
+						{
+							"name": "01 - GET categorias → las de la distribuidora",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/categorias",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"categorias"
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"const nombres = pm.response.json().map(c => c.nombre);",
+											"pm.test('trae las del enum anterior (V10)', () => pm.expect(nombres).to.include.members(['PALETAS', 'CONOS', 'FAMILIARES']));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "02 - POST categoria → 201",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/categorias",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"categorias"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"QA Bebidas {{sufijoQA}}\",\n  \"orden\": 9\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('201 Created', () => pm.response.to.have.status(201));",
+											"const b = pm.response.json();",
+											"pm.test('devuelve id y nombre', () => { pm.expect(b.id).to.be.a('string'); pm.expect(b.nombre).to.eql('QA Bebidas ' + pm.collectionVariables.get('sufijoQA')); });",
+											"pm.collectionVariables.set('categoriaId', b.id);"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "03 - POST categoria con nombre repetido → 409",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/categorias",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"categorias"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"QA Bebidas {{sufijoQA}}\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "04 - POST categoria sin nombre → 400",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/categorias",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"categorias"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "05 - GET unidades → UN y CJ",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/unidades",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"unidades"
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"const u = pm.response.json();",
+											"pm.test('trae UN y CJ', () => pm.expect(u.map(x => x.codigo)).to.include.members(['UN', 'CJ']));",
+											"pm.collectionVariables.set('unidadUnId', u.find(x => x.codigo === 'UN').id);",
+											"pm.collectionVariables.set('unidadCjId', u.find(x => x.codigo === 'CJ').id);",
+											"const bol = u.find(x => x.codigo === 'BOL');",
+											"if (bol) pm.collectionVariables.set('unidadBolId', bol.id);"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "06 - POST unidad BOL → 201 (o 409 si ya existe)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/unidades",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"unidades"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"codigo\": \"bol\",\n  \"nombre\": \"Bolsa\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('201 la crea o 409 ya estaba', () => pm.expect(pm.response.code).to.be.oneOf([201, 409]));",
+											"if (pm.response.code === 201) pm.collectionVariables.set('unidadBolId', pm.response.json().id);"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "07 - POST unidad sin código → 400",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/unidades",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"unidades"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"Sin código\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "08 - POST categoria con ENCARGADO_VENTAS → 403",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tokenVentas}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/categorias",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"categorias"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"nombre\": \"No permitida\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+										]
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Productos: sku, proveedor y factores (RF64)",
+					"item": [
+						{
+							"name": "01 - POST producto con sku, marca, proveedor, categoría y factores → 201",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/catalogo/productos",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"catalogo",
+										"productos"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"codigoTecnico\": \"QA-P1-{{sufijoQA}}\",\n  \"sku\": \"SKU-P1-{{sufijoQA}}\",\n  \"nombre\": \"QA Cono multimarca\",\n  \"marca\": \"Mágico Sabor\",\n  \"categoriaId\": \"{{categoriaId}}\",\n  \"proveedorId\": \"{{proveedorId}}\",\n  \"precioVenta\": 1000,\n  \"precioCosto\": 24000,\n  \"unidadesPorCaja\": 24,\n  \"unidadBaseId\": \"{{unidadUnId}}\",\n  \"factores\": [ { \"unidadOrigenId\": \"{{unidadBolId}}\", \"factor\": 6 } ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('201 Created', () => pm.response.to.have.status(201));",
+											"const p = pm.response.json();",
+											"pm.test('campos nuevos', () => {",
+											"  pm.expect(p.sku).to.eql('SKU-P1-' + pm.collectionVariables.get('sufijoQA'));",
+											"  pm.expect(p.marca).to.eql('Mágico Sabor');",
+											"  pm.expect(p.proveedorId).to.eql(pm.collectionVariables.get('proveedorId'));",
+											"  pm.expect(p.categoriaId).to.eql(pm.collectionVariables.get('categoriaId'));",
+											"  pm.expect(p.unidadBaseCodigo).to.eql('UN');",
+											"});",
+											"pm.test('factor 1 BOL = 6 UN', () => {",
+											"  pm.expect(p.factores).to.have.length(1);",
+											"  pm.expect(p.factores[0].unidadOrigenCodigo).to.eql('BOL');",
+											"  pm.expect(p.factores[0].factor).to.eql(6);",
+											"});",
+											"pm.collectionVariables.set('productoQAId', p.id);",
+											"pm.collectionVariables.set('skuProductoQA', p.sku);"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "02 - POST producto con sku repetido → 409",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/catalogo/productos",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"catalogo",
+										"productos"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"codigoTecnico\": \"QA-P2-{{sufijoQA}}\",\n  \"sku\": \"{{skuProductoQA}}\",\n  \"nombre\": \"QA sku repetido\",\n  \"categoriaId\": \"{{categoriaId}}\",\n  \"precioVenta\": 1000,\n  \"precioCosto\": 600\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "03 - POST producto con proveedor de otra distribuidora → 404",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tokenGerenteB}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/catalogo/productos",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"catalogo",
+										"productos"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"codigoTecnico\": \"QA-AJENO-{{sufijoQA}}\",\n  \"nombre\": \"QA proveedor ajeno\",\n  \"categoria\": \"PALETAS\",\n  \"proveedorId\": \"{{proveedorId}}\",\n  \"precioVenta\": 1000,\n  \"precioCosto\": 600\n}"
+								},
+								"description": "El Gerente de B usa el proveedor de Mágico Sabor."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "04 - PATCH inactivar el proveedor",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/activar?activo=false",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"activar"
+									],
+									"query": [
+										{
+											"key": "activo",
+											"value": "false"
+										}
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"pm.test('inactivo', () => pm.expect(pm.response.json().activo).to.eql(false));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "05 - POST producto con proveedor inactivo → 400",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/catalogo/productos",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"catalogo",
+										"productos"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"codigoTecnico\": \"QA-INACT-{{sufijoQA}}\",\n  \"nombre\": \"QA proveedor inactivo\",\n  \"categoriaId\": \"{{categoriaId}}\",\n  \"proveedorId\": \"{{proveedorId}}\",\n  \"precioVenta\": 1000,\n  \"precioCosto\": 600\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "06 - PATCH reactivar el proveedor",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/activar",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"activar"
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"pm.test('activo', () => pm.expect(pm.response.json().activo).to.eql(true));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "07 - POST producto con un factor para CJ → 400",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/catalogo/productos",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"catalogo",
+										"productos"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"codigoTecnico\": \"QA-CJ-{{sufijoQA}}\",\n  \"nombre\": \"QA factor CJ\",\n  \"categoriaId\": \"{{categoriaId}}\",\n  \"precioVenta\": 1000,\n  \"precioCosto\": 600,\n  \"factores\": [ { \"unidadOrigenId\": \"{{unidadCjId}}\", \"factor\": 24 } ]\n}"
+								},
+								"description": "CJ → UN sale de unidadesPorCaja, no de factor_conversion."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "08 - GET catalogo/productos?categoriaId= → lista con el sku",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/catalogo/productos?categoriaId={{categoriaId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"catalogo",
+										"productos"
+									],
+									"query": [
+										{
+											"key": "categoriaId",
+											"value": "{{categoriaId}}"
+										}
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"const items = pm.response.json().content || pm.response.json();",
+											"const p = items.find(x => x.id === pm.collectionVariables.get('productoQAId'));",
+											"pm.test('aparece el producto con sku, marca y factores', () => {",
+											"  pm.expect(p).to.be.an('object');",
+											"  pm.expect(p.sku).to.eql(pm.collectionVariables.get('skuProductoQA'));",
+											"  pm.expect(p.factores).to.have.length(1);",
+											"});"
+										]
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Factor de conversión en el inventario (RF64)",
+					"item": [
+						{
+							"name": "01 - POST entrada de 2 cajas × 24 → stock 48",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/inventario/entradas",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"inventario",
+										"entradas"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"items\": [\n    { \"productoId\": \"{{productoQAId}}\", \"cantidadCajas\": 2, \"cantidadUnidades\": 0 }\n  ]\n}"
+								},
+								"description": "Usa el producto QA del paso anterior (stock inicial 0)."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"const s = pm.response.json().stockActualizado.find(x => x.productoId === pm.collectionVariables.get('productoQAId'));",
+											"pm.test('stock 48 (CJ → UN con unidades_por_caja)', () => pm.expect(s.nuevoStock).to.eql(48));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "02 - POST venta de 30 unidades → stock 18",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/ventas/confirmar",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"ventas",
+										"confirmar"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"canal\": \"VENTANILLA\",\n  \"metodoPago\": \"EFECTIVO\",\n  \"items\": [\n    { \"productoId\": \"{{productoQAId}}\", \"cajas\": 0, \"unidades\": 30 }\n  ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"pm.test('total $30.000', () => pm.expect(Number(pm.response.json().total)).to.eql(30000));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "03 - GET catalogo → el stock quedó en 18",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/catalogo/productos?categoriaId={{categoriaId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"catalogo",
+										"productos"
+									],
+									"query": [
+										{
+											"key": "categoriaId",
+											"value": "{{categoriaId}}"
+										}
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"const items = pm.response.json().content || pm.response.json();",
+											"const p = items.find(x => x.id === pm.collectionVariables.get('productoQAId'));",
+											"pm.test('stock 18 = 2×24 − 30', () => pm.expect(p.stockActual).to.eql(18));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "04 - POST entrada de 3 BOL (1 BOL = 6 UN) → stock 36",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/inventario/entradas",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"inventario",
+										"entradas"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"items\": [\n    { \"productoId\": \"{{productoQAId}}\", \"cantidadCajas\": 0, \"cantidadUnidades\": 0,\n      \"unidad\": \"BOL\", \"cantidadUnidad\": 3 }\n  ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"const s = pm.response.json().stockActualizado.find(x => x.productoId === pm.collectionVariables.get('productoQAId'));",
+											"pm.test('18 + 3×6 = 36 (factor_conversion)', () => pm.expect(s.nuevoStock).to.eql(36));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "05 - POST venta de 2 BOL → descuenta 12 (stock 24)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/ventas/confirmar",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"ventas",
+										"confirmar"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"canal\": \"VENTANILLA\",\n  \"metodoPago\": \"EFECTIVO\",\n  \"items\": [\n    { \"productoId\": \"{{productoQAId}}\", \"cajas\": 0, \"unidades\": 0, \"unidad\": \"BOL\", \"cantidadUnidad\": 2 }\n  ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"pm.test('total $12.000', () => pm.expect(Number(pm.response.json().total)).to.eql(12000));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "06 - POST entrada en una unidad sin factor → 400",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/inventario/entradas",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"inventario",
+										"entradas"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"items\": [\n    { \"productoId\": \"{{productoQAId}}\", \"cantidadCajas\": 0, \"cantidadUnidades\": 0,\n      \"unidad\": \"KG\", \"cantidadUnidad\": 1 }\n  ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "07 - PUT producto: factores nuevos reemplazan a los anteriores",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/catalogo/productos/{{productoQAId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"catalogo",
+										"productos",
+										"{{productoQAId}}"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"factores\": [ { \"unidadOrigenId\": \"{{unidadBolId}}\", \"factor\": 12 } ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200 OK', () => pm.response.to.have.status(200));",
+											"const p = pm.response.json();",
+											"pm.test('un solo factor, ahora 1 BOL = 12 UN', () => {",
+											"  pm.expect(p.factores).to.have.length(1);",
+											"  pm.expect(p.factores[0].factor).to.eql(12);",
+											"});"
+										]
+									}
+								}
+							]
+						}
+					]
+				}
+			]
 		}
 	],
 	"variable": [
@@ -2150,6 +3731,66 @@
 			"value": "",
 			"type": "string",
 			"description": "Lo llena Asignar plan/01"
+		},
+		{
+			"key": "tokenVentas",
+			"value": "",
+			"type": "string",
+			"description": "ID Token de un ENCARGADO_VENTAS de Mágico Sabor (debe responder 403 en proveedores)"
+		},
+		{
+			"key": "sufijoQA",
+			"value": "",
+			"type": "string",
+			"description": "Lo llena el pre-request de Proveedores/01 (evita choques al repetir la carpeta)"
+		},
+		{
+			"key": "proveedorId",
+			"value": "",
+			"type": "string",
+			"description": "Lo llena Proveedores/01"
+		},
+		{
+			"key": "proveedorNombre",
+			"value": "",
+			"type": "string",
+			"description": "Lo llena Proveedores/01"
+		},
+		{
+			"key": "categoriaId",
+			"value": "",
+			"type": "string",
+			"description": "Lo llena Categorías y unidades/02"
+		},
+		{
+			"key": "unidadUnId",
+			"value": "",
+			"type": "string",
+			"description": "Lo llena Categorías y unidades/05"
+		},
+		{
+			"key": "unidadBolId",
+			"value": "",
+			"type": "string",
+			"description": "Lo llena Categorías y unidades/05 o /06"
+		},
+		{
+			"key": "unidadCjId",
+			"value": "",
+			"type": "string",
+			"description": "Lo llena Categorías y unidades/05"
+		},
+		{
+			"key": "productoQAId",
+			"value": "",
+			"type": "string",
+			"description": "Lo llena Productos/01"
+		},
+		{
+			"key": "skuProductoQA",
+			"value": "",
+			"type": "string",
+			"description": "Lo llena Productos/01"
 		}
 	]
 }

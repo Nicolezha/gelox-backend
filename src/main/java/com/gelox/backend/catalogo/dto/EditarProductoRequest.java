@@ -15,7 +15,7 @@ public class EditarProductoRequest {
 
     private String nombre;
 
-    private String categoria;   // PALETAS | CONOS | FAMILIARES
+    private String categoria;   // nombre de una categoría de la tabla (alternativa a categoriaId)
 
     @DecimalMin(value = "0", inclusive = false, message = "El precio de venta debe ser mayor a 0")
     private BigDecimal precioVenta;
@@ -38,6 +38,21 @@ public class EditarProductoRequest {
     private Integer unidadesPorCaja;
 
     private java.math.BigDecimal precioComerciente;
+
+
+    // RF63/RF64
+    private String sku;
+
+    private String marca;
+
+    private java.util.UUID proveedorId;
+
+    private java.util.UUID categoriaId;
+
+    private java.util.UUID unidadBaseId;
+
+    @jakarta.validation.Valid
+    private java.util.List<FactorConversionRequest> factores;
 
     // Getters y Setters
 
@@ -76,4 +91,22 @@ public class EditarProductoRequest {
 
     public java.math.BigDecimal getPrecioComerciente() { return precioComerciente; }
     public void setPrecioComerciente(java.math.BigDecimal precioComerciente) { this.precioComerciente = precioComerciente; }
+
+    public String getSku() { return sku; }
+    public void setSku(String sku) { this.sku = sku; }
+
+    public String getMarca() { return marca; }
+    public void setMarca(String marca) { this.marca = marca; }
+
+    public java.util.UUID getProveedorId() { return proveedorId; }
+    public void setProveedorId(java.util.UUID proveedorId) { this.proveedorId = proveedorId; }
+
+    public java.util.UUID getCategoriaId() { return categoriaId; }
+    public void setCategoriaId(java.util.UUID categoriaId) { this.categoriaId = categoriaId; }
+
+    public java.util.UUID getUnidadBaseId() { return unidadBaseId; }
+    public void setUnidadBaseId(java.util.UUID unidadBaseId) { this.unidadBaseId = unidadBaseId; }
+
+    public java.util.List<FactorConversionRequest> getFactores() { return factores; }
+    public void setFactores(java.util.List<FactorConversionRequest> factores) { this.factores = factores; }
 }

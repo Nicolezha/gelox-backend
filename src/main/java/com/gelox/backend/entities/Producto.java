@@ -48,8 +48,32 @@ public class Producto implements TenantAware {
     @Column(columnDefinition = "TEXT")
     private String descripcion;
 
-    @Enumerated(EnumType.STRING)
-    private CategoriaProducto categoria;
+    /** RF64 — categoría de la tabla categoria (categoria_id NOT NULL desde V10). */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "categoria_id")
+    private Categoria categoria;
+
+    /**
+     * Columna de texto heredada (producto.categoria): V10 la conserva y se sigue escribiendo
+     * con el nombre de la categoría para no romper lecturas antiguas.
+     */
+    @Column(name = "categoria", length = 80)
+    private String categoriaTexto;
+
+    @Column(length = 40)
+    private String sku;
+
+    @Column(length = 80)
+    private String marca;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "proveedor_id")
+    private Proveedor proveedor;
+
+    /** Unidad en la que se lleva el stock (UN por defecto). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "unidad_base_id")
+    private UnidadMedida unidadBase;
 
     @Column(nullable = false)
     private Boolean activo = true;
@@ -71,12 +95,14 @@ public class Producto implements TenantAware {
 
     @PrePersist
     public void prePersist() {
+        sincronizarCategoriaTexto();
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
     }
 
     @PreUpdate
     public void preUpdate() {
+        sincronizarCategoriaTexto();
         updatedAt = LocalDateTime.now();
     }
 
@@ -116,8 +142,27 @@ public class Producto implements TenantAware {
     public String getDescripcion() { return descripcion; }
     public void setDescripcion(String descripcion) { this.descripcion = descripcion; }
 
-    public CategoriaProducto getCategoria() { return categoria; }
-    public void setCategoria(CategoriaProducto categoria) { this.categoria = categoria; }
+    public Categoria getCategoria() { return categoria; }
+    public void setCategoria(Categoria categoria) {
+        this.categoria = categoria;
+        sincronizarCategoriaTexto();
+    }
+
+    private void sincronizarCategoriaTexto() {
+        if (categoria != null) categoriaTexto = categoria.getNombre();
+    }
+
+    public String getSku() { return sku; }
+    public void setSku(String sku) { this.sku = sku; }
+
+    public String getMarca() { return marca; }
+    public void setMarca(String marca) { this.marca = marca; }
+
+    public Proveedor getProveedor() { return proveedor; }
+    public void setProveedor(Proveedor proveedor) { this.proveedor = proveedor; }
+
+    public UnidadMedida getUnidadBase() { return unidadBase; }
+    public void setUnidadBase(UnidadMedida unidadBase) { this.unidadBase = unidadBase; }
 
     public Boolean getActivo() { return activo; }
     public void setActivo(Boolean activo) { this.activo = activo; }

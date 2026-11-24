@@ -71,7 +71,7 @@ class PedidoProveedorModificarTest {
     @BeforeEach
     void setUp() {
         service = new PedidoProveedorService(pedidoRepo, null, productoRepo, null, null, eventoService,
-                mock(IdentidadDistribuidoraService.class));
+                mock(IdentidadDistribuidoraService.class), null);
         ReflectionTestUtils.setField(service, "plantillaExcel", new ClassPathResource("templates/catalogo.xlsx"));
 
         usuario = TestHelper.buildUsuario("uid-1", "voz@gelox-test.com", RolUsuario.ADMINISTRADOR, true);

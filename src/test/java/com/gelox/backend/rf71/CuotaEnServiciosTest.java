@@ -17,7 +17,12 @@ import com.gelox.backend.gobierno.ArchivoAlmacenadoRepository;
 import com.gelox.backend.gobierno.CuotaAlcanzadaException;
 import com.gelox.backend.gobierno.CuotaService;
 import com.gelox.backend.gobierno.TipoCuota;
+import com.gelox.backend.entities.Categoria;
+import com.gelox.backend.repositories.CategoriaRepository;
 import com.gelox.backend.repositories.ComercianteRepository;
+import com.gelox.backend.repositories.FactorConversionRepository;
+import com.gelox.backend.repositories.ProveedorRepository;
+import com.gelox.backend.repositories.UnidadMedidaRepository;
 import com.gelox.backend.repositories.ItemPlanillaRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
 import com.gelox.backend.repositories.UsuarioRepository;
@@ -80,6 +85,10 @@ class CuotaEnServiciosTest {
     @Mock ItemPlanillaRepository itemPlanillaRepository;
     @Mock ArchivoAlmacenadoRepository archivoRepository;
     @Mock CuotaService cuotaService;
+    @Mock CategoriaRepository categoriaRepository;
+    @Mock ProveedorRepository proveedorRepository;
+    @Mock UnidadMedidaRepository unidadMedidaRepository;
+    @Mock FactorConversionRepository factorConversionRepository;
 
     private Usuario gerente;
 
@@ -123,7 +132,11 @@ class CuotaEnServiciosTest {
     @DisplayName("CP-64-09: producto n.º 6 con plan de máx. 5 → 409 y no se guarda")
     void crearProductoBloqueado() {
         cuotaAlcanzada(TipoCuota.PRODUCTOS, 5);
-        CatalogoService catalogoService = new CatalogoService(catalogoRepository, cuotaService);
+        CatalogoService catalogoService = new CatalogoService(catalogoRepository, cuotaService,
+                proveedorRepository, categoriaRepository, unidadMedidaRepository, factorConversionRepository);
+        Categoria paletas = new Categoria();
+        paletas.setNombre("PALETAS");
+        when(categoriaRepository.findByNombreIgnoreCase("PALETAS")).thenReturn(Optional.of(paletas));
 
         CrearProductoRequest req = new CrearProductoRequest();
         req.setCodigoTecnico("P-006");

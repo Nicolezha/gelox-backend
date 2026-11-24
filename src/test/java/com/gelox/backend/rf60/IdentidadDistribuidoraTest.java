@@ -274,7 +274,7 @@ class IdentidadDistribuidoraTest {
     void excelPedido_llevaNombreComercial() throws Exception {
         PedidoProveedorRepository pedidoRepo = mock(PedidoProveedorRepository.class);
         PedidoProveedorService pedidoService = new PedidoProveedorService(
-                pedidoRepo, null, null, null, null, null, service);
+                pedidoRepo, null, null, null, null, null, service, null);
         ReflectionTestUtils.setField(pedidoService, "plantillaExcel", new ClassPathResource("templates/catalogo.xlsx"));
         PedidoProveedor pedido = PedidoProveedor.builder()
                 .id(UUID.randomUUID()).fecha(LocalDate.now()).estado(EstadoPedido.PENDIENTE).build();

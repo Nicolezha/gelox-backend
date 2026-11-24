@@ -29,7 +29,7 @@ public record ItemPlanillaDetalleDTO(
                 prod.getId(),
                 prod.getNombre(),
                 prod.getCodigoTecnico(),
-                prod.getCategoria() != null ? prod.getCategoria().name() : null,
+                prod.getCategoria() != null ? prod.getCategoria().getNombre() : null,
                 prod.getImagenUrl(),
                 item.getUnidadesDespachadas(),
                 item.getUnidadesDevueltas(),

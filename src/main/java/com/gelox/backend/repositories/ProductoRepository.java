@@ -1,6 +1,5 @@
 package com.gelox.backend.repositories;
 
-import com.gelox.backend.entities.CategoriaProducto;
 import com.gelox.backend.entities.Producto;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,7 +17,8 @@ public interface ProductoRepository extends JpaRepository<Producto, UUID> {
 
     List<Producto> findByActivoTrueOrderByNombreAsc();
 
-    List<Producto> findByActivoTrueAndCategoria(CategoriaProducto categoria);
+    /** RF64 — productos activos de la categoría de tabla con ese nombre (sin distinguir mayúsculas). */
+    List<Producto> findByActivoTrueAndCategoriaNombreIgnoreCase(String nombreCategoria);
 
     boolean existsByCodigoTecnico(String codigoTecnico);
 
