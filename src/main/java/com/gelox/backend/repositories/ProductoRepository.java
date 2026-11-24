@@ -15,6 +15,9 @@ public interface ProductoRepository extends JpaRepository<Producto, UUID> {
 
     List<Producto> findByActivoTrue();
 
+    /** RF67 — productos activos de un proveedor, para su tabla de homologación. */
+    List<Producto> findByProveedorIdAndActivoTrueOrderByNombreAsc(UUID proveedorId);
+
     List<Producto> findByActivoTrueOrderByNombreAsc();
 
     /** RF64 — productos activos de la categoría de tabla con ese nombre (sin distinguir mayúsculas). */

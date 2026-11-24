@@ -16,6 +16,9 @@ public interface PedidoProveedorRepository extends JpaRepository<PedidoProveedor
 
     List<PedidoProveedor> findAllByOrderByFechaDesc();
 
+    /** RF56 — pedidos generados desde una misma recomendación (comparten la nota, uno por proveedor). */
+    List<PedidoProveedor> findByNotas(String notas);
+
     /**
      * Resumen para el historial de pedidos (RF21 — GET /pedidos).
      * Devuelve: [id::text, fecha, estado::text, notas, totalSolicitado::int]
@@ -50,6 +53,7 @@ public interface PedidoProveedorRepository extends JpaRepository<PedidoProveedor
      */
     @Query("""
             SELECT p FROM PedidoProveedor p
+            LEFT JOIN FETCH p.proveedor
             LEFT JOIN FETCH p.items i
             LEFT JOIN FETCH i.producto
             WHERE p.id = :id

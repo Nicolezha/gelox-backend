@@ -3650,6 +3650,832 @@
 					]
 				}
 			]
+		},
+		{
+			"name": "Exportación",
+			"description": "T190 — RF67 plantillas de exportación y homologación por proveedor (paquete exportacion) y RF68 reportes financieros en Excel y PDF. Requiere {{proveedorId}} y {{productoQAId}} de la carpeta «Proveedores y catálogo» y los tokens de la colección.",
+			"item": [
+				{
+					"name": "Plantillas y homologación (RF67)",
+					"item": [
+						{
+							"name": "01 - GET plantilla de un proveedor sin plantilla → 200 (estándar de Nutresa)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/plantilla",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"plantilla"
+									]
+								},
+								"description": "Si el proveedor aún no guardó la suya, personalizada=false y se devuelve la estándar de Nutresa (RELLENAR_CATALOGO, fila 4). Usa {{proveedorId}} de la carpeta Proveedores (RF63)."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200', () => pm.response.to.have.status(200));",
+											"const b = pm.response.json();",
+											"pm.test('trae modo, columnas y homologaciones', () => {",
+											"  pm.expect(b.modo).to.be.oneOf(['RELLENAR_CATALOGO','GENERAR_FILAS']);",
+											"  pm.expect(b.columnas).to.be.an('array');",
+											"  pm.expect(b.homologaciones).to.be.an('array');",
+											"});"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "02 - PUT plantilla GENERAR_FILAS → 200 (PLANTILLA_EXPORTACION_CAMBIAR)",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/plantilla",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"plantilla"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"modo\": \"GENERAR_FILAS\",\n  \"columnas\": [\n    {\n      \"campo\": \"CODIGO_PROVEEDOR\",\n      \"encabezado\": \"Código\"\n    },\n    {\n      \"campo\": \"NOMBRE_PRODUCTO\",\n      \"encabezado\": \"Producto\"\n    },\n    {\n      \"campo\": \"CANTIDAD_CAJAS\",\n      \"encabezado\": \"Cajas\"\n    },\n    {\n      \"campo\": \"PRECIO_UNITARIO\",\n      \"encabezado\": \"Precio\"\n    },\n    {\n      \"campo\": \"TEXTO_FIJO\",\n      \"encabezado\": \"Cliente\",\n      \"valorFijo\": \"CLI-QA\"\n    }\n  ]\n}"
+								},
+								"description": "Deja una fila PLANTILLA_EXPORTACION_CAMBIAR en auditoria con entidad_id = el proveedor."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200', () => pm.response.to.have.status(200));",
+											"const b = pm.response.json();",
+											"pm.test('queda personalizada con las columnas numeradas', () => {",
+											"  pm.expect(b.personalizada).to.eql(true);",
+											"  pm.expect(b.modo).to.eql('GENERAR_FILAS');",
+											"  pm.expect(b.columnas.map(c => c.orden)).to.eql([1,2,3,4,5]);",
+											"});"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "03 - PUT plantilla sin columnas → 400",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/plantilla",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"plantilla"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"modo\": \"GENERAR_FILAS\",\n  \"columnas\": []\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "04 - PUT plantilla con un campo desconocido → 400",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/plantilla",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"plantilla"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"modo\": \"GENERAR_FILAS\",\n  \"columnas\": [\n    {\n      \"campo\": \"NO_EXISTE\",\n      \"encabezado\": \"X\"\n    }\n  ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "05 - PUT plantilla con texto fijo sin valor → 400",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/plantilla",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"plantilla"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"modo\": \"GENERAR_FILAS\",\n  \"columnas\": [\n    {\n      \"campo\": \"TEXTO_FIJO\",\n      \"encabezado\": \"Cliente\"\n    }\n  ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "06 - PUT plantilla RELLENAR_CATALOGO → 200",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/plantilla",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"plantilla"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"modo\": \"RELLENAR_CATALOGO\",\n  \"filaEncabezado\": 4,\n  \"encabezadoCodigo\": \"Producto/SKU\",\n  \"encabezadoCantidad\": \"Cantidad\",\n  \"encabezadoUnidad\": \"Unidad de Medida\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200', () => pm.response.to.have.status(200));",
+											"pm.test('sin columnas en este modo', () => pm.expect(pm.response.json().columnas).to.have.length(0));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "07 - POST vista previa (no guarda) → 200",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/plantilla/vista-previa",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"plantilla",
+										"vista-previa"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"modo\": \"GENERAR_FILAS\",\n  \"columnas\": [\n    {\n      \"campo\": \"CODIGO_PROVEEDOR\",\n      \"encabezado\": \"Código\"\n    },\n    {\n      \"campo\": \"NOMBRE_PRODUCTO\",\n      \"encabezado\": \"Producto\"\n    },\n    {\n      \"campo\": \"CANTIDAD_CAJAS\",\n      \"encabezado\": \"Cajas\"\n    },\n    {\n      \"campo\": \"PRECIO_UNITARIO\",\n      \"encabezado\": \"Precio\"\n    },\n    {\n      \"campo\": \"TEXTO_FIJO\",\n      \"encabezado\": \"Cliente\",\n      \"valorFijo\": \"CLI-QA\"\n    }\n  ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200', () => pm.response.to.have.status(200));",
+											"const b = pm.response.json();",
+											"pm.test('encabezados en el orden configurado', () => pm.expect(b.encabezados).to.eql(['Código','Producto','Cajas','Precio','Cliente']));",
+											"pm.test('trae filas y la lista de productos sin código', () => {",
+											"  pm.expect(b.filas).to.be.an('array');",
+											"  pm.expect(b.productosSinCodigo).to.be.an('array');",
+											"});"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "08 - PUT homologaciones: asigna un código → 200",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/homologaciones",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"homologaciones"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"homologaciones\": [\n    {\n      \"productoId\": \"{{productoQAId}}\",\n      \"codigo\": \"QA-COD-{{sufijoQA}}\"\n    }\n  ]\n}"
+								},
+								"description": "Requiere que {{productoQAId}} sea un producto de {{proveedorId}} (carpeta Catálogo)."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200', () => pm.response.to.have.status(200));",
+											"pm.test('el producto queda homologado', () => {",
+											"  const h = pm.response.json().homologaciones.find(x => x.productoId === pm.collectionVariables.get('productoQAId'));",
+											"  pm.expect(h.codigo).to.eql('QA-COD-' + pm.collectionVariables.get('sufijoQA'));",
+											"});"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "09 - PUT homologaciones con un código repetido → 409",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/homologaciones",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"homologaciones"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"homologaciones\": [\n    {\n      \"productoId\": \"{{productoQAId}}\",\n      \"codigo\": \"DUP-1\"\n    },\n    {\n      \"productoId\": \"00000000-0000-0000-0000-000000000001\",\n      \"codigo\": \"dup-1\"\n    }\n  ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('409', () => pm.response.to.have.status(409));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "10 - PUT homologaciones con código vacío → 200 (quita el código)",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/homologaciones",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"homologaciones"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"homologaciones\": [\n    {\n      \"productoId\": \"{{productoQAId}}\",\n      \"codigo\": \"\"\n    }\n  ]\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200', () => pm.response.to.have.status(200));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "11 - GET plantilla de un proveedor inexistente → 404",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/00000000-0000-0000-0000-00000000dead/plantilla",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"00000000-0000-0000-0000-00000000dead",
+										"plantilla"
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('404', () => pm.response.to.have.status(404));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "12 - GET plantilla con el token de otra distribuidora → 404",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tokenGerenteB}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/proveedores/{{proveedorId}}/plantilla",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"proveedores",
+										"{{proveedorId}}",
+										"plantilla"
+									]
+								},
+								"description": "Un proveedor de otra distribuidora responde 404, no 403."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('404', () => pm.response.to.have.status(404));"
+										]
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Reportes exportables (RF68)",
+					"item": [
+						{
+							"name": "13 - GET reporte financiero en Excel → 200",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/reportes/financiero/excel?tipo=MES&secciones=RESUMEN,INVERSION_INGRESOS,RENTABILIDAD_CANAL,TOP5_COMERCIANTES",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"reportes",
+										"financiero",
+										"excel"
+									],
+									"query": [
+										{
+											"key": "tipo",
+											"value": "MES"
+										},
+										{
+											"key": "secciones",
+											"value": "RESUMEN,INVERSION_INGRESOS,RENTABILIDAD_CANAL,TOP5_COMERCIANTES"
+										}
+									]
+								},
+								"description": "RF68. Solo ADMINISTRADOR. tipo DIA, SEMANA, MES, ANIO o RANGO (RANGO pide fechaInicio y fechaFin)."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200', () => pm.response.to.have.status(200));",
+											"pm.test('es un .xlsx con nombre reporte-financiero-{subdominio}-{desde}-{hasta}', () => {",
+											"  pm.expect(pm.response.headers.get('Content-Type')).to.include('spreadsheetml');",
+											"  pm.expect(pm.response.headers.get('Content-Disposition')).to.match(/reporte-financiero-[a-z0-9-]+-\\d{4}-\\d{2}-\\d{2}-\\d{4}-\\d{2}-\\d{2}\\.xlsx/);",
+											"});"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "14 - GET reporte financiero en PDF → 200",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/reportes/financiero/pdf?tipo=RANGO&fechaInicio=2026-11-01&fechaFin=2026-11-24&secciones=RESUMEN,RENTABILIDAD_CANAL",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"reportes",
+										"financiero",
+										"pdf"
+									],
+									"query": [
+										{
+											"key": "tipo",
+											"value": "RANGO"
+										},
+										{
+											"key": "fechaInicio",
+											"value": "2026-11-01"
+										},
+										{
+											"key": "fechaFin",
+											"value": "2026-11-24"
+										},
+										{
+											"key": "secciones",
+											"value": "RESUMEN,RENTABILIDAD_CANAL"
+										}
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('200', () => pm.response.to.have.status(200));",
+											"pm.test('es un PDF', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf'));",
+											"pm.test('nombre con el rango pedido', () => pm.expect(pm.response.headers.get('Content-Disposition')).to.include('-2026-11-01-2026-11-24.pdf'));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "15 - GET reporte sin secciones → 400",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/reportes/financiero/excel?tipo=MES",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"reportes",
+										"financiero",
+										"excel"
+									],
+									"query": [
+										{
+											"key": "tipo",
+											"value": "MES"
+										}
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "16 - GET reporte con una sección desconocida → 400",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/reportes/financiero/pdf?tipo=MES&secciones=NO_EXISTE",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"reportes",
+										"financiero",
+										"pdf"
+									],
+									"query": [
+										{
+											"key": "tipo",
+											"value": "MES"
+										},
+										{
+											"key": "secciones",
+											"value": "NO_EXISTE"
+										}
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "17 - GET reporte con inicio posterior al fin → 400",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/reportes/financiero/excel?tipo=RANGO&fechaInicio=2026-11-24&fechaFin=2026-11-01&secciones=RESUMEN",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"reportes",
+										"financiero",
+										"excel"
+									],
+									"query": [
+										{
+											"key": "tipo",
+											"value": "RANGO"
+										},
+										{
+											"key": "fechaInicio",
+											"value": "2026-11-24"
+										},
+										{
+											"key": "fechaFin",
+											"value": "2026-11-01"
+										},
+										{
+											"key": "secciones",
+											"value": "RESUMEN"
+										}
+									]
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('400', () => pm.response.to.have.status(400));"
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "18 - GET reporte con el token del Encargado de Ventas → 403",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{tokenVentas}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/reportes/financiero/excel?tipo=MES&secciones=RESUMEN",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"reportes",
+										"financiero",
+										"excel"
+									],
+									"query": [
+										{
+											"key": "tipo",
+											"value": "MES"
+										},
+										{
+											"key": "secciones",
+											"value": "RESUMEN"
+										}
+									]
+								},
+								"description": "Solo el Gerente (ADMINISTRADOR) exporta."
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('403', () => pm.response.to.have.status(403));"
+										]
+									}
+								}
+							]
+						}
+					]
+				}
+			]
 		}
 	],
 	"variable": [

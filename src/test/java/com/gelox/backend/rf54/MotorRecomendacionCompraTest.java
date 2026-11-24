@@ -2,6 +2,7 @@ package com.gelox.backend.rf54;
 
 import com.gelox.backend.entities.AjustePresupuesto;
 import com.gelox.backend.entities.Producto;
+import com.gelox.backend.entities.Proveedor;
 import com.gelox.backend.entities.UrgenciaRecomendacion;
 import com.gelox.backend.recomendacion.DemandaRepository.DemandaDia;
 import com.gelox.backend.recomendacion.MotorRecomendacionCompra;
@@ -359,5 +360,136 @@ class MotorRecomendacionCompraTest {
                 .extracting(MotorRecomendacionCompra.ProductoExcluido::motivo)
                 .containsExactly("Sin precio de costo", "Sin precio de costo", "Sin unidades por caja",
                         "Producto inactivo");
+    }
+
+    // ── RF63 — Tiempo de entrega por proveedor (T194) ───────────────
+
+    static Proveedor proveedor(String nombre, int dias, boolean habiles) {
+        Proveedor p = new Proveedor();
+        p.setId(UUID.randomUUID());
+        p.setNombre(nombre);
+        p.setTiempoEntregaDias(dias);
+        p.setDiasHabiles(habiles);
+        return p;
+    }
+
+    /** Nutresa entrega en 1 día hábil (FP-15 D6). */
+    static Proveedor nutresa() {
+        return proveedor("Nutresa", 1, true);
+    }
+
+    static List<DemandaDia> diezDiarias(Producto p, LocalDate hoy) {
+        List<DemandaDia> ventas = new ArrayList<>();
+        for (int i = 0; i < 90; i++) ventas.add(new DemandaDia(p.getId(), hoy.minusDays(i), 10));
+        return ventas;
+    }
+
+    @Test
+    @DisplayName("Ejemplo 2.10.6 con Nutresa: el 17/10/2026 es sábado, 1 día hábil = 2 días (lunes) y da lo mismo que L = 2")
+    void ejemploResueltoConNutresa() {
+        mango.setProveedor(nutresa());
+
+        ItemCalculado i = item(motor.calcular(List.of(mango), ventasMango(mango), bd("1000000"), HOY), mango);
+
+        assertThat(i.stockSeguridad()).isEqualByComparingTo("20.00");
+        assertThat(i.puntoReorden()).isEqualByComparingTo("20.20");
+        assertThat(i.urgencia()).isEqualTo(UrgenciaRecomendacion.CRITICO);
+        assertThat(i.cajasSugeridas()).isEqualTo(1);
+        assertThat(i.costoEstimado()).isEqualByComparingTo("48840");
+        assertThat(i.justificacion()).isEqualTo(
+                "Crítico: 17 unidades, por debajo del stock de seguridad (20). "
+                        + "Promedio de 0,1 unidades/día en 90 días. "
+                        + "Nutresa tarda 1 día hábil (2 días calendario) en entregar. "
+                        + "Las ventas del último mes van 1,5× por encima del promedio.");
+    }
+
+    @Test
+    @DisplayName("Con Nutresa un miércoles L = 1: ROP = 0,1 × 1 + 20 = 20,1")
+    void nutresaUnMiercoles() {
+        LocalDate miercoles = LocalDate.of(2026, 10, 14);
+        mango.setProveedor(nutresa());
+
+        ItemCalculado i = item(motor.calcular(List.of(mango), ventasMango(mango), bd("1000000"), miercoles), mango);
+
+        assertThat(i.puntoReorden()).isEqualByComparingTo("20.10");
+        assertThat(i.unidadesSugeridas()).isEqualTo(4);   // q = 0,1 × (1 + 7) + 20 − 17 = 3,8
+        assertThat(i.justificacion()).contains("Nutresa tarda 1 día hábil en entregar.");
+    }
+
+    @Test
+    @DisplayName("Días hábiles → días calendario: viernes 3, sábado 2, domingo 1, miércoles 1; 2 hábiles un jueves = 4")
+    void diasHabilesACalendario() {
+        assertThat(MotorRecomendacionCompra.diasCalendario(LocalDate.of(2026, 10, 16), 1)).isEqualTo(3);
+        assertThat(MotorRecomendacionCompra.diasCalendario(LocalDate.of(2026, 10, 17), 1)).isEqualTo(2);
+        assertThat(MotorRecomendacionCompra.diasCalendario(LocalDate.of(2026, 10, 18), 1)).isEqualTo(1);
+        assertThat(MotorRecomendacionCompra.diasCalendario(LocalDate.of(2026, 10, 14), 1)).isEqualTo(1);
+        assertThat(MotorRecomendacionCompra.diasCalendario(LocalDate.of(2026, 10, 15), 2)).isEqualTo(4);
+        assertThat(MotorRecomendacionCompra.diasCalendario(LocalDate.of(2026, 10, 15), 0)).isZero();
+    }
+
+    @Test
+    @DisplayName("Proveedor de 5 días calendario: cobertura 1,5 < 5 → CRÍTICO y la justificación dice quién tarda")
+    void criticoConTiempoDelProveedor() {
+        Producto p = producto("Alta rotación", 15, 0, 12, "30000", "4000");
+        p.setProveedor(proveedor("Proveedor QA Dos", 5, false));
+
+        ItemCalculado i = item(motor.calcular(List.of(p), diezDiarias(p, HOY), bd("1000000"), HOY), p);
+
+        assertThat(i.urgencia()).isEqualTo(UrgenciaRecomendacion.CRITICO);
+        assertThat(i.puntoReorden()).isEqualByComparingTo("50.00");   // D × L = 10 × 5, SS = 0
+        assertThat(i.unidadesSugeridas()).isEqualTo(105);             // 10 × (5 + 7) − 15
+        assertThat(i.justificacion()).isEqualTo(
+                "Crítico: quedan 1,5 días de inventario y Proveedor QA Dos tarda 5 días. "
+                        + "Promedio de 10 unidades/día en 90 días.");
+    }
+
+    @Test
+    @DisplayName("CP-63-06: mismo stock y demanda, cada producto con el L de su proveedor; sin proveedor, el global")
+    void cadaProductoConSuTiempoDeEntrega() {
+        LocalDate miercoles = LocalDate.of(2026, 10, 14);
+        Producto deNutresa = producto("De Nutresa", 25, 10, 12, "30000", "4000");
+        deNutresa.setProveedor(nutresa());                                  // L = 1
+        Producto deQaDos = producto("De QA Dos", 25, 10, 12, "30000", "4000");
+        deQaDos.setProveedor(proveedor("Proveedor QA Dos", 5, false));      // L = 5
+        Producto sinProveedor = producto("Sin proveedor", 25, 10, 12, "30000", "4000");   // L = 2 global
+        List<DemandaDia> ventas = new ArrayList<>(diezDiarias(deNutresa, miercoles));
+        ventas.addAll(diezDiarias(deQaDos, miercoles));
+        ventas.addAll(diezDiarias(sinProveedor, miercoles));
+
+        Resultado r = motor.calcular(List.of(deNutresa, deQaDos, sinProveedor), ventas, bd("10000000"), miercoles);
+
+        assertThat(item(r, deNutresa).puntoReorden()).isEqualByComparingTo("20.00");
+        assertThat(item(r, deNutresa).urgencia()).isEqualTo(UrgenciaRecomendacion.ESTABLE);
+        assertThat(item(r, deQaDos).puntoReorden()).isEqualByComparingTo("60.00");
+        assertThat(item(r, deQaDos).urgencia()).isEqualTo(UrgenciaRecomendacion.CRITICO);
+        assertThat(item(r, sinProveedor).puntoReorden()).isEqualByComparingTo("30.00");
+        assertThat(item(r, sinProveedor).urgencia()).isEqualTo(UrgenciaRecomendacion.ALERTA);
+        assertThat(item(r, sinProveedor).justificacion()).doesNotContain("tarda");
+    }
+
+    @Test
+    @DisplayName("Proveedor con tiempo de entrega 0 (sin configurar) → L global y sin frase de entrega")
+    void proveedorSinTiempoUsaElGlobal() {
+        Producto p = producto("Alta rotación", 15, 0, 12, "30000", "4000");
+        p.setProveedor(proveedor("Sin configurar", 0, true));
+
+        ItemCalculado i = item(motor.calcular(List.of(p), diezDiarias(p, HOY), bd("1000000"), HOY), p);
+
+        assertThat(i.puntoReorden()).isEqualByComparingTo("20.00");   // 10 × 2
+        assertThat(i.justificacion()).contains("el proveedor tarda 2 días");
+    }
+
+    @Test
+    @DisplayName("ESTABLE con proveedor: el horizonte usa su L y se dice cuánto tarda")
+    void estableConProveedor() {
+        Producto jet = jetVainilla();
+        jet.setProveedor(proveedor("Proveedor QA Uno", 2, false));
+
+        ItemCalculado i = item(motor.calcular(List.of(jet), ventasJet(jet), bd("1000000"), HOY), jet);
+
+        assertThat(i.urgencia()).isEqualTo(UrgenciaRecomendacion.ESTABLE);
+        assertThat(i.justificacion())
+                .startsWith("Estable: cubre 3,1 días; se sugiere completar hasta el próximo pedido (2+7 días).")
+                .contains("Proveedor QA Uno tarda 2 días en entregar.");
     }
 }
