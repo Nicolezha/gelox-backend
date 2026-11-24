@@ -2246,6 +2246,1137 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Crédito y liquidación",
+      "item": [
+        {
+          "name": "Política de crédito",
+          "item": [
+            {
+              "name": "01 - GET política de crédito por defecto",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/credito/politica",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "credito",
+                    "politica"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('trae cupo, plazoDias y politicaVencimiento', () => {",
+                      "  pm.expect(body.cupo).to.exist;",
+                      "  pm.expect(body.plazoDias).to.exist;",
+                      "  pm.expect(body.politicaVencimiento).to.exist;",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02 - PUT política de crédito por defecto (cupo 5000, BLOQUEAR)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/credito/politica",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "credito",
+                    "politica"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cupo\": 5000,\n  \"plazoDias\": 0,\n  \"politicaVencimiento\": \"BLOQUEAR\"\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('queda con los nuevos valores', () => {",
+                      "  pm.expect(body.cupo).to.eql(5000);",
+                      "  pm.expect(body.politicaVencimiento).to.eql('BLOQUEAR');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03 - PUT política con ENCARGADO_VENTAS (403)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenVentas}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/credito/politica",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "credito",
+                    "politica"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cupo\": 1,\n  \"plazoDias\": 0,\n  \"politicaVencimiento\": \"BLOQUEAR\"\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('403 FORBIDDEN', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04 - POST comerciante de prueba para crédito",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/comerciantes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "comerciantes"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Comerciante Crédito\",\n  \"municipio\": \"Cúcuta\"\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('comercianteCreditoId', pm.response.json().id);"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Bloqueo por crédito y abonos",
+          "item": [
+            {
+              "name": "01 - POST despacho #1 (10 uds x 1000, precioPublico 1500)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/despacho",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "despacho"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteCreditoId}}\",\n  \"fecha\": \"2026-01-01\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 10,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0,\n      \"precioPublico\": 1500\n    }\n  ]\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "pm.test('sin advertencias (todavía no hay deuda)', () => pm.expect(pm.response.json().advertencias).to.be.empty);",
+                      "pm.collectionVariables.set('planillaMargenId', pm.response.json().planillaId);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02 - GET imprimir despacho #1 (obtener detalleId del ítem)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/{{planillaMargenId}}/imprimir",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "{{planillaMargenId}}",
+                    "imprimir"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.collectionVariables.set('itemMargenId', pm.response.json().items[0].id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03 - POST liquidar despacho #1 con pago parcial (3000 de 10000)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/{{planillaMargenId}}/liquidar",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "{{planillaMargenId}}",
+                    "liquidar"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"devoluciones\": [\n    {\n      \"detalleId\": \"{{itemMargenId}}\",\n      \"unidadesDevueltas\": 0\n    }\n  ],\n  \"efectivoRecibido\": 3000\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('MARGEN: gananciaTotal = precioVenta * unidadesVendidas', () => pm.expect(body.gananciaTotal).to.eql(10000));",
+                      "pm.test('gananciaComercianteTotal = (precioPublico - precioVenta) * unidades', () => pm.expect(body.gananciaComercianteTotal).to.eql(5000));",
+                      "pm.test('efectivoRecibido queda en el valor parcial indicado', () => pm.expect(body.efectivoRecibido).to.eql(3000));",
+                      "pm.test('esquemaAplicado = MARGEN', () => pm.expect(body.esquemaAplicado).to.eql('MARGEN'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04 - GET crédito del comerciante: deuda 7000, bloqueado",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/comerciantes/{{comercianteCreditoId}}/credito",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "comerciantes",
+                    "{{comercianteCreditoId}}",
+                    "credito"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('deuda = 10000 - 3000', () => pm.expect(body.deuda).to.eql(7000));",
+                      "pm.test('excede el cupo (5000) y queda bloqueado', () => pm.expect(body.bloqueado).to.eql(true));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "05 - POST despacho #2 con crédito bloqueado (409)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/despacho",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "despacho"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteCreditoId}}\",\n  \"fecha\": \"2026-01-02\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 5,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                      "const body = pm.response.json();",
+                      "pm.test(\"cuerpo {error, codigo: 'CREDITO_BLOQUEADO', deuda, cupo}\", () => {",
+                      "  pm.expect(body.codigo).to.eql('CREDITO_BLOQUEADO');",
+                      "  pm.expect(body.deuda).to.eql(7000);",
+                      "  pm.expect(body.cupo).to.eql(5000);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06 - POST abono que cubre toda la deuda",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/comerciantes/{{comercianteCreditoId}}/abonos",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "comerciantes",
+                    "{{comercianteCreditoId}}",
+                    "abonos"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"valor\": 7000,\n  \"observacion\": \"Pago total de la deuda pendiente\"\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "pm.test('valor del abono', () => pm.expect(pm.response.json().valor).to.eql(7000));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07 - GET crédito del comerciante tras el abono: deuda 0, no bloqueado",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/comerciantes/{{comercianteCreditoId}}/credito",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "comerciantes",
+                    "{{comercianteCreditoId}}",
+                    "credito"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('deuda en cero', () => pm.expect(body.deuda).to.eql(0));",
+                      "pm.test('ya no está bloqueado', () => pm.expect(body.bloqueado).to.eql(false));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08 - POST despacho #2 ahora sí (crédito liberado)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/despacho",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "despacho"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteCreditoId}}\",\n  \"fecha\": \"2026-01-02\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 5,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09 - PATCH extender fecha límite de pago del despacho #1",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/{{planillaMargenId}}/fecha-limite",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "{{planillaMargenId}}",
+                    "fecha-limite"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fechaLimitePago\": \"2026-12-31\"\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10 - GET imprimir: la fecha límite quedó extendida",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/{{planillaMargenId}}/imprimir",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "{{planillaMargenId}}",
+                    "imprimir"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.test('fechaLimitePago = 2026-12-31', () => pm.expect(pm.response.json().fechaLimitePago).to.eql('2026-12-31'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11 - PUT política por defecto más generosa (limpieza)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/credito/politica",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "credito",
+                    "politica"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cupo\": 999999999,\n  \"plazoDias\": 30,\n  \"politicaVencimiento\": \"SOLO_ALERTA\"\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Esquema de liquidación",
+          "item": [
+            {
+              "name": "01 - GET esquema de liquidación vigente (MARGEN por defecto)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/liquidacion/esquema",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "liquidacion",
+                    "esquema"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.test('trae tipo y valor', () => { pm.expect(pm.response.json().tipo).to.exist; pm.expect(pm.response.json().valor).to.exist; });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02 - POST comerciante para pruebas de esquema",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/comerciantes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "comerciantes"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Comerciante Esquema\",\n  \"municipio\": \"Cúcuta\"\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('comercianteEsquemaId', pm.response.json().id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03 - PUT esquema COMISION 20%",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/liquidacion/esquema",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "liquidacion",
+                    "esquema"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tipo\": \"COMISION\",\n  \"valor\": 20\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.test('queda en COMISION 20', () => { pm.expect(pm.response.json().tipo).to.eql('COMISION'); pm.expect(pm.response.json().valor).to.eql(20); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04 - POST despacho con precio al público (10 uds x 1000, público 1500)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/despacho",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "despacho"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteEsquemaId}}\",\n  \"fecha\": \"2026-02-01\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 10,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0,\n      \"precioPublico\": 1500\n    }\n  ]\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('planillaComisionId', pm.response.json().planillaId);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "05 - GET imprimir (obtener detalleId)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/{{planillaComisionId}}/imprimir",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "{{planillaComisionId}}",
+                    "imprimir"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.collectionVariables.set('itemComisionId', pm.response.json().items[0].id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06 - POST liquidar con COMISION: factura el 20% de la venta al público",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/{{planillaComisionId}}/liquidar",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "{{planillaComisionId}}",
+                    "liquidar"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"devoluciones\": [\n    {\n      \"detalleId\": \"{{itemComisionId}}\",\n      \"unidadesDevueltas\": 0\n    }\n  ]\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('gananciaTotal = 15000 * 20%', () => pm.expect(body.gananciaTotal).to.eql(3000));",
+                      "pm.test('gananciaComercianteTotal = 15000 - 3000', () => pm.expect(body.gananciaComercianteTotal).to.eql(12000));",
+                      "pm.test('sin efectivoRecibido indicado, se asume pago completo', () => pm.expect(body.efectivoRecibido).to.eql(3000));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07 - PUT esquema TARIFA_FIJA $200 por unidad",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/liquidacion/esquema",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "liquidacion",
+                    "esquema"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tipo\": \"TARIFA_FIJA\",\n  \"valor\": 200\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08 - POST despacho sin precio al público (10 uds x 1000)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/despacho",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "despacho"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteEsquemaId}}\",\n  \"fecha\": \"2026-02-02\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 10,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('planillaTarifaId', pm.response.json().planillaId);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09 - GET imprimir (obtener detalleId)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/{{planillaTarifaId}}/imprimir",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "{{planillaTarifaId}}",
+                    "imprimir"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.collectionVariables.set('itemTarifaId', pm.response.json().items[0].id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10 - POST liquidar con TARIFA_FIJA: factura 200 por unidad, sin ganancia del comerciante",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/planillas/{{planillaTarifaId}}/liquidar",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "planillas",
+                    "{{planillaTarifaId}}",
+                    "liquidar"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"devoluciones\": [\n    {\n      \"detalleId\": \"{{itemTarifaId}}\",\n      \"unidadesDevueltas\": 0\n    }\n  ]\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('gananciaTotal = 200 * 10', () => pm.expect(body.gananciaTotal).to.eql(2000));",
+                      "pm.test('sin precio al público, no hay gananciaComercianteTotal', () => pm.expect(body.gananciaComercianteTotal).to.eql(null));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11 - PUT restaurar esquema a MARGEN (limpieza)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/liquidacion/esquema",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "liquidacion",
+                    "esquema"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tipo\": \"MARGEN\",\n  \"valor\": 0\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -2327,6 +3458,66 @@
       "value": "",
       "type": "string",
       "description": "Lo llena Asignar plan/01"
+    },
+    {
+      "key": "tokenVentas",
+      "value": "",
+      "type": "string",
+      "description": "ID Token de un ENCARGADO_VENTAS de Mágico Sabor, para los 403 de RF65/RF66"
+    },
+    {
+      "key": "productoId",
+      "value": "",
+      "type": "string",
+      "description": "RF65/RF66: id de un producto activo de Mágico Sabor para los despachos de prueba"
+    },
+    {
+      "key": "comercianteCreditoId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'Política de crédito/04'"
+    },
+    {
+      "key": "comercianteEsquemaId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'Esquema de liquidación/02'"
+    },
+    {
+      "key": "planillaMargenId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'Bloqueo por crédito y abonos/01'"
+    },
+    {
+      "key": "itemMargenId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'Bloqueo por crédito y abonos/02'"
+    },
+    {
+      "key": "planillaComisionId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'Esquema de liquidación/04'"
+    },
+    {
+      "key": "itemComisionId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'Esquema de liquidación/05'"
+    },
+    {
+      "key": "planillaTarifaId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'Esquema de liquidación/08'"
+    },
+    {
+      "key": "itemTarifaId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'Esquema de liquidación/09'"
     }
   ]
 }
