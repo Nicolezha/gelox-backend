@@ -1,2155 +1,2332 @@
 {
-	"info": {
-		"_postman_id": "09c8fe46-1671-48c3-a1f7-0c97295ec2e4",
-		"name": "GELOX IT3 - Iteración 3",
-		"description": "Iteración 3 (RF63–RF71). Cada desarrollador agrega su carpeta en su PR.\n\nGobierno (T184): cuotas del plan, que responden 409 {error, codigo: CUOTA_PLAN_ALCANZADA, cuota, limite, usado} (RF70), y log de auditoría (RF71). Requiere la migración V9.\n\nPlanes y auditoría (T191): CRUD de planes, asignación de plan a una distribuidora y consulta del log.",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"item": [
-		{
-			"name": "Gobierno",
-			"description": "T184 — @Auditable, AuditoriaService y CuotaService (paquete gobierno).",
-			"item": [
-				{
-					"name": "Cuotas del plan (RF70)",
-					"description": "Distribuidora B (subdominio {{subdominioB}}) con el plan de cuotas pequeñas del plan de QA (máx. 3 usuarios, 5 productos, 4 comerciantes, 10 MB, 20 llamadas IA/mes) y ya al límite de cada cuota. {{tokenGerenteB}} es el ID Token del Gerente de B. El gerente titular cuenta en la cuota de usuarios.\n\nPreparar el plan en Supabase:\n\nINSERT INTO plan_suscripcion (nombre, descripcion, max_usuarios, max_productos, max_comerciantes,\n                              max_almacenamiento_mb, max_llamadas_ia_mes)\nVALUES ('QA_PEQUENO', 'Plan de QA con cuotas pequeñas', 3, 5, 4, 10, 20)\nON CONFLICT (nombre) DO NOTHING;\nUPDATE distribuidora SET plan_id = (SELECT id FROM plan_suscripcion WHERE nombre = 'QA_PEQUENO')\n WHERE subdominio = 'prueba';",
-					"item": [
-						{
-							"name": "01 - POST usuario n.º 4 con plan de máx. 3 → 409 (CP-70-04)",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenGerenteB}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/usuarios",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"usuarios"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"Vendedor Cuota\",\n  \"correo\": \"vendedor.cuota@gelox-test.com\",\n  \"contrasenaTemporal\": \"Temporal123*\",\n  \"rol\": \"ENCARGADO_VENTAS\"\n}"
-								},
-								"description": "No debe quedar cuenta en Firebase ni fila en usuario ni fila USUARIO_CREAR en auditoria."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 Conflict', () => pm.response.to.have.status(409));",
-											"const body = pm.response.json();",
-											"pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
-											"  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
-											"  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
-											"  pm.expect(body.cuota).to.eql('USUARIOS');",
-											"  pm.expect(body.limite).to.be.a('number');",
-											"  pm.expect(body.usado).to.be.a('number');",
-											"});",
-											"pm.test('limite del plan QA = 3', () => pm.expect(body.limite).to.eql(3));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "02 - POST producto n.º 6 con plan de máx. 5 → 409 (CP-64-09 / CP-70-05)",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenGerenteB}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/catalogo/productos",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"catalogo",
-										"productos"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"codigoTecnico\": \"QA-CUOTA-6\",\n  \"nombre\": \"Paleta cuota\",\n  \"categoria\": \"PALETAS\",\n  \"precioVenta\": 2000,\n  \"precioCosto\": 1200\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 Conflict', () => pm.response.to.have.status(409));",
-											"const body = pm.response.json();",
-											"pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
-											"  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
-											"  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
-											"  pm.expect(body.cuota).to.eql('PRODUCTOS');",
-											"  pm.expect(body.limite).to.be.a('number');",
-											"  pm.expect(body.usado).to.be.a('number');",
-											"});",
-											"pm.test('limite del plan QA = 5', () => pm.expect(body.limite).to.eql(5));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "03 - POST comerciante n.º 5 con plan de máx. 4 → 409",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenGerenteB}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/comerciantes",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"comerciantes"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"Comerciante Cuota\",\n  \"municipio\": \"Cúcuta\"\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 Conflict', () => pm.response.to.have.status(409));",
-											"const body = pm.response.json();",
-											"pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
-											"  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
-											"  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
-											"  pm.expect(body.cuota).to.eql('COMERCIANTES');",
-											"  pm.expect(body.limite).to.be.a('number');",
-											"  pm.expect(body.usado).to.be.a('number');",
-											"});",
-											"pm.test('limite del plan QA = 4', () => pm.expect(body.limite).to.eql(4));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "04 - PATCH activar comerciante inactivo con la cuota alcanzada → 409",
-							"request": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenGerenteB}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/comerciantes/{{comercianteInactivoB}}/estado",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"comerciantes",
-										"{{comercianteInactivoB}}",
-										"estado"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"activo\": true\n}"
-								},
-								"description": "{{comercianteInactivoB}}: id de un comerciante inactivo de B. Desactivar no consulta la cuota."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 Conflict', () => pm.response.to.have.status(409));",
-											"const body = pm.response.json();",
-											"pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
-											"  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
-											"  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
-											"  pm.expect(body.cuota).to.eql('COMERCIANTES');",
-											"  pm.expect(body.limite).to.be.a('number');",
-											"  pm.expect(body.usado).to.be.a('number');",
-											"});",
-											"pm.test('limite del plan QA = 4', () => pm.expect(body.limite).to.eql(4));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "05 - POST archivo que supera max_almacenamiento_mb → 409 (CP-70-06)",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenGerenteB}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/upload",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"upload"
-									]
-								},
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "archivo",
-											"type": "file",
-											"src": ""
-										},
-										{
-											"key": "carpeta",
-											"value": "productos",
-											"type": "text"
-										}
-									]
-								},
-								"description": "En 'archivo' elegir una imagen (máx. 5 MB) que, sumada a lo que B ya subió (archivo_almacenado), pase de 10 MB. limite y usado vienen en MB. No se sube ni se registra en archivo_almacenado:\nSELECT SUM(bytes) / 1048576.0 AS mb FROM archivo_almacenado WHERE tenant_id = '<id de B>';"
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 Conflict', () => pm.response.to.have.status(409));",
-											"const body = pm.response.json();",
-											"pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
-											"  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
-											"  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
-											"  pm.expect(body.cuota).to.eql('ALMACENAMIENTO_MB');",
-											"  pm.expect(body.limite).to.be.a('number');",
-											"  pm.expect(body.usado).to.be.a('number');",
-											"});",
-											"pm.test('limite del plan QA = 10', () => pm.expect(body.limite).to.eql(10));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "06 - POST voz con LLAMADAS_IA_MES agotada → 200 con el clasificador de respaldo (sin 409)",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenGerenteB}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/voz/interpretar",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"voz",
-										"interpretar"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"texto\": \"vendí tres paletas de mango\",\n  \"confianza\": 0.95\n}"
-								},
-								"description": "Con 20 comandos de B clasificados por el LLM en el mes calendario (hora de Bogotá). El comando nuevo queda con metodo_clasificacion MODELO o REGLAS, no LLM:\nSELECT metodo_clasificacion, created_at FROM comando_voz WHERE tenant_id = '<id de B>' ORDER BY created_at DESC LIMIT 1;"
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"pm.test('no responde 409', () => pm.expect(pm.response.code).to.not.eql(409));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "07 - POST producto en Mágico Sabor (plan migrado sin límites) → 201 (CP-70-07)",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/catalogo/productos",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"catalogo",
-										"productos"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"codigoTecnico\": \"QA-PILOTO-{{$timestamp}}\",\n  \"nombre\": \"Paleta piloto QA\",\n  \"categoria\": \"PALETAS\",\n  \"precioVenta\": 2000,\n  \"precioCosto\": 1200\n}"
-								},
-								"description": "Con el Gerente de Mágico Sabor (plan PILOTO sin máximos). Eliminar el producto al terminar."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('201 Created', () => pm.response.to.have.status(201));"
-										]
-									}
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "Auditoría (RF71)",
-					"description": "Cada request deja (o no) una fila en auditoria. Verificar en Supabase con:\n\nSELECT fecha_hora, ip, tenant_id, usuario_id, rol, accion, entidad, entidad_id, detalle\n  FROM auditoria ORDER BY fecha_hora DESC LIMIT 20;\n\nip = primera dirección de X-Forwarded-For o, si no hay, request.getRemoteAddr(). tenant_id es NULL para el Superadministrador. detalle es JSON en texto.",
-					"item": [
-						{
-							"name": "01 - POST /api/auth/verificar → fila SESION_INICIAR",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/auth/verificar",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"auth",
-										"verificar"
-									]
-								},
-								"description": "Fila SESION_INICIAR con usuario_id, rol ADMINISTRADOR y tenant_id de Mágico Sabor."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "02 - POST usuario permitido → fila USUARIO_CREAR (CP-71-01, INT-06)",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/usuarios",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"usuarios"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"Vendedor Auditoría\",\n  \"correo\": \"vendedor.auditoria.{{$timestamp}}@gelox-test.com\",\n  \"contrasenaTemporal\": \"Temporal123*\",\n  \"rol\": \"ENCARGADO_VENTAS\"\n}"
-								},
-								"description": "Fila USUARIO_CREAR con entidad Usuario y entidad_id = id del usuario creado."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('201 Created', () => pm.response.to.have.status(201));",
-											"pm.collectionVariables.set('usuarioAuditoriaId', pm.response.json().id);"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "03 - DELETE deshabilitar ese usuario → fila USUARIO_DESHABILITAR",
-							"request": {
-								"method": "DELETE",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/usuarios/{{usuarioAuditoriaId}}",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"usuarios",
-										"{{usuarioAuditoriaId}}"
-									]
-								},
-								"description": "entidad_id = {{usuarioAuditoriaId}}."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('2xx', () => pm.expect(pm.response.code).to.be.within(200, 204));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "04 - Cuota alcanzada → 409 y SIN fila USUARIO_CREAR (CP-71-03)",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenGerenteB}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/usuarios",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"usuarios"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"Vendedor Cuota\",\n  \"correo\": \"vendedor.cuota2@gelox-test.com\",\n  \"contrasenaTemporal\": \"Temporal123*\",\n  \"rol\": \"ENCARGADO_VENTAS\"\n}"
-								},
-								"description": "La operación fallida no deja fila."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 Conflict', () => pm.response.to.have.status(409));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "05 - Token inválido → 401 y fila TOKEN_INVALIDO",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer token-invalido"
-									},
-									{
-										"key": "X-Forwarded-For",
-										"value": "181.50.1.20, 10.0.0.1"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/auth/perfil",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"auth",
-										"perfil"
-									]
-								},
-								"description": "Fila TOKEN_INVALIDO sin usuario_id ni tenant_id, ip 181.50.1.20 y detalle con motivo y ruta."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "06 - Distribuidora suspendida → 403 y fila ACCESO_BLOQUEADO",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuspendida}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/auth/perfil",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"auth",
-										"perfil"
-									]
-								},
-								"description": "{{tokenSuspendida}}: ID Token de un usuario de una distribuidora SUSPENDIDO. Fila ACCESO_BLOQUEADO con tenant_id, usuario_id y detalle {estado, ruta}."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
-											"pm.test('código de bloqueo', () => pm.expect(pm.response.json().codigo).to.eql('DISTRIBUIDORA_SUSPENDIDA'));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "07 - PATCH suspender distribuidora B (Superadministrador) → fila DISTRIBUIDORA_CAMBIAR_ESTADO (CP-71-02)",
-							"request": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/estado",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras",
-										"{{distribuidoraBId}}",
-										"estado"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"estado\": \"SUSPENDIDO\",\n  \"motivo\": \"QA auditoría: suspensión de prueba\"\n}"
-								},
-								"description": "Fila con tenant_id NULL, rol SUPERADMINISTRADOR y entidad_id = {{distribuidoraBId}}."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "08 - PATCH reactivar distribuidora B → fila DISTRIBUIDORA_CAMBIAR_ESTADO",
-							"request": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/estado",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras",
-										"{{distribuidoraBId}}",
-										"estado"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"estado\": \"ACTIVO\",\n  \"motivo\": \"QA auditoría: reactivación\"\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "09 - POST /api/auth/cerrar-sesion → fila SESION_CERRAR",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/auth/cerrar-sesion",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"auth",
-										"cerrar-sesion"
-									]
-								},
-								"description": "Ejecutar al final: revoca la sesión del Gerente de Mágico Sabor."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));"
-										]
-									}
-								}
-							]
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Planes y auditoría",
-			"description": "T191 — /api/plataforma/planes (RF70), PATCH /api/plataforma/distribuidoras/{id}/plan y /api/plataforma/auditoria (RF71). Solo SUPERADMINISTRADOR: {{tokenSuper}}; {{token}} (Gerente) recibe 403. Nombres de campo del mock de T193 (src/services/mocks/mockPlataforma.js). Correr en orden: Planes → Asignar plan → Log de auditoría.",
-			"item": [
-				{
-					"name": "Planes (RF70)",
-					"item": [
-						{
-							"name": "01 - GET planes → 200 (lista con distribuidoras y uso)",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"const lista = pm.response.json();",
-											"pm.test('es una lista', () => pm.expect(lista).to.be.an('array'));",
-											"if (lista.length) pm.collectionVariables.set('planOtroId', lista[0].id);",
-											"const conDist = lista.find(p => p.totalDistribuidoras > 0);",
-											"if (conDist) pm.collectionVariables.set('planAsignadoId', conDist.id);"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "02 - POST plan → 201 (null = sin límite)",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"QA Planes {{$timestamp}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
-								},
-								"description": "Deja fila PLAN_CREAR {plan, precioMensual, cuotas}."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('201 Created', () => pm.response.to.have.status(201));",
-											"const p = pm.response.json();",
-											"pm.test('forma del plan (mock T193)', () => {",
-											"  ['id','nombre','descripcion','precioMensual','maxUsuarios','maxProductos','maxComerciantes',",
-											"   'maxAlmacenamientoMb','maxLlamadasIaMes','totalDistribuidoras','distribuidoras']",
-											"    .forEach(c => pm.expect(p).to.have.property(c));",
-											"});",
-											"pm.collectionVariables.set('planNuevoId', p.id);",
-											"pm.collectionVariables.set('planNuevoNombre', p.nombre);",
-											"pm.test('sin distribuidoras', () => pm.expect(p.totalDistribuidoras).to.eql(0));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "03 - GET plan/{id} → 200",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes/{{planNuevoId}}",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes",
-										"{{planNuevoId}}"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"const p = pm.response.json();",
-											"pm.test('forma del plan (mock T193)', () => {",
-											"  ['id','nombre','descripcion','precioMensual','maxUsuarios','maxProductos','maxComerciantes',",
-											"   'maxAlmacenamientoMb','maxLlamadasIaMes','totalDistribuidoras','distribuidoras']",
-											"    .forEach(c => pm.expect(p).to.have.property(c));",
-											"});"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "04 - POST nombre repetido → 409 {campo: nombre}",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"{{planNuevoNombre}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
-								},
-								"description": "No distingue mayúsculas ni tildes."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 con campo', () => pm.response.to.have.status(409));",
-											"pm.test('campo = nombre', () => pm.expect(pm.response.json().campo).to.eql('nombre'));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "05 - POST cuota negativa → 400 {campo}",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"QA negativo\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": -1,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('400 con campo', () => pm.response.to.have.status(400));",
-											"pm.test('campo = maxProductos', () => pm.expect(pm.response.json().campo).to.eql('maxProductos'));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "06 - POST precio negativo → 400 {campo: precioMensual}",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"QA precio\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": -5,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('400 con campo', () => pm.response.to.have.status(400));",
-											"pm.test('campo = precioMensual', () => pm.expect(pm.response.json().campo).to.eql('precioMensual'));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "07 - PUT plan → 200 y valores nuevos",
-							"request": {
-								"method": "PUT",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes/{{planNuevoId}}",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes",
-										"{{planNuevoId}}"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"{{planNuevoNombre}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 6,\n  \"maxComerciantes\": null,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
-								},
-								"description": "Deja fila PLAN_EDITAR {plan, cambios: [{campo, antes, despues}]}."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"const p = pm.response.json();",
-											"pm.test('forma del plan (mock T193)', () => {",
-											"  ['id','nombre','descripcion','precioMensual','maxUsuarios','maxProductos','maxComerciantes',",
-											"   'maxAlmacenamientoMb','maxLlamadasIaMes','totalDistribuidoras','distribuidoras']",
-											"    .forEach(c => pm.expect(p).to.have.property(c));",
-											"});",
-											"pm.test('valores nuevos', () => { pm.expect(p.maxProductos).to.eql(6); pm.expect(p.maxComerciantes).to.eql(null); });"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "08 - PUT plan inexistente → 404",
-							"request": {
-								"method": "PUT",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes/00000000-0000-0000-0000-000000000000",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes",
-										"00000000-0000-0000-0000-000000000000"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"QA 404\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('404 Not Found', () => pm.response.to.have.status(404));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "09 - DELETE plan con distribuidoras asignadas → 409",
-							"request": {
-								"method": "DELETE",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes/{{planAsignadoId}}",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes",
-										"{{planAsignadoId}}"
-									]
-								},
-								"description": "{{planAsignadoId}} lo llena 01 con un plan que tenga distribuidoras."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 Conflict', () => pm.response.to.have.status(409));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "10 - GET planes como Gerente → 403 (CP-70-08)",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "11 - POST plan como Gerente → 403",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"nombre\": \"QA gerente\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
-										]
-									}
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "Asignar plan (RF70)",
-					"item": [
-						{
-							"name": "01 - GET distribuidora/{id} → 200 con plan y uso de cuotas",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras",
-										"{{distribuidoraBId}}"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"const d = pm.response.json();",
-											"pm.test('planId, planNombre, plan y fechaPlan', () => {",
-											"  pm.expect(d.planId).to.be.a('string');",
-											"  pm.expect(d.planNombre).to.be.a('string');",
-											"  pm.expect(d.plan).to.eql(d.planNombre);",
-											"  pm.expect(d.fechaPlan).to.be.a('string');",
-											"});",
-											"pm.test('uso {usado, limite} por cuota', () => {",
-											"  ['usuarios','productos','comerciantes','almacenamientoMb','llamadasIaMes'].forEach(c => {",
-											"    pm.expect(d.uso[c]).to.have.property('usado');",
-											"    pm.expect(d.uso[c]).to.have.property('limite');",
-											"  });",
-											"});",
-											"pm.collectionVariables.set('planAnteriorBId', d.planId);"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "02 - PATCH plan → 200 (CP-70-03)",
-							"request": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras",
-										"{{distribuidoraBId}}",
-										"plan"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"planId\": \"{{planNuevoId}}\",\n  \"motivo\": \"QA: plan de cuotas pequeñas\"\n}"
-								},
-								"description": "Si el uso de B ya supera alguna cuota del plan nuevo se asigna igual y la respuesta trae advertencias: [{cuota, usado, limite}]. Deja fila PLAN_ASIGNAR {planAnterior, planNuevo, motivo, cuotas}."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"const d = pm.response.json();",
-											"pm.test('planId, planNombre, plan y fechaPlan', () => {",
-											"  pm.expect(d.planId).to.be.a('string');",
-											"  pm.expect(d.planNombre).to.be.a('string');",
-											"  pm.expect(d.plan).to.eql(d.planNombre);",
-											"  pm.expect(d.fechaPlan).to.be.a('string');",
-											"});",
-											"pm.test('uso {usado, limite} por cuota', () => {",
-											"  ['usuarios','productos','comerciantes','almacenamientoMb','llamadasIaMes'].forEach(c => {",
-											"    pm.expect(d.uso[c]).to.have.property('usado');",
-											"    pm.expect(d.uso[c]).to.have.property('limite');",
-											"  });",
-											"});",
-											"pm.test('plan nuevo', () => pm.expect(d.planId).to.eql(pm.collectionVariables.get('planNuevoId')));",
-											"if (d.advertencias) pm.test('advertencias [{cuota, usado, limite}]', () => {",
-											"  d.advertencias.forEach(a => { pm.expect(a).to.have.keys('cuota','usado','limite'); pm.expect(a.usado).to.be.above(a.limite); });",
-											"});"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "03 - PATCH el mismo plan → 409",
-							"request": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras",
-										"{{distribuidoraBId}}",
-										"plan"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"planId\": \"{{planNuevoId}}\",\n  \"motivo\": \"otra vez\"\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 Conflict', () => pm.response.to.have.status(409));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "04 - PATCH sin motivo → 400 {campo: motivo}",
-							"request": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras",
-										"{{distribuidoraBId}}",
-										"plan"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"planId\": \"{{planAnteriorBId}}\",\n  \"motivo\": \"\"\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('400 con campo', () => pm.response.to.have.status(400));",
-											"pm.test('campo = motivo', () => pm.expect(pm.response.json().campo).to.eql('motivo'));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "05 - PATCH plan inexistente → 404",
-							"request": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras",
-										"{{distribuidoraBId}}",
-										"plan"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"planId\": \"00000000-0000-0000-0000-000000000000\",\n  \"motivo\": \"x\"\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('404 Not Found', () => pm.response.to.have.status(404));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "06 - DELETE el plan ya asignado → 409",
-							"request": {
-								"method": "DELETE",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes/{{planNuevoId}}",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes",
-										"{{planNuevoId}}"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('409 Conflict', () => pm.response.to.have.status(409));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "07 - PATCH restaurar el plan anterior → 200",
-							"request": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras",
-										"{{distribuidoraBId}}",
-										"plan"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"planId\": \"{{planAnteriorBId}}\",\n  \"motivo\": \"QA: restaurar plan\"\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "08 - DELETE el plan de QA (ya sin distribuidoras) → 204",
-							"request": {
-								"method": "DELETE",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/planes/{{planNuevoId}}",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"planes",
-										"{{planNuevoId}}"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('204 No Content', () => pm.response.to.have.status(204));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "09 - POST distribuidora con planId inexistente → 400 {campo: planId}",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"razonSocial\": \"QA Plan S.A.S.\",\n  \"nit\": \"900{{$timestamp}}\",\n  \"nombreComercial\": \"QA Plan\",\n  \"subdominio\": \"qa-plan\",\n  \"nombreGerente\": \"QA\",\n  \"correoGerente\": \"qa.plan.{{$timestamp}}@gelox-test.com\",\n  \"planId\": \"00000000-0000-0000-0000-000000000000\"\n}"
-								},
-								"description": "El alta ahora recibe planId (UUID) en lugar del texto plan."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('400 con campo', () => pm.response.to.have.status(400));",
-											"pm.test('campo = planId', () => pm.expect(pm.response.json().campo).to.eql('planId'));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "10 - PATCH plan como Gerente → 403",
-							"request": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"distribuidoras",
-										"{{distribuidoraBId}}",
-										"plan"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"planId\": \"{{planOtroId}}\",\n  \"motivo\": \"x\"\n}"
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
-										]
-									}
-								}
-							]
-						}
-					]
-				},
-				{
-					"name": "Log de auditoría (RF71)",
-					"item": [
-						{
-							"name": "01 - GET auditoría (primera página) → 200",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/auditoria?page=0&size=10",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"auditoria"
-									],
-									"query": [
-										{
-											"key": "page",
-											"value": "0"
-										},
-										{
-											"key": "size",
-											"value": "10"
-										}
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"const pg = pm.response.json();",
-											"pm.test('página {content, totalElements, totalPages, number, size}', () => {",
-											"  pm.expect(pg).to.have.keys('content','totalElements','totalPages','number','size');",
-											"});",
-											"pm.test('ordenada por fechaHora desc', () => {",
-											"  const f = pg.content.map(r => r.fechaHora);",
-											"  pm.expect(f).to.eql([...f].sort().reverse());",
-											"});",
-											"pm.test('fila con los campos del contrato', () => {",
-											"  if (!pg.content.length) return;",
-											"  pm.expect(pg.content[0]).to.have.all.keys('id','fechaHora','ip','tenantId','distribuidoraNombre','usuarioId',",
-											"    'usuarioNombre','usuarioCorreo','usuarioRol','accion','entidad','entidadId','detalle');",
-											"});"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "02 - GET filtrado por distribuidora y PLAN_ASIGNAR → filas de Asignar plan",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/auditoria?page=0&size=20&distribuidoraId={{distribuidoraBId}}&accion=PLAN_ASIGNAR",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"auditoria"
-									],
-									"query": [
-										{
-											"key": "page",
-											"value": "0"
-										},
-										{
-											"key": "size",
-											"value": "20"
-										},
-										{
-											"key": "distribuidoraId",
-											"value": "{{distribuidoraBId}}"
-										},
-										{
-											"key": "accion",
-											"value": "PLAN_ASIGNAR"
-										}
-									]
-								},
-								"description": "Las filas del Superadministrador sobre B tienen tenantId null y distribuidoraNombre = B."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"const pg = pm.response.json();",
-											"pm.test('página {content, totalElements, totalPages, number, size}', () => {",
-											"  pm.expect(pg).to.have.keys('content','totalElements','totalPages','number','size');",
-											"});",
-											"pm.test('ordenada por fechaHora desc', () => {",
-											"  const f = pg.content.map(r => r.fechaHora);",
-											"  pm.expect(f).to.eql([...f].sort().reverse());",
-											"});",
-											"pm.test('solo PLAN_ASIGNAR de B, con detalle JSON', () => {",
-											"  pg.content.forEach(r => {",
-											"    pm.expect(r.accion).to.eql('PLAN_ASIGNAR');",
-											"    pm.expect(r.entidadId).to.eql(pm.collectionVariables.get('distribuidoraBId'));",
-											"    const det = JSON.parse(r.detalle);",
-											"    pm.expect(det).to.include.keys('planAnterior','planNuevo','motivo','cuotas');",
-											"  });",
-											"});"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "03 - GET filtrado por acción PLAN_CREAR y rango de fechas → 200",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/auditoria?accion=PLAN_CREAR&desde=2026-11-01&hasta=2026-12-31",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"auditoria"
-									],
-									"query": [
-										{
-											"key": "accion",
-											"value": "PLAN_CREAR"
-										},
-										{
-											"key": "desde",
-											"value": "2026-11-01"
-										},
-										{
-											"key": "hasta",
-											"value": "2026-12-31"
-										},
-										{
-											"key": "usuarioId",
-											"value": "",
-											"disabled": true
-										}
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"pm.test('solo PLAN_CREAR', () => pm.response.json().content.forEach(r => pm.expect(r.accion).to.eql('PLAN_CREAR')));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "04 - GET desde posterior a hasta → 400",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/auditoria?desde=2026-12-01&hasta=2026-11-01",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"auditoria"
-									],
-									"query": [
-										{
-											"key": "desde",
-											"value": "2026-12-01"
-										},
-										{
-											"key": "hasta",
-											"value": "2026-11-01"
-										}
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "05 - GET acciones → 200 (códigos AccionAuditoria)",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/auditoria/acciones",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"auditoria",
-										"acciones"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"pm.test('incluye PLAN_ASIGNAR y USUARIO_CREAR', () => pm.expect(pm.response.json()).to.include.members(['PLAN_ASIGNAR','USUARIO_CREAR']));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "06 - GET usuarios del log (de B) → 200",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{tokenSuper}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/auditoria/usuarios?distribuidoraId={{distribuidoraBId}}",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"auditoria",
-										"usuarios"
-									],
-									"query": [
-										{
-											"key": "distribuidoraId",
-											"value": "{{distribuidoraBId}}"
-										}
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('200 OK', () => pm.response.to.have.status(200));",
-											"pm.test('[{id, nombre, correo, rol, distribuidoraNombre}]', () => pm.response.json().forEach(u =>",
-											"  pm.expect(u).to.have.all.keys('id','nombre','correo','rol','distribuidoraNombre')));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "07 - GET auditoría como Gerente → 403 (CP-71-05)",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/auditoria",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"auditoria"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "08 - GET acciones como Gerente → 403",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/auditoria/acciones",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"auditoria",
-										"acciones"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
-										]
-									}
-								}
-							]
-						},
-						{
-							"name": "09 - GET usuarios del log como Gerente → 403",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{token}}"
-									}
-								],
-								"url": {
-									"raw": "{{baseUrl}}/api/plataforma/auditoria/usuarios",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"plataforma",
-										"auditoria",
-										"usuarios"
-									]
-								}
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"type": "text/javascript",
-										"exec": [
-											"pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
-										]
-									}
-								}
-							]
-						}
-					]
-				}
-			]
-		}
-	],
-	"variable": [
-		{
-			"key": "baseUrl",
-			"value": "http://localhost:8080",
-			"type": "string"
-		},
-		{
-			"key": "token",
-			"value": "",
-			"type": "string",
-			"description": "ID Token del Gerente (ADMINISTRADOR) de Mágico Sabor"
-		},
-		{
-			"key": "tokenGerenteB",
-			"value": "",
-			"type": "string",
-			"description": "ID Token del Gerente de la distribuidora B (plan QA_PEQUENO, al límite)"
-		},
-		{
-			"key": "tokenSuper",
-			"value": "",
-			"type": "string",
-			"description": "ID Token del SUPERADMINISTRADOR"
-		},
-		{
-			"key": "tokenSuspendida",
-			"value": "",
-			"type": "string",
-			"description": "ID Token de un usuario de una distribuidora SUSPENDIDO"
-		},
-		{
-			"key": "subdominioB",
-			"value": "prueba",
-			"type": "string"
-		},
-		{
-			"key": "distribuidoraBId",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "comercianteInactivoB",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "usuarioAuditoriaId",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "planNuevoId",
-			"value": "",
-			"type": "string",
-			"description": "Lo llena Planes/02"
-		},
-		{
-			"key": "planNuevoNombre",
-			"value": "",
-			"type": "string",
-			"description": "Lo llena Planes/02"
-		},
-		{
-			"key": "planAsignadoId",
-			"value": "",
-			"type": "string",
-			"description": "Lo llena Planes/01: un plan con distribuidoras"
-		},
-		{
-			"key": "planOtroId",
-			"value": "",
-			"type": "string",
-			"description": "Lo llena Planes/01"
-		},
-		{
-			"key": "planAnteriorBId",
-			"value": "",
-			"type": "string",
-			"description": "Lo llena Asignar plan/01"
-		}
-	]
+  "info": {
+    "_postman_id": "09c8fe46-1671-48c3-a1f7-0c97295ec2e4",
+    "name": "GELOX IT3 - Iteración 3",
+    "description": "Iteración 3 (RF63–RF71). Cada desarrollador agrega su carpeta en su PR.\n\nGobierno (T184): cuotas del plan, que responden 409 {error, codigo: CUOTA_PLAN_ALCANZADA, cuota, limite, usado} (RF70), y log de auditoría (RF71). Requiere la migración V9.\n\nPlanes y auditoría (T191): CRUD de planes, asignación de plan a una distribuidora y consulta del log.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Gobierno",
+      "description": "T184 — @Auditable, AuditoriaService y CuotaService (paquete gobierno).",
+      "item": [
+        {
+          "name": "Cuotas del plan (RF70)",
+          "description": "Distribuidora B (subdominio {{subdominioB}}) con el plan de cuotas pequeñas del plan de QA (máx. 3 usuarios, 5 productos, 4 comerciantes, 10 MB, 20 llamadas IA/mes) y ya al límite de cada cuota. {{tokenGerenteB}} es el ID Token del Gerente de B. El gerente titular cuenta en la cuota de usuarios.\n\nPreparar el plan en Supabase:\n\nINSERT INTO plan_suscripcion (nombre, descripcion, max_usuarios, max_productos, max_comerciantes,\n                              max_almacenamiento_mb, max_llamadas_ia_mes)\nVALUES ('QA_PEQUENO', 'Plan de QA con cuotas pequeñas', 3, 5, 4, 10, 20)\nON CONFLICT (nombre) DO NOTHING;\nUPDATE distribuidora SET plan_id = (SELECT id FROM plan_suscripcion WHERE nombre = 'QA_PEQUENO')\n WHERE subdominio = 'prueba';",
+          "item": [
+            {
+              "name": "01 - POST usuario n.º 4 con plan de máx. 3 → 409 (CP-70-04)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenGerenteB}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/usuarios",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "usuarios"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Vendedor Cuota\",\n  \"correo\": \"vendedor.cuota@gelox-test.com\",\n  \"contrasenaTemporal\": \"Temporal123*\",\n  \"rol\": \"ENCARGADO_VENTAS\"\n}"
+                },
+                "description": "No debe quedar cuenta en Firebase ni fila en usuario ni fila USUARIO_CREAR en auditoria."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                      "const body = pm.response.json();",
+                      "pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
+                      "  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
+                      "  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
+                      "  pm.expect(body.cuota).to.eql('USUARIOS');",
+                      "  pm.expect(body.limite).to.be.a('number');",
+                      "  pm.expect(body.usado).to.be.a('number');",
+                      "});",
+                      "pm.test('limite del plan QA = 3', () => pm.expect(body.limite).to.eql(3));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02 - POST producto n.º 6 con plan de máx. 5 → 409 (CP-64-09 / CP-70-05)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenGerenteB}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/catalogo/productos",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "catalogo",
+                    "productos"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"codigoTecnico\": \"QA-CUOTA-6\",\n  \"nombre\": \"Paleta cuota\",\n  \"categoria\": \"PALETAS\",\n  \"precioVenta\": 2000,\n  \"precioCosto\": 1200\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                      "const body = pm.response.json();",
+                      "pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
+                      "  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
+                      "  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
+                      "  pm.expect(body.cuota).to.eql('PRODUCTOS');",
+                      "  pm.expect(body.limite).to.be.a('number');",
+                      "  pm.expect(body.usado).to.be.a('number');",
+                      "});",
+                      "pm.test('limite del plan QA = 5', () => pm.expect(body.limite).to.eql(5));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03 - POST comerciante n.º 5 con plan de máx. 4 → 409",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenGerenteB}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/comerciantes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "comerciantes"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Comerciante Cuota\",\n  \"municipio\": \"Cúcuta\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                      "const body = pm.response.json();",
+                      "pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
+                      "  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
+                      "  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
+                      "  pm.expect(body.cuota).to.eql('COMERCIANTES');",
+                      "  pm.expect(body.limite).to.be.a('number');",
+                      "  pm.expect(body.usado).to.be.a('number');",
+                      "});",
+                      "pm.test('limite del plan QA = 4', () => pm.expect(body.limite).to.eql(4));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04 - PATCH activar comerciante inactivo con la cuota alcanzada → 409",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenGerenteB}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/comerciantes/{{comercianteInactivoB}}/estado",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "comerciantes",
+                    "{{comercianteInactivoB}}",
+                    "estado"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"activo\": true\n}"
+                },
+                "description": "{{comercianteInactivoB}}: id de un comerciante inactivo de B. Desactivar no consulta la cuota."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                      "const body = pm.response.json();",
+                      "pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
+                      "  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
+                      "  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
+                      "  pm.expect(body.cuota).to.eql('COMERCIANTES');",
+                      "  pm.expect(body.limite).to.be.a('number');",
+                      "  pm.expect(body.usado).to.be.a('number');",
+                      "});",
+                      "pm.test('limite del plan QA = 4', () => pm.expect(body.limite).to.eql(4));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "05 - POST archivo que supera max_almacenamiento_mb → 409 (CP-70-06)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenGerenteB}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/upload",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "upload"
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "archivo",
+                      "type": "file",
+                      "src": ""
+                    },
+                    {
+                      "key": "carpeta",
+                      "value": "productos",
+                      "type": "text"
+                    }
+                  ]
+                },
+                "description": "En 'archivo' elegir una imagen (máx. 5 MB) que, sumada a lo que B ya subió (archivo_almacenado), pase de 10 MB. limite y usado vienen en MB. No se sube ni se registra en archivo_almacenado:\nSELECT SUM(bytes) / 1048576.0 AS mb FROM archivo_almacenado WHERE tenant_id = '<id de B>';"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                      "const body = pm.response.json();",
+                      "pm.test('cuerpo {error, codigo, cuota, limite, usado}', () => {",
+                      "  pm.expect(body.error).to.eql('Cuota del plan alcanzada');",
+                      "  pm.expect(body.codigo).to.eql('CUOTA_PLAN_ALCANZADA');",
+                      "  pm.expect(body.cuota).to.eql('ALMACENAMIENTO_MB');",
+                      "  pm.expect(body.limite).to.be.a('number');",
+                      "  pm.expect(body.usado).to.be.a('number');",
+                      "});",
+                      "pm.test('limite del plan QA = 10', () => pm.expect(body.limite).to.eql(10));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06 - POST voz con LLAMADAS_IA_MES agotada → 200 con el clasificador de respaldo (sin 409)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenGerenteB}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/voz/interpretar",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "voz",
+                    "interpretar"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"texto\": \"vendí tres paletas de mango\",\n  \"confianza\": 0.95\n}"
+                },
+                "description": "Con 20 comandos de B clasificados por el LLM en el mes calendario (hora de Bogotá). El comando nuevo queda con metodo_clasificacion MODELO o REGLAS, no LLM:\nSELECT metodo_clasificacion, created_at FROM comando_voz WHERE tenant_id = '<id de B>' ORDER BY created_at DESC LIMIT 1;"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.test('no responde 409', () => pm.expect(pm.response.code).to.not.eql(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07 - POST producto en Mágico Sabor (plan migrado sin límites) → 201 (CP-70-07)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/catalogo/productos",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "catalogo",
+                    "productos"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"codigoTecnico\": \"QA-PILOTO-{{$timestamp}}\",\n  \"nombre\": \"Paleta piloto QA\",\n  \"categoria\": \"PALETAS\",\n  \"precioVenta\": 2000,\n  \"precioCosto\": 1200\n}"
+                },
+                "description": "Con el Gerente de Mágico Sabor (plan PILOTO sin máximos). Eliminar el producto al terminar."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Auditoría (RF71)",
+          "description": "Cada request deja (o no) una fila en auditoria. Verificar en Supabase con:\n\nSELECT fecha_hora, ip, tenant_id, usuario_id, rol, accion, entidad, entidad_id, detalle\n  FROM auditoria ORDER BY fecha_hora DESC LIMIT 20;\n\nip = primera dirección de X-Forwarded-For o, si no hay, request.getRemoteAddr(). tenant_id es NULL para el Superadministrador. detalle es JSON en texto.",
+          "item": [
+            {
+              "name": "01 - POST /api/auth/verificar → fila SESION_INICIAR",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/verificar",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "verificar"
+                  ]
+                },
+                "description": "Fila SESION_INICIAR con usuario_id, rol ADMINISTRADOR y tenant_id de Mágico Sabor."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02 - POST usuario permitido → fila USUARIO_CREAR (CP-71-01, INT-06)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/usuarios",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "usuarios"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Vendedor Auditoría\",\n  \"correo\": \"vendedor.auditoria.{{$timestamp}}@gelox-test.com\",\n  \"contrasenaTemporal\": \"Temporal123*\",\n  \"rol\": \"ENCARGADO_VENTAS\"\n}"
+                },
+                "description": "Fila USUARIO_CREAR con entidad Usuario y entidad_id = id del usuario creado."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('usuarioAuditoriaId', pm.response.json().id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03 - DELETE deshabilitar ese usuario → fila USUARIO_DESHABILITAR",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/usuarios/{{usuarioAuditoriaId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "usuarios",
+                    "{{usuarioAuditoriaId}}"
+                  ]
+                },
+                "description": "entidad_id = {{usuarioAuditoriaId}}."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', () => pm.expect(pm.response.code).to.be.within(200, 204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04 - Cuota alcanzada → 409 y SIN fila USUARIO_CREAR (CP-71-03)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenGerenteB}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/usuarios",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "usuarios"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Vendedor Cuota\",\n  \"correo\": \"vendedor.cuota2@gelox-test.com\",\n  \"contrasenaTemporal\": \"Temporal123*\",\n  \"rol\": \"ENCARGADO_VENTAS\"\n}"
+                },
+                "description": "La operación fallida no deja fila."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "05 - Token inválido → 401 y fila TOKEN_INVALIDO",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer token-invalido"
+                  },
+                  {
+                    "key": "X-Forwarded-For",
+                    "value": "181.50.1.20, 10.0.0.1"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/perfil",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "perfil"
+                  ]
+                },
+                "description": "Fila TOKEN_INVALIDO sin usuario_id ni tenant_id, ip 181.50.1.20 y detalle con motivo y ruta."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06 - Distribuidora suspendida → 403 y fila ACCESO_BLOQUEADO",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuspendida}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/perfil",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "perfil"
+                  ]
+                },
+                "description": "{{tokenSuspendida}}: ID Token de un usuario de una distribuidora SUSPENDIDO. Fila ACCESO_BLOQUEADO con tenant_id, usuario_id y detalle {estado, ruta}."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+                      "pm.test('código de bloqueo', () => pm.expect(pm.response.json().codigo).to.eql('DISTRIBUIDORA_SUSPENDIDA'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07 - PATCH suspender distribuidora B (Superadministrador) → fila DISTRIBUIDORA_CAMBIAR_ESTADO (CP-71-02)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/estado",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras",
+                    "{{distribuidoraBId}}",
+                    "estado"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"estado\": \"SUSPENDIDO\",\n  \"motivo\": \"QA auditoría: suspensión de prueba\"\n}"
+                },
+                "description": "Fila con tenant_id NULL, rol SUPERADMINISTRADOR y entidad_id = {{distribuidoraBId}}."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08 - PATCH reactivar distribuidora B → fila DISTRIBUIDORA_CAMBIAR_ESTADO",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/estado",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras",
+                    "{{distribuidoraBId}}",
+                    "estado"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"estado\": \"ACTIVO\",\n  \"motivo\": \"QA auditoría: reactivación\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09 - POST /api/auth/cerrar-sesion → fila SESION_CERRAR",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/cerrar-sesion",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "cerrar-sesion"
+                  ]
+                },
+                "description": "Ejecutar al final: revoca la sesión del Gerente de Mágico Sabor."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Planes y auditoría",
+      "description": "T191 — /api/plataforma/planes (RF70), PATCH /api/plataforma/distribuidoras/{id}/plan y /api/plataforma/auditoria (RF71). Solo SUPERADMINISTRADOR: {{tokenSuper}}; {{token}} (Gerente) recibe 403. Nombres de campo del mock de T193 (src/services/mocks/mockPlataforma.js). Correr en orden: Planes → Asignar plan → Log de auditoría.",
+      "item": [
+        {
+          "name": "Planes (RF70)",
+          "item": [
+            {
+              "name": "01 - GET planes → 200 (lista con distribuidoras y uso)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const lista = pm.response.json();",
+                      "pm.test('es una lista', () => pm.expect(lista).to.be.an('array'));",
+                      "if (lista.length) pm.collectionVariables.set('planOtroId', lista[0].id);",
+                      "const conDist = lista.find(p => p.totalDistribuidoras > 0);",
+                      "if (conDist) pm.collectionVariables.set('planAsignadoId', conDist.id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02 - POST plan → 201 (null = sin límite)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"QA Planes {{$timestamp}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                },
+                "description": "Deja fila PLAN_CREAR {plan, precioMensual, cuotas}."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "const p = pm.response.json();",
+                      "pm.test('forma del plan (mock T193)', () => {",
+                      "  ['id','nombre','descripcion','precioMensual','maxUsuarios','maxProductos','maxComerciantes',",
+                      "   'maxAlmacenamientoMb','maxLlamadasIaMes','totalDistribuidoras','distribuidoras']",
+                      "    .forEach(c => pm.expect(p).to.have.property(c));",
+                      "});",
+                      "pm.collectionVariables.set('planNuevoId', p.id);",
+                      "pm.collectionVariables.set('planNuevoNombre', p.nombre);",
+                      "pm.test('sin distribuidoras', () => pm.expect(p.totalDistribuidoras).to.eql(0));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03 - GET plan/{id} → 200",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes/{{planNuevoId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes",
+                    "{{planNuevoId}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const p = pm.response.json();",
+                      "pm.test('forma del plan (mock T193)', () => {",
+                      "  ['id','nombre','descripcion','precioMensual','maxUsuarios','maxProductos','maxComerciantes',",
+                      "   'maxAlmacenamientoMb','maxLlamadasIaMes','totalDistribuidoras','distribuidoras']",
+                      "    .forEach(c => pm.expect(p).to.have.property(c));",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04 - POST nombre repetido → 409 {campo: nombre}",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"{{planNuevoNombre}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                },
+                "description": "No distingue mayúsculas ni tildes."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 con campo', () => pm.response.to.have.status(409));",
+                      "pm.test('campo = nombre', () => pm.expect(pm.response.json().campo).to.eql('nombre'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "05 - POST cuota negativa → 400 {campo}",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"QA negativo\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": -1,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400 con campo', () => pm.response.to.have.status(400));",
+                      "pm.test('campo = maxProductos', () => pm.expect(pm.response.json().campo).to.eql('maxProductos'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06 - POST precio negativo → 400 {campo: precioMensual}",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"QA precio\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": -5,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400 con campo', () => pm.response.to.have.status(400));",
+                      "pm.test('campo = precioMensual', () => pm.expect(pm.response.json().campo).to.eql('precioMensual'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07 - PUT plan → 200 y valores nuevos",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes/{{planNuevoId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes",
+                    "{{planNuevoId}}"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"{{planNuevoNombre}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 6,\n  \"maxComerciantes\": null,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                },
+                "description": "Deja fila PLAN_EDITAR {plan, cambios: [{campo, antes, despues}]}."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const p = pm.response.json();",
+                      "pm.test('forma del plan (mock T193)', () => {",
+                      "  ['id','nombre','descripcion','precioMensual','maxUsuarios','maxProductos','maxComerciantes',",
+                      "   'maxAlmacenamientoMb','maxLlamadasIaMes','totalDistribuidoras','distribuidoras']",
+                      "    .forEach(c => pm.expect(p).to.have.property(c));",
+                      "});",
+                      "pm.test('valores nuevos', () => { pm.expect(p.maxProductos).to.eql(6); pm.expect(p.maxComerciantes).to.eql(null); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08 - PUT plan inexistente → 404",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes/00000000-0000-0000-0000-000000000000",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes",
+                    "00000000-0000-0000-0000-000000000000"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"QA 404\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09 - DELETE plan con distribuidoras asignadas → 409",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes/{{planAsignadoId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes",
+                    "{{planAsignadoId}}"
+                  ]
+                },
+                "description": "{{planAsignadoId}} lo llena 01 con un plan que tenga distribuidoras."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10 - GET planes como Gerente → 403 (CP-70-08)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11 - POST plan como Gerente → 403",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"QA gerente\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Asignar plan (RF70)",
+          "item": [
+            {
+              "name": "01 - GET distribuidora/{id} → 200 con plan y uso de cuotas",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras",
+                    "{{distribuidoraBId}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const d = pm.response.json();",
+                      "pm.test('planId, planNombre, plan y fechaPlan', () => {",
+                      "  pm.expect(d.planId).to.be.a('string');",
+                      "  pm.expect(d.planNombre).to.be.a('string');",
+                      "  pm.expect(d.plan).to.eql(d.planNombre);",
+                      "  pm.expect(d.fechaPlan).to.be.a('string');",
+                      "});",
+                      "pm.test('uso {usado, limite} por cuota', () => {",
+                      "  ['usuarios','productos','comerciantes','almacenamientoMb','llamadasIaMes'].forEach(c => {",
+                      "    pm.expect(d.uso[c]).to.have.property('usado');",
+                      "    pm.expect(d.uso[c]).to.have.property('limite');",
+                      "  });",
+                      "});",
+                      "pm.collectionVariables.set('planAnteriorBId', d.planId);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02 - PATCH plan → 200 (CP-70-03)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras",
+                    "{{distribuidoraBId}}",
+                    "plan"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"planId\": \"{{planNuevoId}}\",\n  \"motivo\": \"QA: plan de cuotas pequeñas\"\n}"
+                },
+                "description": "Si el uso de B ya supera alguna cuota del plan nuevo se asigna igual y la respuesta trae advertencias: [{cuota, usado, limite}]. Deja fila PLAN_ASIGNAR {planAnterior, planNuevo, motivo, cuotas}."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const d = pm.response.json();",
+                      "pm.test('planId, planNombre, plan y fechaPlan', () => {",
+                      "  pm.expect(d.planId).to.be.a('string');",
+                      "  pm.expect(d.planNombre).to.be.a('string');",
+                      "  pm.expect(d.plan).to.eql(d.planNombre);",
+                      "  pm.expect(d.fechaPlan).to.be.a('string');",
+                      "});",
+                      "pm.test('uso {usado, limite} por cuota', () => {",
+                      "  ['usuarios','productos','comerciantes','almacenamientoMb','llamadasIaMes'].forEach(c => {",
+                      "    pm.expect(d.uso[c]).to.have.property('usado');",
+                      "    pm.expect(d.uso[c]).to.have.property('limite');",
+                      "  });",
+                      "});",
+                      "pm.test('plan nuevo', () => pm.expect(d.planId).to.eql(pm.collectionVariables.get('planNuevoId')));",
+                      "if (d.advertencias) pm.test('advertencias [{cuota, usado, limite}]', () => {",
+                      "  d.advertencias.forEach(a => { pm.expect(a).to.have.keys('cuota','usado','limite'); pm.expect(a.usado).to.be.above(a.limite); });",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03 - PATCH el mismo plan → 409",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras",
+                    "{{distribuidoraBId}}",
+                    "plan"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"planId\": \"{{planNuevoId}}\",\n  \"motivo\": \"otra vez\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04 - PATCH sin motivo → 400 {campo: motivo}",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras",
+                    "{{distribuidoraBId}}",
+                    "plan"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"planId\": \"{{planAnteriorBId}}\",\n  \"motivo\": \"\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400 con campo', () => pm.response.to.have.status(400));",
+                      "pm.test('campo = motivo', () => pm.expect(pm.response.json().campo).to.eql('motivo'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "05 - PATCH plan inexistente → 404",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras",
+                    "{{distribuidoraBId}}",
+                    "plan"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"planId\": \"00000000-0000-0000-0000-000000000000\",\n  \"motivo\": \"x\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06 - DELETE el plan ya asignado → 409",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes/{{planNuevoId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes",
+                    "{{planNuevoId}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07 - PATCH restaurar el plan anterior → 200",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras",
+                    "{{distribuidoraBId}}",
+                    "plan"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"planId\": \"{{planAnteriorBId}}\",\n  \"motivo\": \"QA: restaurar plan\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08 - DELETE el plan de QA (ya sin distribuidoras) → 204",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/planes/{{planNuevoId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "planes",
+                    "{{planNuevoId}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09 - POST distribuidora con planId inexistente → 400 {campo: planId}",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"razonSocial\": \"QA Plan S.A.S.\",\n  \"nit\": \"900{{$timestamp}}\",\n  \"nombreComercial\": \"QA Plan\",\n  \"subdominio\": \"qa-plan\",\n  \"nombreGerente\": \"QA\",\n  \"correoGerente\": \"qa.plan.{{$timestamp}}@gelox-test.com\",\n  \"planId\": \"00000000-0000-0000-0000-000000000000\"\n}"
+                },
+                "description": "El alta ahora recibe planId (UUID) en lugar del texto plan."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400 con campo', () => pm.response.to.have.status(400));",
+                      "pm.test('campo = planId', () => pm.expect(pm.response.json().campo).to.eql('planId'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10 - PATCH plan como Gerente → 403",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/distribuidoras/{{distribuidoraBId}}/plan",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "distribuidoras",
+                    "{{distribuidoraBId}}",
+                    "plan"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"planId\": \"{{planOtroId}}\",\n  \"motivo\": \"x\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Log de auditoría (RF71)",
+          "item": [
+            {
+              "name": "01 - GET auditoría (primera página) → 200",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/auditoria?page=0&size=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "auditoria"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "0"
+                    },
+                    {
+                      "key": "size",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const pg = pm.response.json();",
+                      "pm.test('página {content, totalElements, totalPages, number, size}', () => {",
+                      "  pm.expect(pg).to.have.keys('content','totalElements','totalPages','number','size');",
+                      "});",
+                      "pm.test('ordenada por fechaHora desc', () => {",
+                      "  const f = pg.content.map(r => r.fechaHora);",
+                      "  pm.expect(f).to.eql([...f].sort().reverse());",
+                      "});",
+                      "pm.test('fila con los campos del contrato', () => {",
+                      "  if (!pg.content.length) return;",
+                      "  pm.expect(pg.content[0]).to.have.all.keys('id','fechaHora','ip','tenantId','distribuidoraNombre','usuarioId',",
+                      "    'usuarioNombre','usuarioCorreo','usuarioRol','accion','entidad','entidadId','detalle');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02 - GET filtrado por distribuidora y PLAN_ASIGNAR → filas de Asignar plan",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/auditoria?page=0&size=20&distribuidoraId={{distribuidoraBId}}&accion=PLAN_ASIGNAR",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "auditoria"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "0"
+                    },
+                    {
+                      "key": "size",
+                      "value": "20"
+                    },
+                    {
+                      "key": "distribuidoraId",
+                      "value": "{{distribuidoraBId}}"
+                    },
+                    {
+                      "key": "accion",
+                      "value": "PLAN_ASIGNAR"
+                    }
+                  ]
+                },
+                "description": "Las filas del Superadministrador sobre B tienen tenantId null y distribuidoraNombre = B."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "const pg = pm.response.json();",
+                      "pm.test('página {content, totalElements, totalPages, number, size}', () => {",
+                      "  pm.expect(pg).to.have.keys('content','totalElements','totalPages','number','size');",
+                      "});",
+                      "pm.test('ordenada por fechaHora desc', () => {",
+                      "  const f = pg.content.map(r => r.fechaHora);",
+                      "  pm.expect(f).to.eql([...f].sort().reverse());",
+                      "});",
+                      "pm.test('solo PLAN_ASIGNAR de B, con detalle JSON', () => {",
+                      "  pg.content.forEach(r => {",
+                      "    pm.expect(r.accion).to.eql('PLAN_ASIGNAR');",
+                      "    pm.expect(r.entidadId).to.eql(pm.collectionVariables.get('distribuidoraBId'));",
+                      "    const det = JSON.parse(r.detalle);",
+                      "    pm.expect(det).to.include.keys('planAnterior','planNuevo','motivo','cuotas');",
+                      "  });",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03 - GET filtrado por acción PLAN_CREAR y rango de fechas → 200",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/auditoria?accion=PLAN_CREAR&desde=2026-11-01&hasta=2026-12-31",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "auditoria"
+                  ],
+                  "query": [
+                    {
+                      "key": "accion",
+                      "value": "PLAN_CREAR"
+                    },
+                    {
+                      "key": "desde",
+                      "value": "2026-11-01"
+                    },
+                    {
+                      "key": "hasta",
+                      "value": "2026-12-31"
+                    },
+                    {
+                      "key": "usuarioId",
+                      "value": "",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.test('solo PLAN_CREAR', () => pm.response.json().content.forEach(r => pm.expect(r.accion).to.eql('PLAN_CREAR')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04 - GET desde posterior a hasta → 400",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/auditoria?desde=2026-12-01&hasta=2026-11-01",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "auditoria"
+                  ],
+                  "query": [
+                    {
+                      "key": "desde",
+                      "value": "2026-12-01"
+                    },
+                    {
+                      "key": "hasta",
+                      "value": "2026-11-01"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "05 - GET acciones → 200 (códigos AccionAuditoria)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/auditoria/acciones",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "auditoria",
+                    "acciones"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.test('incluye PLAN_ASIGNAR y USUARIO_CREAR', () => pm.expect(pm.response.json()).to.include.members(['PLAN_ASIGNAR','USUARIO_CREAR']));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "06 - GET usuarios del log (de B) → 200",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{tokenSuper}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/auditoria/usuarios?distribuidoraId={{distribuidoraBId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "auditoria",
+                    "usuarios"
+                  ],
+                  "query": [
+                    {
+                      "key": "distribuidoraId",
+                      "value": "{{distribuidoraBId}}"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                      "pm.test('[{id, nombre, correo, rol, distribuidoraNombre}]', () => pm.response.json().forEach(u =>",
+                      "  pm.expect(u).to.have.all.keys('id','nombre','correo','rol','distribuidoraNombre')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "07 - GET auditoría como Gerente → 403 (CP-71-05)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/auditoria",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "auditoria"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "08 - GET acciones como Gerente → 403",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/auditoria/acciones",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "auditoria",
+                    "acciones"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09 - GET usuarios del log como Gerente → 403",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/plataforma/auditoria/usuarios",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "plataforma",
+                    "auditoria",
+                    "usuarios"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Panel",
+      "item": [
+        {
+          "name": "01 - Panel con rango explícito",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('trae distribuidoras.total', () => pm.expect(body.distribuidoras.total).to.exist);",
+                  "pm.test('trae ventas.valor y transacciones', () => { pm.expect(body.ventas.valor).to.exist; pm.expect(body.ventas.transacciones).to.exist; });",
+                  "pm.test('trae pedidosProveedor.cantidad', () => pm.expect(body.pedidosProveedor.cantidad).to.exist);",
+                  "pm.test('serie no esta vacia', () => pm.expect(body.serie.length).to.be.greaterThan(0));",
+                  "pm.test('porDistribuidora es una lista', () => pm.expect(body.porDistribuidora).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/panel?desde=2026-01-01&hasta=2026-11-24",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "panel"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-11-24"
+                }
+              ]
+            },
+            "description": "Dashboard del Superadministrador (RF69). La serie cubre al menos 6 meses terminando en \"hasta\"."
+          },
+          "response": []
+        },
+        {
+          "name": "02 - Panel sin fechas usa el rango por defecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('trae desde y hasta', () => { pm.expect(body.desde).to.exist; pm.expect(body.hasta).to.exist; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/panel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "panel"
+              ]
+            },
+            "description": "Sin desde/hasta: los últimos 30 días hasta hoy."
+          },
+          "response": []
+        },
+        {
+          "name": "03 - Panel con desde posterior a hasta (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 BAD REQUEST', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenSuper}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/panel?desde=2026-12-01&hasta=2026-01-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "panel"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-12-01"
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-01-01"
+                }
+              ]
+            },
+            "description": "desde no puede ser posterior a hasta."
+          },
+          "response": []
+        },
+        {
+          "name": "04 - Panel con rol ADMINISTRADOR (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 FORBIDDEN', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plataforma/panel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plataforma",
+                "panel"
+              ]
+            },
+            "description": "{{token}} es de un ADMINISTRADOR (Gerente): /api/plataforma/** exige SUPERADMINISTRADOR."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "ID Token del Gerente (ADMINISTRADOR) de Mágico Sabor"
+    },
+    {
+      "key": "tokenGerenteB",
+      "value": "",
+      "type": "string",
+      "description": "ID Token del Gerente de la distribuidora B (plan QA_PEQUENO, al límite)"
+    },
+    {
+      "key": "tokenSuper",
+      "value": "",
+      "type": "string",
+      "description": "ID Token del SUPERADMINISTRADOR"
+    },
+    {
+      "key": "tokenSuspendida",
+      "value": "",
+      "type": "string",
+      "description": "ID Token de un usuario de una distribuidora SUSPENDIDO"
+    },
+    {
+      "key": "subdominioB",
+      "value": "prueba",
+      "type": "string"
+    },
+    {
+      "key": "distribuidoraBId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "comercianteInactivoB",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "usuarioAuditoriaId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "planNuevoId",
+      "value": "",
+      "type": "string",
+      "description": "Lo llena Planes/02"
+    },
+    {
+      "key": "planNuevoNombre",
+      "value": "",
+      "type": "string",
+      "description": "Lo llena Planes/02"
+    },
+    {
+      "key": "planAsignadoId",
+      "value": "",
+      "type": "string",
+      "description": "Lo llena Planes/01: un plan con distribuidoras"
+    },
+    {
+      "key": "planOtroId",
+      "value": "",
+      "type": "string",
+      "description": "Lo llena Planes/01"
+    },
+    {
+      "key": "planAnteriorBId",
+      "value": "",
+      "type": "string",
+      "description": "Lo llena Asignar plan/01"
+    }
+  ]
 }
