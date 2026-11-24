@@ -172,19 +172,28 @@ public class InventarioController {
      */
     @GetMapping("/pedidos/{id}/exportar")
     public ResponseEntity<byte[]> exportarPedido(@PathVariable UUID id) {
-        byte[] excel = pedidoService.exportarExcelPedido(id);
-        String nombreArchivo = "pedido-nutresa-" +
-                LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".xlsx";
+        PedidoProveedorService.ArchivoPedido archivo = pedidoService.exportarPedido(id);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentDisposition(
-                ContentDisposition.attachment().filename(nombreArchivo).build());
+                ContentDisposition.attachment().filename(archivo.nombreArchivo()).build());
+        // RF67: un producto sin código del proveedor no se omite; el archivo sale igual y se avisa aquí
+        // (nombres separados por «|», codificados para URL).
+        avisar(headers, "X-Productos-Sin-Codigo", archivo.productosSinCodigo());
+        avisar(headers, "X-Productos-No-Ubicados", archivo.productosNoUbicados());
 
         return ResponseEntity.ok()
                 .headers(headers)
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .body(excel);
+                .body(archivo.contenido());
+    }
+
+    private static void avisar(HttpHeaders headers, String nombre, java.util.List<String> productos) {
+        if (productos == null || productos.isEmpty()) return;
+        headers.add(nombre, productos.stream()
+                .map(p -> java.net.URLEncoder.encode(p, java.nio.charset.StandardCharsets.UTF_8))
+                .collect(java.util.stream.Collectors.joining("|")));
     }
 
     // ──────────────────────────────────────────────────────────────────────

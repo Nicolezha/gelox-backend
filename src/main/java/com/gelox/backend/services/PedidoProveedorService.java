@@ -3,23 +3,16 @@ package com.gelox.backend.services;
 import com.gelox.backend.catalogo.dto.PagedResponse;
 import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.*;
-import com.gelox.backend.plataforma.IdentidadDistribuidoraService;
+import com.gelox.backend.exportacion.ExportadorPedido;
 import com.gelox.backend.repositories.*;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -37,11 +30,8 @@ public class PedidoProveedorService {
     private final MovimientoInventarioRepository movimientoRepo;
     private final PerdidaRepository             perdidaRepo;
     private final EventoSistemaService          eventoService;
-    private final IdentidadDistribuidoraService identidadService;
+    private final ExportadorPedido             exportador;                // RF67
     private final ConversionUnidadService      conversionUnidadService;   // RF64
-
-    @Value("classpath:templates/catalogo.xlsx")
-    private Resource plantillaExcel;
 
     // ══════════════════════════════════════════════════════════════════════
     // RF21 — Crear pedido + generar Excel Nutresa
@@ -95,9 +85,11 @@ public class PedidoProveedorService {
                 usuarioActual.getId());
 
         // 5. Generar Excel llenando la plantilla catálogo
-        byte[] excel = generarExcelDesdeTemplate(guardado);
+        ExportadorPedido.Resultado archivo = exportar(guardado);
 
-        return Map.of("pedidoId", guardado.getId(), "excel", excel);
+        return Map.of("pedidoId", guardado.getId(), "excel", archivo.contenido(),
+                "productosSinCodigo", archivo.productosSinCodigo(),
+                "productosNoUbicados", archivo.productosNoUbicados());
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -315,130 +307,35 @@ public class PedidoProveedorService {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // Generación de Excel desde plantilla catálogo (RF21)
+    // Archivo del pedido con la plantilla de su proveedor (RF21, RF67)
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Carga la plantilla {@code catalogo.xlsx}, localiza las columnas
-     * "Producto/SKU" y "Cantidad", y escribe las cantidades del pedido
-     * en cada fila cuyo SKU coincida con un codigoTecnico del carrito.
-     * El resto de filas queda en blanco en la columna Cantidad.
-     */
-    private byte[] generarExcelDesdeTemplate(PedidoProveedor pedido) {
-
-        // Por SKU, lo que falta escribir: {cajas, unidades}. La plantilla se sube a
-        // Nutresa tal cual: solo se llena la columna Cantidad, nunca se agregan filas.
-        Map<String, int[]> pendientes = new HashMap<>();
-        Map<String, Producto> productos = new HashMap<>();
-        for (ItemPedidoProveedor item : pedido.getItems()) {
-            String raw = item.getProducto().getCodigoTecnico();
-            if (raw == null || raw.isBlank()) continue; // sin SKU no se puede mapear al Excel
-            String sku = raw.trim();
-            int[] cant = pendientes.computeIfAbsent(sku, k -> new int[2]);
-            cant[0] += valorOrCero(item.getCantidadCajas());
-            cant[1] += valorOrCero(item.getCantidadUnidades());
-            productos.put(sku, item.getProducto());
-        }
-
-        try (InputStream tplStream = plantillaExcel.getInputStream();
-             Workbook wb = new XSSFWorkbook(tplStream);
-             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-
-            Sheet sheet = wb.getSheetAt(0);
-
-            // T119 — nombre de la distribuidora en el título (A1, combinada A1:I3).
-            // Solo cambia el texto de esa celda: sin imágenes ni filas o columnas nuevas, porque
-            // el portal de Nutresa y el propio sistema leen el formato desde la fila "Producto/SKU".
-            IdentidadDTO identidad = identidadService.obtener();
-            Row filaTitulo = sheet.getRow(0);
-            Cell celdaTitulo = filaTitulo != null ? filaTitulo.getCell(0) : null;
-            if (identidad != null && identidad.nombreComercial() != null && celdaTitulo != null) {
-                celdaTitulo.setCellValue("Formato de pedido masivo — " + identidad.nombreComercial());
-            }
-
-            // Buscar fila de encabezados y los índices de columna
-            int colSku = -1, colUm = -1, colCantidad = -1, headerRow = -1;
-            for (Row row : sheet) {
-                for (Cell cell : row) {
-                    String val = cellText(cell).trim();
-                    if (val.equalsIgnoreCase("Producto/SKU"))      { colSku      = cell.getColumnIndex(); headerRow = row.getRowNum(); }
-                    if (val.equalsIgnoreCase("Unidad de Medida"))  { colUm       = cell.getColumnIndex(); }
-                    if (val.equalsIgnoreCase("Cantidad"))          { colCantidad = cell.getColumnIndex(); }
-                }
-                if (headerRow >= 0) break;
-            }
-
-            if (colSku < 0 || colCantidad < 0) {
-                throw new RuntimeException(
-                        "La plantilla catálogo.xlsx no contiene los encabezados 'Producto/SKU' y 'Cantidad'");
-            }
-
-            // Llenar/limpiar columna Cantidad fila a fila
-            for (int i = headerRow + 1; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row == null) continue;
-
-                String sku = cellText(row.getCell(colSku)).trim();
-                if (sku.isBlank()) continue;
-
-                String rawUm = (colUm >= 0) ? cellText(row.getCell(colUm)).trim().toUpperCase() : "";
-                int qty = tomarCantidad(pendientes.get(sku), productos.get(sku),
-                        rawUm.startsWith("CAJ") || rawUm.equals("CJ"));
-
-                Cell cantCell = row.getCell(colCantidad);
-                if (cantCell == null) cantCell = row.createCell(colCantidad, CellType.NUMERIC);
-
-                if (qty > 0) {
-                    cantCell.setCellValue(qty);
-                } else {
-                    cantCell.setBlank();
-                }
-            }
-
-            wb.write(out);
-            return out.toByteArray();
-
-        } catch (IOException e) {
-            throw new RuntimeException("Error al generar Excel desde plantilla: " + e.getMessage(), e);
-        }
+    /** Archivo listo para descargar y avisos de la exportación (FP-15 §2.18.1). */
+    public record ArchivoPedido(byte[] contenido, String nombreArchivo,
+                                List<String> productosSinCodigo, List<String> productosNoUbicados) {
     }
 
     /**
-     * Saca de {@code cant} lo que cabe en una fila de la plantilla, convertido a su
-     * unidad: en una fila CJ van las cajas (y las sueltas solo si completan cajas);
-     * en una fila UN va todo en unidades.
+     * Arma el .xlsx del pedido con la plantilla de su proveedor ({@link ExportadorPedido}). El proveedor
+     * es el de los productos del pedido; sin proveedor se usa la plantilla estándar de Nutresa.
      */
-    private static int tomarCantidad(int[] cant, Producto producto, boolean filaEnCajas) {
-        if (cant == null) return 0;
-        Integer upc = producto.getUnidadesPorCaja();
-        boolean conCaja = upc != null && upc > 0;
-        int qty;
-        if (filaEnCajas) {
-            qty = cant[0];
-            cant[0] = 0;
-            if (conCaja && cant[1] % upc == 0) {
-                qty += cant[1] / upc;
-                cant[1] = 0;
-            }
-        } else {
-            qty = cant[1];
-            cant[1] = 0;
-            if (conCaja) {
-                qty += cant[0] * upc;
-                cant[0] = 0;
-            }
-        }
-        return qty;
+    private ExportadorPedido.Resultado exportar(PedidoProveedor pedido) {
+        return exportador.generar(pedido, proveedorDe(pedido));
     }
 
-    private String cellText(Cell cell) {
-        if (cell == null) return "";
-        return switch (cell.getCellType()) {
-            case STRING  -> cell.getStringCellValue();
-            case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
-            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
-            default      -> "";
-        };
+    private static Proveedor proveedorDe(PedidoProveedor pedido) {
+        return pedido.getItems().stream()
+                .map(i -> i.getProducto().getProveedor())
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** Pedido_&lt;proveedor&gt;_&lt;fecha&gt;.xlsx; un pedido sin proveedor es de Nutresa. */
+    private static String nombreArchivo(PedidoProveedor pedido, Proveedor proveedor) {
+        String nombre = proveedor != null ? proveedor.getNombre() : "Nutresa";
+        String limpio = nombre.trim().replaceAll("[^\\p{L}\\p{N}]+", "-").replaceAll("^-|-$", "");
+        return "Pedido_" + limpio + "_" + pedido.getFecha() + ".xlsx";
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -560,7 +457,18 @@ public class PedidoProveedorService {
     public byte[] exportarExcelPedido(UUID pedidoId) {
         PedidoProveedor pedido = pedidoRepo.findByIdWithItems(pedidoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
-        return generarExcelDesdeTemplate(pedido);
+        return exportar(pedido).contenido();
+    }
+
+    /** Igual que {@link #exportarExcelPedido} pero con el nombre del archivo y los avisos (RF67). */
+    @Transactional(readOnly = true)
+    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
+    public ArchivoPedido exportarPedido(UUID pedidoId) {
+        PedidoProveedor pedido = pedidoRepo.findByIdWithItems(pedidoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+        ExportadorPedido.Resultado r = exportar(pedido);
+        return new ArchivoPedido(r.contenido(), nombreArchivo(pedido, proveedorDe(pedido)),
+                r.productosSinCodigo(), r.productosNoUbicados());
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -600,7 +508,10 @@ public class PedidoProveedorService {
                         producto.getNombre()),
                 usuarioActual.getId());
 
-        return Map.of("pedidoId", guardado.getId(), "excel", generarExcelDesdeTemplate(guardado));
+        ExportadorPedido.Resultado archivo = exportar(guardado);
+        return Map.of("pedidoId", guardado.getId(), "excel", archivo.contenido(),
+                "productosSinCodigo", archivo.productosSinCodigo(),
+                "productosNoUbicados", archivo.productosNoUbicados());
     }
 
     private void agregarItemPedido(PedidoProveedor pedido, Producto producto, ModificarPedidoRequest req) {
