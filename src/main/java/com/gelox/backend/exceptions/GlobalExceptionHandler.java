@@ -1,5 +1,6 @@
 package com.gelox.backend.exceptions;
 
+import com.gelox.backend.credito.CreditoBloqueadoException;
 import com.gelox.backend.gobierno.CuotaAlcanzadaException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,12 @@ public class GlobalExceptionHandler {
     /** RF70 — 409 {error, codigo: CUOTA_PLAN_ALCANZADA, cuota, limite, usado} (FP-15 §2.16.2). */
     @ExceptionHandler(CuotaAlcanzadaException.class)
     public ResponseEntity<Map<String, Object>> handleCuotaAlcanzada(CuotaAlcanzadaException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.cuerpo());
+    }
+
+    /** RF65 — 409 {error, codigo: CREDITO_BLOQUEADO, deuda, cupo, planillasVencidas} (FP-15 §2.17.1). */
+    @ExceptionHandler(CreditoBloqueadoException.class)
+    public ResponseEntity<Map<String, Object>> handleCreditoBloqueado(CreditoBloqueadoException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.cuerpo());
     }
 
