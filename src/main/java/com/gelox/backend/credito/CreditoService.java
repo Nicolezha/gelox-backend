@@ -90,11 +90,12 @@ public class CreditoService {
 
     @RequiereRol("ADMINISTRADOR")
     @Auditable(accion = "CREDITO_POLITICA_CAMBIAR", entidad = "PoliticaCredito")
-    public PoliticaCreditoDTO actualizarPoliticaDistribuidora(PoliticaCreditoRequest req) {
+    public PoliticaCreditoDTO actualizarPoliticaDistribuidora(PoliticaCreditoRequest req, Usuario usuario) {
         PoliticaCredito politica = politicaPorDefecto();
         politica.setCupo(req.cupo());
         politica.setPlazoDias(req.plazoDias());
         politica.setPoliticaVencimiento(req.politica());
+        politica.setActualizadoPor(usuario.getId());
         return PoliticaCreditoDTO.from(politicaRepository.save(politica));
     }
 
@@ -108,7 +109,7 @@ public class CreditoService {
 
     @RequiereRol("ADMINISTRADOR")
     @Auditable(accion = "CREDITO_POLITICA_CAMBIAR", entidad = "PoliticaCredito")
-    public CreditoVistaDTO definirExcepcion(UUID comercianteId, PoliticaCreditoRequest req) {
+    public CreditoVistaDTO definirExcepcion(UUID comercianteId, PoliticaCreditoRequest req, Usuario usuario) {
         Comerciante comerciante = validarComercianteDelTenant(comercianteId);
         UUID tenantId = TenantContext.requerido();
         PoliticaCredito politica = politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId)
@@ -116,6 +117,8 @@ public class CreditoService {
         politica.setCupo(req.cupo());
         politica.setPlazoDias(req.plazoDias());
         politica.setPoliticaVencimiento(req.politica());
+        politica.setActivo(true);   // solo puede haber una fila por comerciante: si estaba inactiva, se reutiliza
+        politica.setActualizadoPor(usuario.getId());
         politicaRepository.save(politica);
         return vistaDe(comercianteId);
     }
@@ -174,9 +177,8 @@ public class CreditoService {
     // ── Privados ─────────────────────────────────────────────────────────────
 
     private CreditoVistaDTO vistaDe(UUID comercianteId) {
-        UUID tenantId = TenantContext.requerido();
         PoliticaCredito politicaDefecto = politicaPorDefecto();
-        Optional<PoliticaCredito> excepcion = politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId);
+        Optional<PoliticaCredito> excepcion = excepcionActivaDe(comercianteId);
         PoliticaCredito efectiva = excepcion.orElse(politicaDefecto);
         Saldos saldos = calcularSaldos(comercianteId);
         List<AbonoDTO> abonos = abonoRepository.findByComerciante_IdOrderByFechaDesc(comercianteId).stream()
@@ -229,9 +231,13 @@ public class CreditoService {
     }
 
     private PoliticaCredito politicaEfectivaDe(UUID comercianteId) {
+        return excepcionActivaDe(comercianteId).orElseGet(this::politicaPorDefecto);
+    }
+
+    private Optional<PoliticaCredito> excepcionActivaDe(UUID comercianteId) {
         UUID tenantId = TenantContext.requerido();
         return politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId)
-                .orElseGet(this::politicaPorDefecto);
+                .filter(p -> Boolean.TRUE.equals(p.getActivo()));
     }
 
     private PoliticaCredito politicaPorDefecto() {

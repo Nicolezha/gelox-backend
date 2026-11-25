@@ -163,6 +163,59 @@ class LiquidacionServiceEsquemaTest {
     }
 
     @Test
+    @DisplayName("MARGEN con precio al público en 0: cobra el precio al comerciante y el ítem no genera ganancia")
+    void margen_precioPublicoCero_cobraElPrecioAlComerciante() {
+        item.setPrecioPublico(BigDecimal.ZERO);
+        when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, null));
+
+        LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(planilla.getId(), devolver(0, null), usuario);
+
+        assertThat(response.montoCobrado()).isEqualByComparingTo("10000");
+        assertThat(response.totalVendido()).isEqualByComparingTo("10000");
+        assertThat(response.gananciaComerciante()).isNull();
+        assertThat(item.getGananciaComerciante()).isNull();
+        assertThat(planilla.getTotalGanancia()).isEqualByComparingTo("10000");
+    }
+
+    @Test
+    @DisplayName("MARGEN con un ítem con precio al público y otro en 0: el segundo no resta cobro ni ganancia")
+    void margen_planillaMixta_elItemSinPrecioPublicoNoResta() {
+        item.setPrecioPublico(BigDecimal.valueOf(1500));
+        ItemPlanilla sinPrecio = ItemPlanilla.builder()
+                .id(UUID.randomUUID()).planilla(planilla)
+                .unidadesDespachadas(20).unidadesDevueltas(0)
+                .precioVenta(BigDecimal.valueOf(2400)).precioPublico(BigDecimal.ZERO)
+                .build();
+        when(itemPlanillaRepository.findByIdAndPlanillaId(sinPrecio.getId(), planilla.getId()))
+                .thenReturn(Optional.of(sinPrecio));
+        when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, null));
+
+        LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(planilla.getId(),
+                new LiquidacionRequestDTO(List.of(
+                        new DevolucionItemDTO(item.getId(), 0),
+                        new DevolucionItemDTO(sinPrecio.getId(), 0)), null), usuario);
+
+        // 10 * 1000 + 20 * 2400 = 58000 cobrado; solo el primer ítem da ganancia: 10 * 500
+        assertThat(response.montoCobrado()).isEqualByComparingTo("58000");
+        assertThat(response.gananciaComerciante()).isEqualByComparingTo("5000");
+        assertThat(response.totalVendido()).isEqualByComparingTo("63000");
+    }
+
+    @Test
+    @DisplayName("COMISION con precio al público en 0: usa el precio al comerciante e informa la ganancia descontada")
+    void comision_precioPublicoCero_usaElPrecioAlComerciante() {
+        item.setPrecioPublico(BigDecimal.ZERO);
+        when(esquemaLiquidacionService.vigente())
+                .thenReturn(esquema(TipoEsquemaLiquidacion.COMISION, BigDecimal.valueOf(20)));
+
+        LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(planilla.getId(), devolver(0, null), usuario);
+
+        assertThat(response.gananciaComerciante()).isEqualByComparingTo("2000");
+        assertThat(response.montoCobrado()).isEqualByComparingTo("8000");
+        assertThat(planilla.getGananciaComerciante()).isEqualByComparingTo("2000");
+    }
+
+    @Test
     @DisplayName("sin efectivoRecibido indicado, se asume pago completo (igual al monto cobrado)")
     void sinEfectivoRecibido_asumePagoCompleto() {
         when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, BigDecimal.ZERO));

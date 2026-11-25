@@ -60,7 +60,7 @@ public class PlanillaComerciante implements TenantAware {
     @Column(name = "esquema_aplicado", length = 12)
     private TipoEsquemaLiquidacion esquemaAplicado;
 
-    @Column(name = "valor_esquema", precision = 15, scale = 4)
+    @Column(name = "valor_esquema", precision = 12, scale = 2)
     private BigDecimal valorEsquema;
 
     /** RF65 — fecha de la planilla + plazo de la política de crédito efectiva; el Gerente puede extenderla. */

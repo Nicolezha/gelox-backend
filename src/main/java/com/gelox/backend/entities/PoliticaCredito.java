@@ -48,20 +48,24 @@ public class PoliticaCredito implements TenantAware {
     private Integer plazoDias;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "politica_vencimiento", nullable = false, length = 15)
+    @Column(name = "politica_vencimiento", nullable = false, length = 12)
     private PoliticaVencimiento politicaVencimiento;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    /** Una excepción inactiva no se aplica: rige la política por defecto (FP-15 §2.17.1). */
+    @Builder.Default
+    @Column(name = "activo", nullable = false)
+    private Boolean activo = true;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    /** Usuario que hizo el último cambio; null en la fila sembrada por la migración. */
+    @Column(name = "actualizado_por")
+    private UUID actualizadoPor;
+
     @PrePersist
     protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now(ZONA_BOGOTA);
-        createdAt = now;
-        updatedAt = now;
+        updatedAt = LocalDateTime.now(ZONA_BOGOTA);
     }
 
     @PreUpdate

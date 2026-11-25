@@ -8,6 +8,6 @@ import java.util.UUID;
 
 public interface EsquemaLiquidacionRepository extends JpaRepository<EsquemaLiquidacion, UUID> {
 
-    /** El esquema vigente de la distribuidora (el más reciente por vigenteDesde). */
-    Optional<EsquemaLiquidacion> findTopByTenantIdOrderByVigenteDesdeDesc(UUID tenantId);
+    /** El esquema de la distribuidora (hay uno solo: uq_esquema_liquidacion_tenant). */
+    Optional<EsquemaLiquidacion> findByTenantId(UUID tenantId);
 }

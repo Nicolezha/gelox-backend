@@ -137,11 +137,12 @@ class CreditoServiceTest {
         when(politicaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         PoliticaCreditoDTO dto = creditoService.actualizarPoliticaDistribuidora(
-                new PoliticaCreditoRequest(BigDecimal.valueOf(100000), 10, PoliticaVencimiento.BLOQUEAR));
+                new PoliticaCreditoRequest(BigDecimal.valueOf(100000), 10, PoliticaVencimiento.BLOQUEAR), usuario);
 
         assertThat(dto.cupo()).isEqualByComparingTo("100000");
         assertThat(dto.plazoDias()).isEqualTo(10);
         assertThat(dto.politica()).isEqualTo(PoliticaVencimiento.BLOQUEAR);
+        assertThat(existente.getActualizadoPor()).isEqualTo(usuario.getId());
     }
 
     // ── Vista de crédito del comerciante ────────────────────────────────
@@ -235,7 +236,7 @@ class CreditoServiceTest {
         sinPlanillasNiAbonosVista();
 
         CreditoVistaDTO vista = creditoService.definirExcepcion(comerciante.getId(),
-                new PoliticaCreditoRequest(BigDecimal.valueOf(200000), 15, PoliticaVencimiento.BLOQUEAR));
+                new PoliticaCreditoRequest(BigDecimal.valueOf(200000), 15, PoliticaVencimiento.BLOQUEAR), usuario);
 
         assertThat(vista.origen()).isEqualTo("EXCEPCION");
         assertThat(vista.cupo()).isEqualByComparingTo("200000");
@@ -321,6 +322,23 @@ class CreditoServiceTest {
 
         assertThat(evaluacion.excede()).isFalse();
         assertThat(evaluacion.cupo()).isEqualByComparingTo("500000");
+    }
+
+    @Test
+    @DisplayName("una excepción inactiva no se aplica: rige la política por defecto")
+    void evaluar_excepcionInactiva_usaLaPorDefecto() {
+        PoliticaCredito inactiva = PoliticaCredito.builder().id(UUID.randomUUID()).tenantId(TENANT)
+                .comerciante(comerciante).cupo(BigDecimal.valueOf(500000)).plazoDias(30)
+                .politicaVencimiento(PoliticaVencimiento.SOLO_ALERTA).activo(false).build();
+        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.of(inactiva));
+        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.BLOQUEAR)));
+        sinPlanillasNiAbonos();
+
+        CreditoService.Evaluacion evaluacion = creditoService.evaluar(comerciante.getId());
+
+        assertThat(evaluacion.cupo()).isEqualByComparingTo("50000");
+        assertThat(evaluacion.politica()).isEqualTo(PoliticaVencimiento.BLOQUEAR);
     }
 
     @Test

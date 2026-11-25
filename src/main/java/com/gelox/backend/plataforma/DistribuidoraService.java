@@ -1,8 +1,12 @@
 package com.gelox.backend.plataforma;
 
 import com.gelox.backend.entities.Distribuidora;
+import com.gelox.backend.entities.EsquemaLiquidacion;
 import com.gelox.backend.entities.EstadoDistribuidora;
+import com.gelox.backend.entities.PoliticaCredito;
+import com.gelox.backend.entities.PoliticaVencimiento;
 import com.gelox.backend.entities.RolUsuario;
+import com.gelox.backend.entities.TipoEsquemaLiquidacion;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.exceptions.CampoInvalidoException;
@@ -19,6 +23,8 @@ import com.gelox.backend.plataforma.dto.CambiarEstadoRequest;
 import com.gelox.backend.plataforma.dto.CrearDistribuidoraRequest;
 import com.gelox.backend.plataforma.dto.DistribuidoraDTO;
 import com.gelox.backend.repositories.DistribuidoraRepository;
+import com.gelox.backend.repositories.EsquemaLiquidacionRepository;
+import com.gelox.backend.repositories.PoliticaCreditoRepository;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.EmailService;
@@ -36,6 +42,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -64,6 +71,9 @@ public class DistribuidoraService {
     private static final String COLOR_PRIMARIO_DEFECTO = "#1F3864";
     private static final String COLOR_SECUNDARIO_DEFECTO = "#2E75B6";
 
+    /** Cupo inicial de la política de crédito (plazo 0 y SOLO_ALERTA), igual que el sembrado de V10. */
+    private static final BigDecimal CUPO_CREDITO_DEFECTO = BigDecimal.valueOf(50_000);
+
     private static final String ALFABETO_PASSWORD =
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     private static final int LARGO_PASSWORD = 12;
@@ -77,6 +87,8 @@ public class DistribuidoraService {
     private final PlanSuscripcionRepository planRepository;   // RF70 — distribuidora.plan_id
     private final CuotaService cuotaService;                   // RF70 — uso de cuotas en el detalle
     private final AuditoriaRepository auditoriaRepository;     // RF70 — fechaPlan (último PLAN_ASIGNAR)
+    private final PoliticaCreditoRepository politicaCreditoRepository;         // RF65 — política inicial
+    private final EsquemaLiquidacionRepository esquemaLiquidacionRepository;   // RF66 — esquema inicial
 
     // ─────────────────────────────────────────────────────────────────
     // RF58 — Aprovisionamiento
@@ -119,6 +131,9 @@ public class DistribuidoraService {
                 .colorPrimario(COLOR_PRIMARIO_DEFECTO)
                 .colorSecundario(COLOR_SECUNDARIO_DEFECTO)
                 .build());
+
+        // Antes de crear la cuenta en Firebase: si esto falla no queda ningún usuario por revertir
+        crearConfiguracionComercialInicial(distribuidora.getId());
 
         UserRecord firebaseUser;
         try {
@@ -388,6 +403,20 @@ public class DistribuidoraService {
             log.warn("No se pudo enviar el correo de acceso a {}: {}", correo, e.getMessage());
             return false;
         }
+    }
+
+    /** Sin estas dos filas la distribuidora no podría despachar ni liquidar planillas (RF65, RF66). */
+    private void crearConfiguracionComercialInicial(UUID tenantId) {
+        politicaCreditoRepository.save(PoliticaCredito.builder()
+                .tenantId(tenantId)
+                .cupo(CUPO_CREDITO_DEFECTO)
+                .plazoDias(0)
+                .politicaVencimiento(PoliticaVencimiento.SOLO_ALERTA)
+                .build());
+        esquemaLiquidacionRepository.save(EsquemaLiquidacion.builder()
+                .tenantId(tenantId)
+                .tipo(TipoEsquemaLiquidacion.MARGEN)
+                .build());
     }
 
     /** El Superadministrador no tiene TenantContext: se fija temporalmente para registrar el evento. */

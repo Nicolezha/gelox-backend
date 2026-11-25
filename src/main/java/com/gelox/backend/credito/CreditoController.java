@@ -27,8 +27,10 @@ public class CreditoController {
     }
 
     @PutMapping("/api/credito/politica")
-    public ResponseEntity<PoliticaCreditoDTO> actualizarPolitica(@Valid @RequestBody PoliticaCreditoRequest req) {
-        return ResponseEntity.ok(creditoService.actualizarPoliticaDistribuidora(req));
+    public ResponseEntity<PoliticaCreditoDTO> actualizarPolitica(
+            @Valid @RequestBody PoliticaCreditoRequest req,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(creditoService.actualizarPoliticaDistribuidora(req, usuario));
     }
 
     @GetMapping("/api/comerciantes/{id}/credito")
@@ -38,8 +40,10 @@ public class CreditoController {
 
     @PutMapping("/api/comerciantes/{id}/credito")
     public ResponseEntity<CreditoVistaDTO> definirExcepcion(
-            @PathVariable UUID id, @Valid @RequestBody PoliticaCreditoRequest req) {
-        return ResponseEntity.ok(creditoService.definirExcepcion(id, req));
+            @PathVariable UUID id,
+            @Valid @RequestBody PoliticaCreditoRequest req,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(creditoService.definirExcepcion(id, req, usuario));
     }
 
     @DeleteMapping("/api/comerciantes/{id}/credito")

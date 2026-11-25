@@ -97,12 +97,11 @@ public class LiquidacionService {
 
             int unidadesVendidas = despachadas - devueltas;
             BigDecimal precioComerciante = item.getPrecioVenta();
-            BigDecimal precioPublico = item.getPrecioPublico();
+            BigDecimal precioPublico = item.tienePrecioPublico() ? item.getPrecioPublico() : null;
             if (precioPublico != null) algunPrecioPublico = true;
-            BigDecimal precioPublicoEfectivo = precioPublico != null ? precioPublico : precioComerciante;
 
             totalComerciante = totalComerciante.add(precioComerciante.multiply(BigDecimal.valueOf(unidadesVendidas)));
-            totalPublico = totalPublico.add(precioPublicoEfectivo.multiply(BigDecimal.valueOf(unidadesVendidas)));
+            totalPublico = totalPublico.add(item.precioPublicoEfectivo().multiply(BigDecimal.valueOf(unidadesVendidas)));
             unidadesTotal += unidadesVendidas;
 
             // c. Persistir la devolución
@@ -131,6 +130,11 @@ public class LiquidacionService {
         }
         itemsProcesados.forEach(itemPlanillaRepository::save);
 
+        // En MARGEN sin ningún precio al público la ganancia no se conoce (null). En COMISION y
+        // TARIFA_FIJA se descuenta del cobro, así que siempre se informa.
+        BigDecimal gananciaInformada = algunPrecioPublico || esquema.getTipo() != TipoEsquemaLiquidacion.MARGEN
+                ? gananciaComerciante : null;
+
         BigDecimal efectivoRecibido = request.efectivoRecibido() != null ? request.efectivoRecibido() : montoCobrado;
         BigDecimal saldo = montoCobrado.subtract(efectivoRecibido).max(BigDecimal.ZERO);
 
@@ -143,7 +147,7 @@ public class LiquidacionService {
         planilla.setCerrada(true);
         planilla.setTimestampCierre(ahora);
         planilla.setTotalGanancia(montoCobrado);
-        planilla.setGananciaComerciante(algunPrecioPublico ? gananciaComerciante : null);
+        planilla.setGananciaComerciante(gananciaInformada);
         planilla.setEsquemaAplicado(esquema.getTipo());
         planilla.setValorEsquema(esquema.getValor());
         planilla.setEfectivoRecibido(efectivoRecibido);
@@ -159,7 +163,7 @@ public class LiquidacionService {
 
         // 6. Retornar comprobante
         return new LiquidacionResponseDTO(planilla.getId(), ahora, esquema.getTipo(), esquema.getValor(),
-                totalPublico, algunPrecioPublico ? gananciaComerciante : null, montoCobrado,
+                totalPublico, gananciaInformada, montoCobrado,
                 efectivoRecibido, saldo, fechaLimitePago);
     }
 }
