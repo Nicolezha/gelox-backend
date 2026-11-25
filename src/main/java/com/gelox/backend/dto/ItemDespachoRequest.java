@@ -11,5 +11,6 @@ public record ItemDespachoRequest(
         @NotNull UUID productoId,
         @PositiveOrZero int unidades,
         @NotNull @PositiveOrZero BigDecimal precioUnitario,
-        @PositiveOrZero int saldoAnterior   // unidades ya con el comerciante (devoluciones del día anterior)
+        @PositiveOrZero int saldoAnterior,  // unidades ya con el comerciante (devoluciones del día anterior)
+        @PositiveOrZero BigDecimal precioPublico  // RF66 — precio al público; opcional
 ) {}

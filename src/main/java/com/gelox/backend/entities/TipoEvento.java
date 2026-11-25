@@ -34,5 +34,7 @@ public enum TipoEvento {
     ACTUALIZACION_IDENTIDAD,
     // RF54 / RF56 — Recomendación de compras
     RECOMENDACION_GENERADA,
-    PEDIDO_DESDE_RECOMENDACION
+    PEDIDO_DESDE_RECOMENDACION,
+    // RF65 — Crédito de comerciantes
+    ABONO_COMERCIANTE
 }

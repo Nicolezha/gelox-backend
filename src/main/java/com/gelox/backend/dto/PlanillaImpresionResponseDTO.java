@@ -1,5 +1,7 @@
 package com.gelox.backend.dto;
 
+import com.gelox.backend.entities.TipoEsquemaLiquidacion;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -33,6 +35,10 @@ public record PlanillaImpresionResponseDTO(
         int        totalUnidadesVendidas,
         BigDecimal totalGanancia,
         BigDecimal efectivoRecibido,
+        BigDecimal gananciaComerciante,
+        TipoEsquemaLiquidacion esquemaAplicado,
+        LocalDate fechaLimitePago,
+        BigDecimal saldoPendiente,
 
         Identidad identidad
 ) {
