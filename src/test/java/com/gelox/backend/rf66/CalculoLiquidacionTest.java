@@ -16,62 +16,75 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * RF66 — aritmética de cada esquema de liquidación (FP-15 §2.17.2). MARGEN
- * reproduce el cálculo histórico (precioVenta * unidadesVendidas) exacto.
+ * RF66 — aritmética de cada esquema de liquidación sobre los totales de TODA
+ * la planilla (FP-15 §2.17.2), espejo exacto de calcularLiquidacion() en
+ * creditoUtils.js del frontend. 20 despachadas − 5 devueltas = 15 vendidas,
+ * PVP 2000, precio comerciante 1600 (ejemplo de EsquemaLiquidacion.jsx).
  */
 class CalculoLiquidacionTest {
 
-    static final BigDecimal PRECIO_VENTA = BigDecimal.valueOf(1000);
-    static final BigDecimal PRECIO_PUBLICO = BigDecimal.valueOf(1500);
+    static final int UNIDADES = 15;
+    static final BigDecimal TOTAL_PUBLICO = BigDecimal.valueOf(2000L * UNIDADES);        // 30000
+    static final BigDecimal TOTAL_COMERCIANTE = BigDecimal.valueOf(1600L * UNIDADES);    // 24000
 
     @Test
-    @DisplayName("MARGEN: factura precioVenta * unidadesVendidas, igual que el cálculo histórico")
-    void margen_facturaPrecioVentaPorUnidades() {
-        CalculoLiquidacion.Linea linea = new MargenCalculo().calcular(PRECIO_VENTA, null, 10, BigDecimal.ZERO);
+    @DisplayName("MARGEN: la ganancia del comerciante es la diferencia entre total público y total comerciante")
+    void margen_gananciaEsLaDiferencia() {
+        CalculoLiquidacion.Resultado r = new MargenCalculo().calcular(TOTAL_PUBLICO, TOTAL_COMERCIANTE, UNIDADES, BigDecimal.ZERO);
 
-        assertThat(linea.montoCobrado()).isEqualByComparingTo("10000");
-        assertThat(linea.gananciaComerciante()).isNull();
+        assertThat(r.gananciaComerciante()).isEqualByComparingTo("6000");
+        assertThat(r.montoCobrado()).isEqualByComparingTo("24000");
     }
 
     @Test
-    @DisplayName("MARGEN con precio al público: la ganancia del comerciante es la diferencia de precios")
-    void margen_conPrecioPublico_calculaGananciaComerciante() {
-        CalculoLiquidacion.Linea linea = new MargenCalculo().calcular(PRECIO_VENTA, PRECIO_PUBLICO, 10, BigDecimal.ZERO);
+    @DisplayName("MARGEN sin precio al público (totalPublico == totalComerciante): reproduce el histórico exacto")
+    void margen_sinPrecioPublico_reproduceElHistorico() {
+        CalculoLiquidacion.Resultado r = new MargenCalculo().calcular(TOTAL_COMERCIANTE, TOTAL_COMERCIANTE, UNIDADES, BigDecimal.ZERO);
 
-        assertThat(linea.montoCobrado()).isEqualByComparingTo("10000");
-        assertThat(linea.gananciaComerciante()).isEqualByComparingTo("5000");
+        assertThat(r.montoCobrado()).isEqualByComparingTo("24000");
+        assertThat(r.gananciaComerciante()).isEqualByComparingTo("0");
     }
 
     @Test
-    @DisplayName("COMISION: factura el porcentaje de la venta al público sobre precio al público")
-    void comision_facturaPorcentajeDeLaVentaAlPublico() {
-        CalculoLiquidacion.Linea linea = new ComisionCalculo().calcular(
-                PRECIO_VENTA, PRECIO_PUBLICO, 10, BigDecimal.valueOf(20));
+    @DisplayName("COMISION: el comerciante gana el porcentaje del total público; la distribuidora cobra el resto")
+    void comision_gananciaEsElPorcentajeDelTotalPublico() {
+        CalculoLiquidacion.Resultado r = new ComisionCalculo().calcular(TOTAL_PUBLICO, TOTAL_COMERCIANTE, UNIDADES, BigDecimal.valueOf(20));
 
-        // venta al público = 15000; comisión 20% = 3000; ganancia comerciante = 12000
-        assertThat(linea.montoCobrado()).isEqualByComparingTo("3000");
-        assertThat(linea.gananciaComerciante()).isEqualByComparingTo("12000");
+        // 30000 * 20% = 6000 para el comerciante; 24000 factura la distribuidora
+        assertThat(r.gananciaComerciante()).isEqualByComparingTo("6000");
+        assertThat(r.montoCobrado()).isEqualByComparingTo("24000");
     }
 
     @Test
-    @DisplayName("COMISION sin precio al público: aplica el porcentaje sobre precioVenta y no calcula ganancia")
-    void comision_sinPrecioPublico_usaPrecioVenta() {
-        CalculoLiquidacion.Linea linea = new ComisionCalculo().calcular(
-                PRECIO_VENTA, null, 10, BigDecimal.valueOf(20));
+    @DisplayName("TARIFA_FIJA: el comerciante gana un valor fijo por planilla, sin importar lo vendido")
+    void tarifaFija_gananciaEsElValorFijoPorPlanilla() {
+        CalculoLiquidacion.Resultado r = new TarifaFijaCalculo().calcular(TOTAL_PUBLICO, TOTAL_COMERCIANTE, UNIDADES, BigDecimal.valueOf(5000));
 
-        assertThat(linea.montoCobrado()).isEqualByComparingTo("2000");
-        assertThat(linea.gananciaComerciante()).isNull();
+        assertThat(r.gananciaComerciante()).isEqualByComparingTo("5000");
+        assertThat(r.montoCobrado()).isEqualByComparingTo("25000");
     }
 
     @Test
-    @DisplayName("TARIFA_FIJA: factura un monto fijo por unidad vendida")
-    void tarifaFija_facturaMontoFijoPorUnidad() {
-        CalculoLiquidacion.Linea linea = new TarifaFijaCalculo().calcular(
-                PRECIO_VENTA, PRECIO_PUBLICO, 10, BigDecimal.valueOf(200));
+    @DisplayName("TARIFA_FIJA sin unidades vendidas: no hay ganancia")
+    void tarifaFija_sinUnidades_sinGanancia() {
+        CalculoLiquidacion.Resultado r = new TarifaFijaCalculo().calcular(BigDecimal.ZERO, BigDecimal.ZERO, 0, BigDecimal.valueOf(5000));
 
-        // tarifa 200/u * 10 = 2000; venta al público = 15000; ganancia comerciante = 13000
-        assertThat(linea.montoCobrado()).isEqualByComparingTo("2000");
-        assertThat(linea.gananciaComerciante()).isEqualByComparingTo("13000");
+        assertThat(r.gananciaComerciante()).isEqualByComparingTo("0");
+        assertThat(r.montoCobrado()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("la ganancia nunca queda negativa ni supera el total público")
+    void laGanancia_quedaAcotadaEntreCeroYElTotalPublico() {
+        // comisión exagerada no hace que la distribuidora cobre un monto negativo
+        CalculoLiquidacion.Resultado comision = new ComisionCalculo().calcular(TOTAL_PUBLICO, TOTAL_COMERCIANTE, UNIDADES, BigDecimal.valueOf(100));
+        assertThat(comision.gananciaComerciante()).isEqualByComparingTo(TOTAL_PUBLICO);
+        assertThat(comision.montoCobrado()).isEqualByComparingTo("0");
+
+        // tarifa fija mayor al total público no deja montoCobrado negativo
+        CalculoLiquidacion.Resultado tarifa = new TarifaFijaCalculo().calcular(TOTAL_PUBLICO, TOTAL_COMERCIANTE, UNIDADES, BigDecimal.valueOf(999999));
+        assertThat(tarifa.gananciaComerciante()).isEqualByComparingTo(TOTAL_PUBLICO);
+        assertThat(tarifa.montoCobrado()).isEqualByComparingTo("0");
     }
 
     @Test

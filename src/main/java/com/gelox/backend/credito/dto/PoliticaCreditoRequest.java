@@ -6,9 +6,9 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 
-/** RF65 — Cuerpo de PUT /api/credito/politica y PUT /api/comerciantes/{id}/credito. */
+/** RF65 — PUT /api/credito/politica y PUT /api/comerciantes/{id}/credito. */
 public record PoliticaCreditoRequest(
         @NotNull @PositiveOrZero BigDecimal cupo,
         @NotNull @PositiveOrZero Integer plazoDias,
-        @NotNull PoliticaVencimiento politicaVencimiento
+        @NotNull PoliticaVencimiento politica
 ) {}

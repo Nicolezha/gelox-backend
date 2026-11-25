@@ -5,7 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -22,36 +21,14 @@ public interface PlanillaComercianteRepository extends JpaRepository<PlanillaCom
     Optional<PlanillaComerciante> findByIdAndComerciante_IdAndCerrada(UUID id, UUID comercianteId, boolean cerrada);
 
     /**
-     * RF65 — planillas cerradas del comerciante (FP-15 §2.17.1): saldo de cada una =
-     * total_ganancia (monto cobrado) − efectivo_recibido; la deuda es la suma de los
-     * saldos positivos, y la planilla está vencida si ese saldo es positivo y su
-     * fecha_limite_pago ya pasó. Los abonos se descuentan aparte, de forma agregada
-     * (no se reparten entre planillas concretas).
+     * RF65 — planillas cerradas del comerciante, de la más antigua a la más
+     * reciente: es el orden en que CreditoService reparte los abonos (FIFO),
+     * igual que distribuirAbono() del frontend.
      */
     @Query("""
             SELECT p FROM PlanillaComerciante p
             WHERE p.comerciante.id = :comercianteId AND p.cerrada = true
+            ORDER BY p.fecha ASC
             """)
-    List<PlanillaComerciante> findCerradasPorComerciante(@Param("comercianteId") UUID comercianteId);
-
-    default BigDecimal sumarSaldoCerradas(UUID comercianteId) {
-        return findCerradasPorComerciante(comercianteId).stream()
-                .map(p -> {
-                    BigDecimal cobrado = p.getTotalGanancia() != null ? p.getTotalGanancia() : BigDecimal.ZERO;
-                    BigDecimal recibido = p.getEfectivoRecibido() != null ? p.getEfectivoRecibido() : BigDecimal.ZERO;
-                    return cobrado.subtract(recibido);
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    default long contarVencidas(UUID comercianteId, LocalDate hoy) {
-        return findCerradasPorComerciante(comercianteId).stream()
-                .filter(p -> p.getFechaLimitePago() != null && p.getFechaLimitePago().isBefore(hoy))
-                .filter(p -> {
-                    BigDecimal cobrado = p.getTotalGanancia() != null ? p.getTotalGanancia() : BigDecimal.ZERO;
-                    BigDecimal recibido = p.getEfectivoRecibido() != null ? p.getEfectivoRecibido() : BigDecimal.ZERO;
-                    return cobrado.subtract(recibido).signum() > 0;
-                })
-                .count();
-    }
+    List<PlanillaComerciante> findCerradasPorComercianteOrdenadas(@Param("comercianteId") UUID comercianteId);
 }

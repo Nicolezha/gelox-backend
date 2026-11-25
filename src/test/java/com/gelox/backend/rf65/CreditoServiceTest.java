@@ -3,11 +3,12 @@ package com.gelox.backend.rf65;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.credito.CreditoService;
 import com.gelox.backend.credito.dto.AbonoRequest;
-import com.gelox.backend.credito.dto.CreditoComercianteDTO;
+import com.gelox.backend.credito.dto.CreditoVistaDTO;
 import com.gelox.backend.credito.dto.PoliticaCreditoDTO;
 import com.gelox.backend.credito.dto.PoliticaCreditoRequest;
 import com.gelox.backend.entities.AbonoComerciante;
 import com.gelox.backend.entities.Comerciante;
+import com.gelox.backend.entities.PlanillaComerciante;
 import com.gelox.backend.entities.PoliticaCredito;
 import com.gelox.backend.entities.PoliticaVencimiento;
 import com.gelox.backend.entities.RolUsuario;
@@ -30,19 +31,20 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * RF65 — Política de crédito (por defecto y excepciones), deuda/planillas
- * vencidas del comerciante y abonos (FP-15 §2.17.1).
+ * RF65 — Política de crédito (por defecto y excepciones), saldo por planilla
+ * con reparto FIFO de abonos y evaluación de crédito al despachar (FP-15
+ * §2.17.1). Contrato alineado con SeccionCredito.jsx / creditoService.js.
  */
 @ExtendWith(MockitoExtension.class)
 class CreditoServiceTest {
@@ -59,11 +61,14 @@ class CreditoServiceTest {
     CreditoService creditoService;
 
     private Comerciante comerciante;
+    private Usuario usuario;
 
     @BeforeEach
     void setUp() {
         TenantContext.set(TENANT);
         comerciante = Comerciante.builder().id(UUID.randomUUID()).tenantId(TENANT).nombre("Doña Rosa").activo(true).build();
+        usuario = TestHelper.buildUsuario("uid-ventas", "ventas@gelox-test.com", RolUsuario.ENCARGADO_VENTAS, true);
+        org.mockito.Mockito.lenient().when(comercianteRepository.findById(comerciante.getId())).thenReturn(Optional.of(comerciante));
     }
 
     @AfterEach
@@ -74,6 +79,31 @@ class CreditoServiceTest {
     private PoliticaCredito defecto(BigDecimal cupo, PoliticaVencimiento vencimiento) {
         return PoliticaCredito.builder().id(UUID.randomUUID()).tenantId(TENANT)
                 .cupo(cupo).plazoDias(5).politicaVencimiento(vencimiento).build();
+    }
+
+    /** Planilla cerrada con saldo (sin abonos todavía) = valor − efectivoRecibido. */
+    private PlanillaComerciante cerrada(LocalDate fecha, BigDecimal valor, BigDecimal efectivoRecibido, LocalDate fechaLimite) {
+        return PlanillaComerciante.builder()
+                .id(UUID.randomUUID()).tenantId(TENANT).comerciante(comerciante).usuario(usuario)
+                .fecha(fecha).cerrada(true).totalGanancia(valor).efectivoRecibido(efectivoRecibido)
+                .fechaLimitePago(fechaLimite).build();
+    }
+
+    private AbonoComerciante abono(BigDecimal valor) {
+        return AbonoComerciante.builder().id(UUID.randomUUID()).comerciante(comerciante).valor(valor)
+                .fecha(LocalDate.now()).usuario(usuario).build();
+    }
+
+    /** Para evaluar() / plazoDiasEfectivo(): no leen el historial de abonos (findByComerciante_IdOrderByFechaDesc). */
+    private void sinPlanillasNiAbonos() {
+        when(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).thenReturn(List.of());
+        when(abonoRepository.findByComerciante_IdOrderByFechaAsc(comerciante.getId())).thenReturn(List.of());
+    }
+
+    /** Para obtenerCreditoComerciante() / definirExcepcion() / eliminarExcepcion() / registrarAbono(): la vista completa. */
+    private void sinPlanillasNiAbonosVista() {
+        sinPlanillasNiAbonos();
+        when(abonoRepository.findByComerciante_IdOrderByFechaDesc(comerciante.getId())).thenReturn(List.of());
     }
 
     // ── Política por defecto ─────────────────────────────────────────────
@@ -87,7 +117,7 @@ class CreditoServiceTest {
         PoliticaCreditoDTO dto = creditoService.obtenerPoliticaDistribuidora();
 
         assertThat(dto.cupo()).isEqualByComparingTo("50000");
-        assertThat(dto.esExcepcion()).isFalse();
+        assertThat(dto.politica()).isEqualTo(PoliticaVencimiento.SOLO_ALERTA);
     }
 
     @Test
@@ -111,50 +141,124 @@ class CreditoServiceTest {
 
         assertThat(dto.cupo()).isEqualByComparingTo("100000");
         assertThat(dto.plazoDias()).isEqualTo(10);
-        assertThat(dto.politicaVencimiento()).isEqualTo(PoliticaVencimiento.BLOQUEAR);
+        assertThat(dto.politica()).isEqualTo(PoliticaVencimiento.BLOQUEAR);
+    }
+
+    // ── Vista de crédito del comerciante ────────────────────────────────
+
+    @Test
+    @DisplayName("sin planillas ni abonos, el comerciante usa la política por defecto y no tiene deuda")
+    void obtenerCredito_sinPlanillas_sinDeuda() {
+        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
+        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.SOLO_ALERTA)));
+        sinPlanillasNiAbonosVista();
+
+        CreditoVistaDTO vista = creditoService.obtenerCreditoComerciante(comerciante.getId());
+
+        assertThat(vista.origen()).isEqualTo("DEFECTO");
+        assertThat(vista.deudaActual()).isEqualByComparingTo("0");
+        assertThat(vista.cupoDisponible()).isEqualByComparingTo("50000");
+        assertThat(vista.planillas()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("la deuda es la suma de los saldos de las planillas cerradas sin abonos")
+    void obtenerCredito_deudaEsLaSumaDeSaldos() {
+        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
+        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.SOLO_ALERTA)));
+        PlanillaComerciante p1 = cerrada(LocalDate.now().minusDays(10), BigDecimal.valueOf(30000), BigDecimal.ZERO, LocalDate.now().plusDays(5));
+        PlanillaComerciante p2 = cerrada(LocalDate.now().minusDays(5), BigDecimal.valueOf(20000), BigDecimal.ZERO, LocalDate.now().plusDays(10));
+        when(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).thenReturn(List.of(p1, p2));
+        when(abonoRepository.findByComerciante_IdOrderByFechaAsc(comerciante.getId())).thenReturn(List.of());
+        when(abonoRepository.findByComerciante_IdOrderByFechaDesc(comerciante.getId())).thenReturn(List.of());
+
+        CreditoVistaDTO vista = creditoService.obtenerCreditoComerciante(comerciante.getId());
+
+        assertThat(vista.deudaActual()).isEqualByComparingTo("50000");
+        assertThat(vista.planillas()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("un abono se aplica primero a la planilla más antigua (FIFO), como distribuirAbono() del frontend")
+    void obtenerCredito_abono_seAplicaALaPlanillaMasAntiguaPrimero() {
+        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
+        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.SOLO_ALERTA)));
+        PlanillaComerciante antigua = cerrada(LocalDate.now().minusDays(10), BigDecimal.valueOf(30000), BigDecimal.ZERO, LocalDate.now().plusDays(5));
+        PlanillaComerciante reciente = cerrada(LocalDate.now().minusDays(1), BigDecimal.valueOf(20000), BigDecimal.ZERO, LocalDate.now().plusDays(10));
+        when(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).thenReturn(List.of(antigua, reciente));
+        when(abonoRepository.findByComerciante_IdOrderByFechaAsc(comerciante.getId())).thenReturn(List.of(abono(BigDecimal.valueOf(35000))));
+        when(abonoRepository.findByComerciante_IdOrderByFechaDesc(comerciante.getId())).thenReturn(List.of());
+
+        CreditoVistaDTO vista = creditoService.obtenerCreditoComerciante(comerciante.getId());
+
+        // El abono de 35000 saja por completo la planilla antigua (30000) y deja 5000 en la reciente (20000-5000=15000)
+        assertThat(vista.deudaActual()).isEqualByComparingTo("15000");
+        assertThat(vista.planillas()).hasSize(1);
+        assertThat(vista.planillas().get(0).planillaId()).isEqualTo(reciente.getId());
+        assertThat(vista.planillas().get(0).saldo()).isEqualByComparingTo("15000");
+    }
+
+    @Test
+    @DisplayName("una planilla con saldo y fecha límite vencida se marca vencida, con sus días de mora")
+    void obtenerCredito_planillaVencida_marcaDiasDeMora() {
+        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
+        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.BLOQUEAR)));
+        PlanillaComerciante vencida = cerrada(LocalDate.now().minusDays(20), BigDecimal.valueOf(10000), BigDecimal.ZERO, LocalDate.now().minusDays(3));
+        when(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).thenReturn(List.of(vencida));
+        when(abonoRepository.findByComerciante_IdOrderByFechaAsc(comerciante.getId())).thenReturn(List.of());
+        when(abonoRepository.findByComerciante_IdOrderByFechaDesc(comerciante.getId())).thenReturn(List.of());
+
+        CreditoVistaDTO vista = creditoService.obtenerCreditoComerciante(comerciante.getId());
+
+        assertThat(vista.planillas().get(0).vencida()).isTrue();
+        assertThat(vista.planillas().get(0).diasMora()).isEqualTo(3L);
     }
 
     // ── Excepción por comerciante ────────────────────────────────────────
 
     @Test
-    @DisplayName("definirExcepcion crea una política propia para el comerciante")
+    @DisplayName("definirExcepcion crea una política propia y la vista queda en origen EXCEPCION")
     void definirExcepcion_creaPoliticaPropia() {
-        when(comercianteRepository.findById(comerciante.getId())).thenReturn(Optional.of(comerciante));
-        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
+        // 1ª lectura (dentro de definirExcepcion): no existe excepción todavía.
+        // 2ª lectura (dentro de vistaDe, para origen): ya existe, la recién creada.
+        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(
+                Optional.empty(),
+                Optional.of(PoliticaCredito.builder().comerciante(comerciante)
+                        .cupo(BigDecimal.valueOf(200000)).plazoDias(15).politicaVencimiento(PoliticaVencimiento.BLOQUEAR).build()));
         when(politicaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.SOLO_ALERTA)));
+        sinPlanillasNiAbonosVista();
 
-        PoliticaCreditoDTO dto = creditoService.definirExcepcion(comerciante.getId(),
+        CreditoVistaDTO vista = creditoService.definirExcepcion(comerciante.getId(),
                 new PoliticaCreditoRequest(BigDecimal.valueOf(200000), 15, PoliticaVencimiento.BLOQUEAR));
 
-        assertThat(dto.esExcepcion()).isTrue();
-        assertThat(dto.cupo()).isEqualByComparingTo("200000");
+        assertThat(vista.origen()).isEqualTo("EXCEPCION");
+        assertThat(vista.cupo()).isEqualByComparingTo("200000");
+        assertThat(vista.politicaDefecto().cupo()).isEqualByComparingTo("50000");
     }
 
     @Test
-    @DisplayName("definirExcepcion para un comerciante de otro tenant lanza 404")
-    void definirExcepcion_comercianteDeOtroTenant_lanza404() {
-        Comerciante otro = Comerciante.builder().id(UUID.randomUUID()).tenantId(UUID.randomUUID()).build();
-        when(comercianteRepository.findById(otro.getId())).thenReturn(Optional.of(otro));
-
-        assertThatThrownBy(() -> creditoService.definirExcepcion(otro.getId(),
-                new PoliticaCreditoRequest(BigDecimal.TEN, 1, PoliticaVencimiento.BLOQUEAR)))
-                .isInstanceOf(ResponseStatusException.class);
-    }
-
-    @Test
-    @DisplayName("eliminarExcepcion borra la política propia del comerciante si existe")
-    void eliminarExcepcion_borraLaExcepcion() {
-        when(comercianteRepository.findById(comerciante.getId())).thenReturn(Optional.of(comerciante));
+    @DisplayName("eliminarExcepcion borra la política propia y la vista vuelve a origen DEFECTO")
+    void eliminarExcepcion_vuelveAOrigenDefecto() {
         PoliticaCredito excepcion = PoliticaCredito.builder().id(UUID.randomUUID()).comerciante(comerciante).build();
         when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId()))
-                .thenReturn(Optional.of(excepcion));
+                .thenReturn(Optional.of(excepcion), Optional.empty());
+        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.SOLO_ALERTA)));
+        sinPlanillasNiAbonosVista();
 
-        creditoService.eliminarExcepcion(comerciante.getId());
+        CreditoVistaDTO vista = creditoService.eliminarExcepcion(comerciante.getId());
 
         verify(politicaRepository).delete(excepcion);
+        assertThat(vista.origen()).isEqualTo("DEFECTO");
     }
 
-    // ── Evaluación de crédito (deuda, vencidas, bloqueo) ────────────────
+    // ── Evaluación de crédito al despachar ──────────────────────────────
 
     @Test
     @DisplayName("sin deuda ni planillas vencidas, el comerciante no excede el crédito")
@@ -162,78 +266,44 @@ class CreditoServiceTest {
         when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
         when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
                 .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.BLOQUEAR)));
-        when(planillaRepository.sumarSaldoCerradas(comerciante.getId())).thenReturn(BigDecimal.ZERO);
-        when(abonoRepository.sumarValorPorComerciante(comerciante.getId())).thenReturn(BigDecimal.ZERO);
-        when(planillaRepository.contarVencidas(eq(comerciante.getId()), any())).thenReturn(0L);
+        sinPlanillasNiAbonos();
 
         CreditoService.Evaluacion evaluacion = creditoService.evaluar(comerciante.getId());
 
         assertThat(evaluacion.excede()).isFalse();
-        assertThat(evaluacion.deuda()).isEqualByComparingTo("0");
+        assertThat(evaluacion.advertencias()).isEmpty();
     }
 
     @Test
-    @DisplayName("la deuda es el saldo de las planillas cerradas menos los abonos, nunca negativa")
-    void evaluar_deuda_restaAbonosSinQuedarNegativa() {
+    @DisplayName("deuda mayor al cupo: excede y la advertencia es CUPO_SUPERADO")
+    void evaluar_deudaMayorAlCupo_advierteCupoSuperado() {
         when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
         when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
-                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.SOLO_ALERTA)));
-        when(planillaRepository.sumarSaldoCerradas(comerciante.getId())).thenReturn(BigDecimal.valueOf(30000));
-        when(abonoRepository.sumarValorPorComerciante(comerciante.getId())).thenReturn(BigDecimal.valueOf(45000));
-        when(planillaRepository.contarVencidas(eq(comerciante.getId()), any())).thenReturn(0L);
-
-        CreditoService.Evaluacion evaluacion = creditoService.evaluar(comerciante.getId());
-
-        assertThat(evaluacion.deuda()).isEqualByComparingTo("0");
-    }
-
-    @Test
-    @DisplayName("deuda mayor al cupo: excede, y con política BLOQUEAR el comerciante queda bloqueado")
-    void evaluar_deudaMayorAlCupo_conBloquear_bloqueado() {
-        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
-        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
-                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.BLOQUEAR)));
-        when(planillaRepository.sumarSaldoCerradas(comerciante.getId())).thenReturn(BigDecimal.valueOf(80000));
-        when(abonoRepository.sumarValorPorComerciante(comerciante.getId())).thenReturn(BigDecimal.ZERO);
-        when(planillaRepository.contarVencidas(eq(comerciante.getId()), any())).thenReturn(0L);
-        when(comercianteRepository.findById(comerciante.getId())).thenReturn(Optional.of(comerciante));
-
-        CreditoComercianteDTO dto = creditoService.obtenerCreditoComerciante(comerciante.getId());
-
-        assertThat(dto.deuda()).isEqualByComparingTo("80000");
-        assertThat(dto.bloqueado()).isTrue();
-    }
-
-    @Test
-    @DisplayName("deuda mayor al cupo con política SOLO_ALERTA: excede pero no queda bloqueado")
-    void evaluar_deudaMayorAlCupo_conSoloAlerta_noBloqueado() {
-        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
-        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
-                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.SOLO_ALERTA)));
-        when(planillaRepository.sumarSaldoCerradas(comerciante.getId())).thenReturn(BigDecimal.valueOf(80000));
-        when(abonoRepository.sumarValorPorComerciante(comerciante.getId())).thenReturn(BigDecimal.ZERO);
-        when(planillaRepository.contarVencidas(eq(comerciante.getId()), any())).thenReturn(0L);
-        when(comercianteRepository.findById(comerciante.getId())).thenReturn(Optional.of(comerciante));
-
-        CreditoComercianteDTO dto = creditoService.obtenerCreditoComerciante(comerciante.getId());
-
-        assertThat(dto.bloqueado()).isFalse();
-    }
-
-    @Test
-    @DisplayName("una planilla vencida hace que el comerciante exceda aunque no supere el cupo")
-    void evaluar_planillaVencida_excedeSinSuperarCupo() {
-        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
-        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
-                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.BLOQUEAR)));
-        when(planillaRepository.sumarSaldoCerradas(comerciante.getId())).thenReturn(BigDecimal.valueOf(1000));
-        when(abonoRepository.sumarValorPorComerciante(comerciante.getId())).thenReturn(BigDecimal.ZERO);
-        when(planillaRepository.contarVencidas(eq(comerciante.getId()), any())).thenReturn(1L);
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(5000), PoliticaVencimiento.SOLO_ALERTA)));
+        PlanillaComerciante p = cerrada(LocalDate.now().minusDays(1), BigDecimal.valueOf(8000), BigDecimal.ZERO, LocalDate.now().plusDays(5));
+        when(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).thenReturn(List.of(p));
+        when(abonoRepository.findByComerciante_IdOrderByFechaAsc(comerciante.getId())).thenReturn(List.of());
 
         CreditoService.Evaluacion evaluacion = creditoService.evaluar(comerciante.getId());
 
         assertThat(evaluacion.excede()).isTrue();
-        assertThat(evaluacion.planillasVencidas()).isEqualTo(1L);
+        assertThat(evaluacion.advertencias()).extracting("codigo").containsExactly("CUPO_SUPERADO");
+    }
+
+    @Test
+    @DisplayName("una planilla vencida advierte PLANILLA_VENCIDA aunque no se supere el cupo")
+    void evaluar_planillaVencida_advierteSinSuperarCupo() {
+        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
+        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.BLOQUEAR)));
+        PlanillaComerciante vencida = cerrada(LocalDate.now().minusDays(20), BigDecimal.valueOf(1000), BigDecimal.ZERO, LocalDate.now().minusDays(1));
+        when(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).thenReturn(List.of(vencida));
+        when(abonoRepository.findByComerciante_IdOrderByFechaAsc(comerciante.getId())).thenReturn(List.of());
+
+        CreditoService.Evaluacion evaluacion = creditoService.evaluar(comerciante.getId());
+
+        assertThat(evaluacion.excede()).isTrue();
+        assertThat(evaluacion.advertencias()).extracting("codigo").containsExactly("PLANILLA_VENCIDA");
     }
 
     @Test
@@ -243,14 +313,14 @@ class CreditoServiceTest {
                 .comerciante(comerciante).cupo(BigDecimal.valueOf(500000)).plazoDias(30)
                 .politicaVencimiento(PoliticaVencimiento.SOLO_ALERTA).build();
         when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.of(excepcion));
-        when(planillaRepository.sumarSaldoCerradas(comerciante.getId())).thenReturn(BigDecimal.valueOf(80000));
-        when(abonoRepository.sumarValorPorComerciante(comerciante.getId())).thenReturn(BigDecimal.ZERO);
-        when(planillaRepository.contarVencidas(eq(comerciante.getId()), any())).thenReturn(0L);
+        PlanillaComerciante p = cerrada(LocalDate.now().minusDays(1), BigDecimal.valueOf(80000), BigDecimal.ZERO, LocalDate.now().plusDays(10));
+        when(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).thenReturn(List.of(p));
+        when(abonoRepository.findByComerciante_IdOrderByFechaAsc(comerciante.getId())).thenReturn(List.of());
 
         CreditoService.Evaluacion evaluacion = creditoService.evaluar(comerciante.getId());
 
         assertThat(evaluacion.excede()).isFalse();
-        assertThat(evaluacion.politica().cupo()).isEqualByComparingTo("500000");
+        assertThat(evaluacion.cupo()).isEqualByComparingTo("500000");
     }
 
     @Test
@@ -266,33 +336,31 @@ class CreditoServiceTest {
     // ── Abonos ───────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("registrarAbono guarda el abono, dispara el evento del dashboard y lo retorna")
+    @DisplayName("registrarAbono guarda el abono, dispara el evento del dashboard y devuelve la vista actualizada")
     void registrarAbono_guardaYNotifica() {
-        Usuario usuario = TestHelper.buildUsuario("uid-ventas", "ventas@gelox-test.com", RolUsuario.ENCARGADO_VENTAS, true);
-        when(comercianteRepository.findById(comerciante.getId())).thenReturn(Optional.of(comerciante));
-        when(abonoRepository.save(any())).thenAnswer(inv -> {
-            AbonoComerciante a = inv.getArgument(0);
-            a.setId(UUID.randomUUID());
-            a.setFecha(LocalDate.now());
-            return a;
-        });
+        when(politicaRepository.findByTenantIdAndComerciante_Id(TENANT, comerciante.getId())).thenReturn(Optional.empty());
+        when(politicaRepository.findByTenantIdAndComercianteIsNull(TENANT))
+                .thenReturn(Optional.of(defecto(BigDecimal.valueOf(50000), PoliticaVencimiento.SOLO_ALERTA)));
+        PlanillaComerciante p = cerrada(LocalDate.now().minusDays(1), BigDecimal.valueOf(30000), BigDecimal.ZERO, LocalDate.now().plusDays(5));
+        when(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).thenReturn(List.of(p));
+        when(abonoRepository.findByComerciante_IdOrderByFechaAsc(comerciante.getId())).thenReturn(List.of());
+        when(abonoRepository.findByComerciante_IdOrderByFechaDesc(comerciante.getId())).thenReturn(List.of(abono(BigDecimal.valueOf(20000))));
+        when(abonoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var dto = creditoService.registrarAbono(comerciante.getId(),
-                new AbonoRequest(BigDecimal.valueOf(20000), null, "Pago parcial"), usuario);
+        CreditoVistaDTO vista = creditoService.registrarAbono(comerciante.getId(),
+                new AbonoRequest(BigDecimal.valueOf(20000), "Pago parcial"), usuario);
 
-        assertThat(dto.valor()).isEqualByComparingTo("20000");
+        assertThat(vista.abonos()).hasSize(1);
         verify(eventoSistemaService).registrarEvento(any(), any(), any());
     }
 
     @Test
-    @DisplayName("registrarAbono con planillaId de otro tenant lanza 404")
-    void registrarAbono_planillaDeOtroTenant_lanza404() {
-        Usuario usuario = TestHelper.buildUsuario("uid-ventas", "ventas@gelox-test.com", RolUsuario.ENCARGADO_VENTAS, true);
-        when(comercianteRepository.findById(comerciante.getId())).thenReturn(Optional.of(comerciante));
-        when(planillaRepository.findById(any())).thenReturn(Optional.empty());
+    @DisplayName("registrarAbono con un valor mayor a la deuda actual lanza 400")
+    void registrarAbono_mayorQueLaDeuda_lanza400() {
+        sinPlanillasNiAbonos();
 
         assertThatThrownBy(() -> creditoService.registrarAbono(comerciante.getId(),
-                new AbonoRequest(BigDecimal.valueOf(1000), UUID.randomUUID(), null), usuario))
+                new AbonoRequest(BigDecimal.valueOf(1000), null), usuario))
                 .isInstanceOf(ResponseStatusException.class);
     }
 }

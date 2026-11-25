@@ -2,9 +2,11 @@ package com.gelox.backend.credito;
 
 import com.gelox.backend.credito.dto.AbonoDTO;
 import com.gelox.backend.credito.dto.AbonoRequest;
-import com.gelox.backend.credito.dto.CreditoComercianteDTO;
+import com.gelox.backend.credito.dto.CreditoVistaDTO;
+import com.gelox.backend.credito.dto.PlanillaSaldoDTO;
 import com.gelox.backend.credito.dto.PoliticaCreditoDTO;
 import com.gelox.backend.credito.dto.PoliticaCreditoRequest;
+import com.gelox.backend.dto.AdvertenciaCreditoDTO;
 import com.gelox.backend.entities.AbonoComerciante;
 import com.gelox.backend.entities.Comerciante;
 import com.gelox.backend.entities.PlanillaComerciante;
@@ -29,12 +31,16 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
  * RF65 — Política de crédito por distribuidora (con excepción por
  * comerciante), deuda, planillas vencidas y abonos (FP-15 §2.17.1).
+ * Contrato alineado con creditoService.js / SeccionCredito.jsx del frontend (T196).
  */
 @Service
 @RequiredArgsConstructor
@@ -49,8 +55,30 @@ public class CreditoService {
     private final ComercianteRepository comercianteRepository;
     private final EventoSistemaService eventoSistemaService;
 
-    /** Lo que PlanillaService.crearDespacho necesita para aplicar la política al despachar. */
-    public record Evaluacion(PoliticaCreditoDTO politica, BigDecimal deuda, long planillasVencidas, boolean excede) {
+    /** Lo que PlanillaService.crearDespacho necesita para decidir si bloquea o solo advierte. */
+    public record Evaluacion(PoliticaVencimiento politica, BigDecimal cupo, BigDecimal deuda, long planillasVencidas) {
+        public boolean excedeCupo() {
+            return deuda.compareTo(cupo) > 0;
+        }
+
+        public boolean excede() {
+            return excedeCupo() || planillasVencidas > 0;
+        }
+
+        public List<AdvertenciaCreditoDTO> advertencias() {
+            List<AdvertenciaCreditoDTO> lista = new ArrayList<>();
+            if (excedeCupo()) {
+                lista.add(new AdvertenciaCreditoDTO("CUPO_SUPERADO", "El despacho supera el cupo de crédito del comerciante."));
+            }
+            if (planillasVencidas > 0) {
+                lista.add(new AdvertenciaCreditoDTO("PLANILLA_VENCIDA", "El comerciante tiene planillas vencidas."));
+            }
+            return lista;
+        }
+    }
+
+    /** Planillas con saldo (filtradas) y los totales agregados de la deuda del comerciante. */
+    private record Saldos(List<PlanillaSaldoDTO> planillas, BigDecimal deuda, long vencidas) {
     }
 
     // ── Política por defecto de la distribuidora ────────────────────────────
@@ -66,70 +94,58 @@ public class CreditoService {
         PoliticaCredito politica = politicaPorDefecto();
         politica.setCupo(req.cupo());
         politica.setPlazoDias(req.plazoDias());
-        politica.setPoliticaVencimiento(req.politicaVencimiento());
+        politica.setPoliticaVencimiento(req.politica());
         return PoliticaCreditoDTO.from(politicaRepository.save(politica));
     }
 
-    // ── Crédito de un comerciante (política efectiva, deuda, vencidas) ──────
+    // ── Crédito de un comerciante (política efectiva, deuda, planillas, abonos) ─
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
-    public CreditoComercianteDTO obtenerCreditoComerciante(UUID comercianteId) {
+    public CreditoVistaDTO obtenerCreditoComerciante(UUID comercianteId) {
         validarComercianteDelTenant(comercianteId);
-        Evaluacion evaluacion = evaluar(comercianteId);
-        boolean bloqueado = evaluacion.excede()
-                && evaluacion.politica().politicaVencimiento() == PoliticaVencimiento.BLOQUEAR;
-        return new CreditoComercianteDTO(comercianteId, evaluacion.politica(), evaluacion.deuda(),
-                evaluacion.planillasVencidas(), bloqueado);
+        return vistaDe(comercianteId);
     }
 
     @RequiereRol("ADMINISTRADOR")
     @Auditable(accion = "CREDITO_POLITICA_CAMBIAR", entidad = "PoliticaCredito")
-    public PoliticaCreditoDTO definirExcepcion(UUID comercianteId, PoliticaCreditoRequest req) {
+    public CreditoVistaDTO definirExcepcion(UUID comercianteId, PoliticaCreditoRequest req) {
         Comerciante comerciante = validarComercianteDelTenant(comercianteId);
         UUID tenantId = TenantContext.requerido();
         PoliticaCredito politica = politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId)
                 .orElseGet(() -> PoliticaCredito.builder().comerciante(comerciante).build());
         politica.setCupo(req.cupo());
         politica.setPlazoDias(req.plazoDias());
-        politica.setPoliticaVencimiento(req.politicaVencimiento());
-        return PoliticaCreditoDTO.from(politicaRepository.save(politica));
+        politica.setPoliticaVencimiento(req.politica());
+        politicaRepository.save(politica);
+        return vistaDe(comercianteId);
     }
 
     @RequiereRol("ADMINISTRADOR")
     @Auditable(accion = "CREDITO_POLITICA_CAMBIAR", entidad = "PoliticaCredito")
-    public void eliminarExcepcion(UUID comercianteId) {
+    public CreditoVistaDTO eliminarExcepcion(UUID comercianteId) {
         validarComercianteDelTenant(comercianteId);
         UUID tenantId = TenantContext.requerido();
         politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId)
                 .ifPresent(politicaRepository::delete);
+        return vistaDe(comercianteId);
     }
 
     // ── Abonos ───────────────────────────────────────────────────────────────
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
-    public List<AbonoDTO> listarAbonos(UUID comercianteId) {
-        validarComercianteDelTenant(comercianteId);
-        return abonoRepository.findByComerciante_IdOrderByFechaDesc(comercianteId).stream()
-                .map(AbonoDTO::from).toList();
-    }
-
-    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     @Auditable(accion = "ABONO_REGISTRAR", entidad = "AbonoComerciante")
-    public AbonoDTO registrarAbono(UUID comercianteId, AbonoRequest req, Usuario usuario) {
+    public CreditoVistaDTO registrarAbono(UUID comercianteId, AbonoRequest req, Usuario usuario) {
         Comerciante comerciante = validarComercianteDelTenant(comercianteId);
 
-        PlanillaComerciante planilla = null;
-        if (req.planillaId() != null) {
-            planilla = planillaRepository.findById(req.planillaId())
-                    .filter(TenantContext::pertenece)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Planilla no encontrada"));
+        BigDecimal deudaActual = calcularSaldos(comercianteId).deuda();
+        if (req.valor().compareTo(deudaActual) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El abono supera la deuda actual");
         }
 
-        AbonoComerciante abono = abonoRepository.save(AbonoComerciante.builder()
+        abonoRepository.save(AbonoComerciante.builder()
                 .comerciante(comerciante)
-                .planilla(planilla)
                 .valor(req.valor())
-                .observacion(req.observacion())
+                .observacion(req.observacion() != null && !req.observacion().isBlank() ? req.observacion().trim() : null)
                 .usuario(usuario)
                 .build());
 
@@ -137,36 +153,86 @@ public class CreditoService {
                 "Abono de $" + req.valor().toPlainString() + " de " + comerciante.getNombre() + ".",
                 usuario.getId());
 
-        return AbonoDTO.from(abono);
+        return vistaDe(comercianteId);
     }
 
     // ── Evaluación para PlanillaService.crearDespacho ───────────────────────
 
-    /** Deuda, planillas vencidas y política efectiva del comerciante, para aplicar al crear un despacho. */
+    /** Política efectiva, deuda y planillas vencidas del comerciante, para aplicar al crear un despacho. */
     public Evaluacion evaluar(UUID comercianteId) {
-        UUID tenantId = TenantContext.requerido();
-        PoliticaCredito politicaEfectiva = politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId)
-                .orElseGet(this::politicaPorDefecto);
-
-        BigDecimal saldoPlanillas = planillaRepository.sumarSaldoCerradas(comercianteId);
-        BigDecimal abonado = abonoRepository.sumarValorPorComerciante(comercianteId);
-        BigDecimal deuda = saldoPlanillas.subtract(abonado).max(BigDecimal.ZERO);
-
-        long planillasVencidas = planillaRepository.contarVencidas(comercianteId, LocalDate.now(ZONA_BOGOTA));
-        boolean excede = deuda.compareTo(politicaEfectiva.getCupo()) > 0 || planillasVencidas > 0;
-
-        return new Evaluacion(PoliticaCreditoDTO.from(politicaEfectiva), deuda, planillasVencidas, excede);
+        PoliticaCredito politicaEfectiva = politicaEfectivaDe(comercianteId);
+        Saldos saldos = calcularSaldos(comercianteId);
+        return new Evaluacion(politicaEfectiva.getPoliticaVencimiento(), politicaEfectiva.getCupo(),
+                saldos.deuda(), saldos.vencidas());
     }
 
     /** Plazo (días) de la política efectiva del comerciante, para fijar la fecha límite de pago al liquidar. */
     public int plazoDiasEfectivo(UUID comercianteId) {
-        UUID tenantId = TenantContext.requerido();
-        return politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId)
-                .orElseGet(this::politicaPorDefecto)
-                .getPlazoDias();
+        return politicaEfectivaDe(comercianteId).getPlazoDias();
     }
 
     // ── Privados ─────────────────────────────────────────────────────────────
+
+    private CreditoVistaDTO vistaDe(UUID comercianteId) {
+        UUID tenantId = TenantContext.requerido();
+        PoliticaCredito politicaDefecto = politicaPorDefecto();
+        Optional<PoliticaCredito> excepcion = politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId);
+        PoliticaCredito efectiva = excepcion.orElse(politicaDefecto);
+        Saldos saldos = calcularSaldos(comercianteId);
+        List<AbonoDTO> abonos = abonoRepository.findByComerciante_IdOrderByFechaDesc(comercianteId).stream()
+                .map(AbonoDTO::from).toList();
+
+        return new CreditoVistaDTO(
+                comercianteId,
+                excepcion.isPresent() ? "EXCEPCION" : "DEFECTO",
+                efectiva.getCupo(), efectiva.getPlazoDias(), efectiva.getPoliticaVencimiento(),
+                new CreditoVistaDTO.PoliticaDefectoDTO(
+                        politicaDefecto.getCupo(), politicaDefecto.getPlazoDias(), politicaDefecto.getPoliticaVencimiento()),
+                saldos.deuda(), efectiva.getCupo().subtract(saldos.deuda()).max(BigDecimal.ZERO),
+                saldos.planillas(), abonos);
+    }
+
+    /**
+     * Reparte los abonos (del más antiguo al más reciente) sobre las planillas
+     * cerradas (de la más antigua a la más reciente) — espejo exacto de
+     * distribuirAbono() en creditoUtils.js del frontend.
+     */
+    private Saldos calcularSaldos(UUID comercianteId) {
+        List<PlanillaComerciante> planillas = planillaRepository.findCerradasPorComercianteOrdenadas(comercianteId);
+        BigDecimal abonoRestante = abonoRepository.findByComerciante_IdOrderByFechaAsc(comercianteId).stream()
+                .map(AbonoComerciante::getValor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        LocalDate hoy = LocalDate.now(ZONA_BOGOTA);
+        List<PlanillaSaldoDTO> conSaldo = new ArrayList<>();
+        BigDecimal deudaTotal = BigDecimal.ZERO;
+        long vencidas = 0;
+
+        for (PlanillaComerciante p : planillas) {
+            BigDecimal valor = p.getTotalGanancia() != null ? p.getTotalGanancia() : BigDecimal.ZERO;
+            BigDecimal recibido = p.getEfectivoRecibido() != null ? p.getEfectivoRecibido() : BigDecimal.ZERO;
+            BigDecimal saldoInicial = valor.subtract(recibido).max(BigDecimal.ZERO);
+
+            BigDecimal aplicado = abonoRestante.min(saldoInicial);
+            abonoRestante = abonoRestante.subtract(aplicado);
+            BigDecimal saldoActual = saldoInicial.subtract(aplicado);
+
+            if (saldoActual.signum() > 0) {
+                boolean vencida = p.getFechaLimitePago() != null && p.getFechaLimitePago().isBefore(hoy);
+                Long diasMora = vencida ? ChronoUnit.DAYS.between(p.getFechaLimitePago(), hoy) : null;
+                conSaldo.add(new PlanillaSaldoDTO(p.getId(), p.getFecha(), p.getFechaLimitePago(), valor, saldoActual, vencida, diasMora));
+                deudaTotal = deudaTotal.add(saldoActual);
+                if (vencida) vencidas++;
+            }
+        }
+        return new Saldos(conSaldo, deudaTotal, vencidas);
+    }
+
+    private PoliticaCredito politicaEfectivaDe(UUID comercianteId) {
+        UUID tenantId = TenantContext.requerido();
+        return politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId)
+                .orElseGet(this::politicaPorDefecto);
+    }
 
     private PoliticaCredito politicaPorDefecto() {
         UUID tenantId = TenantContext.requerido();

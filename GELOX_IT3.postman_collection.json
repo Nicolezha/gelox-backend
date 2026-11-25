@@ -4691,10 +4691,10 @@
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
                       "const body = pm.response.json();",
-                      "pm.test('trae cupo, plazoDias y politicaVencimiento', () => {",
+                      "pm.test('trae cupo, plazoDias y politica', () => {",
                       "  pm.expect(body.cupo).to.exist;",
                       "  pm.expect(body.plazoDias).to.exist;",
-                      "  pm.expect(body.politicaVencimiento).to.exist;",
+                      "  pm.expect(body.politica).to.exist;",
                       "});"
                     ]
                   }
@@ -4728,7 +4728,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"cupo\": 5000,\n  \"plazoDias\": 0,\n  \"politicaVencimiento\": \"BLOQUEAR\"\n}"
+                  "raw": "{\n  \"cupo\": 5000,\n  \"plazoDias\": 0,\n  \"politica\": \"BLOQUEAR\"\n}"
                 }
               },
               "response": [],
@@ -4742,7 +4742,7 @@
                       "const body = pm.response.json();",
                       "pm.test('queda con los nuevos valores', () => {",
                       "  pm.expect(body.cupo).to.eql(5000);",
-                      "  pm.expect(body.politicaVencimiento).to.eql('BLOQUEAR');",
+                      "  pm.expect(body.politica).to.eql('BLOQUEAR');",
                       "});"
                     ]
                   }
@@ -4776,7 +4776,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"cupo\": 1,\n  \"plazoDias\": 0,\n  \"politicaVencimiento\": \"BLOQUEAR\"\n}"
+                  "raw": "{\n  \"cupo\": 1,\n  \"plazoDias\": 0,\n  \"politica\": \"BLOQUEAR\"\n}"
                 }
               },
               "response": [],
@@ -4834,6 +4834,50 @@
                   }
                 }
               ]
+            },
+            {
+              "name": "05 - POST producto de prueba (precio al público 1500) para despachar a crédito",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/catalogo/productos",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "catalogo",
+                    "productos"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"codigoTecnico\": \"QA-CREDITO-{{$timestamp}}\",\n  \"nombre\": \"Paleta crédito\",\n  \"categoria\": \"PALETAS\",\n  \"precioVenta\": 1500,\n  \"precioCosto\": 1000\n}"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('productoCreditoId', pm.response.json().id);"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         },
@@ -4841,7 +4885,7 @@
           "name": "Bloqueo por crédito y abonos",
           "item": [
             {
-              "name": "01 - POST despacho #1 (10 uds x 1000, precioPublico 1500)",
+              "name": "01 - POST despacho #1 (10 uds x 1000; el precio al público lo pone el catálogo)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -4867,7 +4911,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"comercianteId\": \"{{comercianteCreditoId}}\",\n  \"fecha\": \"2026-01-01\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 10,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0,\n      \"precioPublico\": 1500\n    }\n  ]\n}"
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteCreditoId}}\",\n  \"fecha\": \"2026-01-01\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoCreditoId}}\",\n      \"unidades\": 10,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
                 }
               },
               "response": [],
@@ -4886,7 +4930,7 @@
               ]
             },
             {
-              "name": "02 - GET imprimir despacho #1 (obtener detalleId del ítem)",
+              "name": "02 - GET imprimir despacho #1 (detalleId y precio al público automático)",
               "request": {
                 "method": "GET",
                 "header": [
@@ -4916,7 +4960,9 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                      "pm.collectionVariables.set('itemMargenId', pm.response.json().items[0].id);"
+                      "const body = pm.response.json();",
+                      "pm.test('el ítem trae precioPublico = 1500 (del catálogo, no lo mandó el cliente)', () => pm.expect(body.items[0].precioPublico).to.eql(1500));",
+                      "pm.collectionVariables.set('itemMargenId', body.items[0].id);"
                     ]
                   }
                 }
@@ -4962,17 +5008,21 @@
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
                       "const body = pm.response.json();",
-                      "pm.test('MARGEN: gananciaTotal = precioVenta * unidadesVendidas', () => pm.expect(body.gananciaTotal).to.eql(10000));",
-                      "pm.test('gananciaComercianteTotal = (precioPublico - precioVenta) * unidades', () => pm.expect(body.gananciaComercianteTotal).to.eql(5000));",
-                      "pm.test('efectivoRecibido queda en el valor parcial indicado', () => pm.expect(body.efectivoRecibido).to.eql(3000));",
-                      "pm.test('esquemaAplicado = MARGEN', () => pm.expect(body.esquemaAplicado).to.eql('MARGEN'));"
+                      "pm.test('MARGEN: montoCobrado = precioVenta * unidadesVendidas', () => pm.expect(body.montoCobrado).to.eql(10000));",
+                      "pm.test('gananciaComerciante = (precioPublico - precioVenta) * unidades', () => pm.expect(body.gananciaComerciante).to.eql(5000));",
+                      "pm.test('totalVendido = precioPublico * unidades', () => pm.expect(body.totalVendido).to.eql(15000));",
+                      "pm.test('efectivoRecibido y saldo', () => { pm.expect(body.efectivoRecibido).to.eql(3000); pm.expect(body.saldo).to.eql(7000); });",
+                      "pm.test('esquemaAplicado = MARGEN y hay fecha límite (queda saldo)', () => {",
+                      "  pm.expect(body.esquemaAplicado).to.eql('MARGEN');",
+                      "  pm.expect(body.fechaLimitePago).to.exist;",
+                      "});"
                     ]
                   }
                 }
               ]
             },
             {
-              "name": "04 - GET crédito del comerciante: deuda 7000, bloqueado",
+              "name": "04 - GET crédito del comerciante: deuda 7000, excede el cupo (5000)",
               "request": {
                 "method": "GET",
                 "header": [
@@ -5003,8 +5053,10 @@
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
                       "const body = pm.response.json();",
-                      "pm.test('deuda = 10000 - 3000', () => pm.expect(body.deuda).to.eql(7000));",
-                      "pm.test('excede el cupo (5000) y queda bloqueado', () => pm.expect(body.bloqueado).to.eql(true));"
+                      "pm.test('deudaActual = 10000 - 3000', () => pm.expect(body.deudaActual).to.eql(7000));",
+                      "pm.test('cupoDisponible en cero (la deuda ya supera el cupo)', () => pm.expect(body.cupoDisponible).to.eql(0));",
+                      "pm.test('una planilla con saldo', () => pm.expect(body.planillas).to.have.length(1));",
+                      "pm.test('política BLOQUEAR', () => pm.expect(body.politica).to.eql('BLOQUEAR'));"
                     ]
                   }
                 }
@@ -5037,7 +5089,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"comercianteId\": \"{{comercianteCreditoId}}\",\n  \"fecha\": \"2026-01-02\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 5,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteCreditoId}}\",\n  \"fecha\": \"2026-01-02\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoCreditoId}}\",\n      \"unidades\": 5,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
                 }
               },
               "response": [],
@@ -5049,10 +5101,11 @@
                     "exec": [
                       "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
                       "const body = pm.response.json();",
-                      "pm.test(\"cuerpo {error, codigo: 'CREDITO_BLOQUEADO', deuda, cupo}\", () => {",
+                      "pm.test(\"cuerpo {error, codigo: 'CREDITO_BLOQUEADO', deuda, cupo, advertencias}\", () => {",
                       "  pm.expect(body.codigo).to.eql('CREDITO_BLOQUEADO');",
                       "  pm.expect(body.deuda).to.eql(7000);",
                       "  pm.expect(body.cupo).to.eql(5000);",
+                      "  pm.expect(body.advertencias.map(a => a.codigo)).to.include('CUPO_SUPERADO');",
                       "});"
                     ]
                   }
@@ -5098,14 +5151,19 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('201 Created', () => pm.response.to.have.status(201));",
-                      "pm.test('valor del abono', () => pm.expect(pm.response.json().valor).to.eql(7000));"
+                      "const body = pm.response.json();",
+                      "pm.test('devuelve la vista de crédito actualizada', () => {",
+                      "  pm.expect(body.deudaActual).to.eql(0);",
+                      "  pm.expect(body.abonos).to.have.length(1);",
+                      "  pm.expect(body.abonos[0].valor).to.eql(7000);",
+                      "});"
                     ]
                   }
                 }
               ]
             },
             {
-              "name": "07 - GET crédito del comerciante tras el abono: deuda 0, no bloqueado",
+              "name": "07 - GET crédito del comerciante tras el abono: sin planillas con saldo",
               "request": {
                 "method": "GET",
                 "header": [
@@ -5136,8 +5194,10 @@
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
                       "const body = pm.response.json();",
-                      "pm.test('deuda en cero', () => pm.expect(body.deuda).to.eql(0));",
-                      "pm.test('ya no está bloqueado', () => pm.expect(body.bloqueado).to.eql(false));"
+                      "pm.test('deuda en cero y sin planillas con saldo', () => {",
+                      "  pm.expect(body.deudaActual).to.eql(0);",
+                      "  pm.expect(body.planillas).to.be.empty;",
+                      "});"
                     ]
                   }
                 }
@@ -5170,7 +5230,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"comercianteId\": \"{{comercianteCreditoId}}\",\n  \"fecha\": \"2026-01-02\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 5,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteCreditoId}}\",\n  \"fecha\": \"2026-01-02\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoCreditoId}}\",\n      \"unidades\": 5,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
                 }
               },
               "response": [],
@@ -5187,7 +5247,7 @@
               ]
             },
             {
-              "name": "09 - PATCH extender fecha límite de pago del despacho #1",
+              "name": "09 - PATCH extender fecha límite de pago del despacho #1 (el motivo es obligatorio)",
               "request": {
                 "method": "PATCH",
                 "header": [
@@ -5214,7 +5274,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"fechaLimitePago\": \"2026-12-31\"\n}"
+                  "raw": "{\n  \"fechaLimitePago\": \"2026-01-10\",\n  \"motivo\": \"Acuerdo con el comerciante por temporada baja\"\n}"
                 }
               },
               "response": [],
@@ -5261,7 +5321,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                      "pm.test('fechaLimitePago = 2026-12-31', () => pm.expect(pm.response.json().fechaLimitePago).to.eql('2026-12-31'));"
+                      "pm.test('fechaLimitePago = 2026-01-10', () => pm.expect(pm.response.json().fechaLimitePago).to.eql('2026-01-10'));"
                     ]
                   }
                 }
@@ -5294,7 +5354,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"cupo\": 999999999,\n  \"plazoDias\": 30,\n  \"politicaVencimiento\": \"SOLO_ALERTA\"\n}"
+                  "raw": "{\n  \"cupo\": 999999999,\n  \"plazoDias\": 30,\n  \"politica\": \"SOLO_ALERTA\"\n}"
                 }
               },
               "response": [],
@@ -5316,7 +5376,7 @@
           "name": "Esquema de liquidación",
           "item": [
             {
-              "name": "01 - GET esquema de liquidación vigente (MARGEN por defecto)",
+              "name": "01 - GET esquema de liquidación vigente (MARGEN por defecto, valor null)",
               "request": {
                 "method": "GET",
                 "header": [
@@ -5345,7 +5405,9 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                      "pm.test('trae tipo y valor', () => { pm.expect(pm.response.json().tipo).to.exist; pm.expect(pm.response.json().valor).to.exist; });"
+                      "const body = pm.response.json();",
+                      "pm.test('trae tipo', () => pm.expect(body.tipo).to.exist);",
+                      "if (body.tipo === 'MARGEN') pm.test('valor es null en MARGEN', () => pm.expect(body.valor).to.eql(null));"
                     ]
                   }
                 }
@@ -5395,7 +5457,7 @@
               ]
             },
             {
-              "name": "03 - PUT esquema COMISION 20%",
+              "name": "03 - PUT esquema COMISION 20% (lo gana el comerciante, no la distribuidora)",
               "request": {
                 "method": "PUT",
                 "header": [
@@ -5439,7 +5501,7 @@
               ]
             },
             {
-              "name": "04 - POST despacho con precio al público (10 uds x 1000, público 1500)",
+              "name": "04 - POST despacho (10 uds x 1000; precio al público 1500 del catálogo)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -5465,7 +5527,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"comercianteId\": \"{{comercianteEsquemaId}}\",\n  \"fecha\": \"2026-02-01\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 10,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0,\n      \"precioPublico\": 1500\n    }\n  ]\n}"
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteEsquemaId}}\",\n  \"fecha\": \"2026-02-01\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoCreditoId}}\",\n      \"unidades\": 10,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
                 }
               },
               "response": [],
@@ -5520,7 +5582,7 @@
               ]
             },
             {
-              "name": "06 - POST liquidar con COMISION: factura el 20% de la venta al público",
+              "name": "06 - POST liquidar con COMISION: el comerciante gana el 20% de la venta al público",
               "request": {
                 "method": "POST",
                 "header": [
@@ -5559,16 +5621,17 @@
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
                       "const body = pm.response.json();",
-                      "pm.test('gananciaTotal = 15000 * 20%', () => pm.expect(body.gananciaTotal).to.eql(3000));",
-                      "pm.test('gananciaComercianteTotal = 15000 - 3000', () => pm.expect(body.gananciaComercianteTotal).to.eql(12000));",
-                      "pm.test('sin efectivoRecibido indicado, se asume pago completo', () => pm.expect(body.efectivoRecibido).to.eql(3000));"
+                      "pm.test('totalVendido = 10 * 1500', () => pm.expect(body.totalVendido).to.eql(15000));",
+                      "pm.test('gananciaComerciante = 15000 * 20%', () => pm.expect(body.gananciaComerciante).to.eql(3000));",
+                      "pm.test('montoCobrado = 15000 - 3000', () => pm.expect(body.montoCobrado).to.eql(12000));",
+                      "pm.test('sin efectivoRecibido indicado, se asume pago completo', () => pm.expect(body.efectivoRecibido).to.eql(12000));"
                     ]
                   }
                 }
               ]
             },
             {
-              "name": "07 - PUT esquema TARIFA_FIJA $200 por unidad",
+              "name": "07 - PUT esquema TARIFA_FIJA $2000 por planilla (no por unidad)",
               "request": {
                 "method": "PUT",
                 "header": [
@@ -5594,7 +5657,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"tipo\": \"TARIFA_FIJA\",\n  \"valor\": 200\n}"
+                  "raw": "{\n  \"tipo\": \"TARIFA_FIJA\",\n  \"valor\": 2000\n}"
                 }
               },
               "response": [],
@@ -5611,7 +5674,7 @@
               ]
             },
             {
-              "name": "08 - POST despacho sin precio al público (10 uds x 1000)",
+              "name": "08 - POST otro despacho (10 uds x 1000)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -5637,7 +5700,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"comercianteId\": \"{{comercianteEsquemaId}}\",\n  \"fecha\": \"2026-02-02\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoId}}\",\n      \"unidades\": 10,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
+                  "raw": "{\n  \"comercianteId\": \"{{comercianteEsquemaId}}\",\n  \"fecha\": \"2026-02-02\",\n  \"items\": [\n    {\n      \"productoId\": \"{{productoCreditoId}}\",\n      \"unidades\": 10,\n      \"precioUnitario\": 1000,\n      \"saldoAnterior\": 0\n    }\n  ]\n}"
                 }
               },
               "response": [],
@@ -5692,7 +5755,7 @@
               ]
             },
             {
-              "name": "10 - POST liquidar con TARIFA_FIJA: factura 200 por unidad, sin ganancia del comerciante",
+              "name": "10 - POST liquidar con TARIFA_FIJA: el comerciante gana $2000 fijos, sin importar lo vendido",
               "request": {
                 "method": "POST",
                 "header": [
@@ -5731,8 +5794,8 @@
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
                       "const body = pm.response.json();",
-                      "pm.test('gananciaTotal = 200 * 10', () => pm.expect(body.gananciaTotal).to.eql(2000));",
-                      "pm.test('sin precio al público, no hay gananciaComercianteTotal', () => pm.expect(body.gananciaComercianteTotal).to.eql(null));"
+                      "pm.test('gananciaComerciante = 2000 (fijo)', () => pm.expect(body.gananciaComerciante).to.eql(2000));",
+                      "pm.test('montoCobrado = 15000 - 2000', () => pm.expect(body.montoCobrado).to.eql(13000));"
                     ]
                   }
                 }
@@ -5765,7 +5828,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"tipo\": \"MARGEN\",\n  \"valor\": 0\n}"
+                  "raw": "{\n  \"tipo\": \"MARGEN\",\n  \"valor\": null\n}"
                 }
               },
               "response": [],
@@ -5873,12 +5936,6 @@
       "description": "ID Token de un ENCARGADO_VENTAS de Mágico Sabor, para los 403 de RF65/RF66"
     },
     {
-      "key": "productoId",
-      "value": "",
-      "type": "string",
-      "description": "RF65/RF66: id de un producto activo de Mágico Sabor para los despachos de prueba"
-    },
-    {
       "key": "comercianteCreditoId",
       "value": "",
       "type": "string",
@@ -5979,6 +6036,12 @@
       "value": "",
       "type": "string",
       "description": "Lo llena Productos/01"
+    },
+    {
+      "key": "productoCreditoId",
+      "value": "",
+      "type": "string",
+      "description": "Se completa al correr 'Política de crédito/05'"
     }
   ]
 }

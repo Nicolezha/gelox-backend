@@ -64,13 +64,11 @@ public class PlanillaService {
         CreditoService.Evaluacion evaluacion = creditoService.evaluar(comerciante.getId());
         List<AdvertenciaCreditoDTO> advertencias = new ArrayList<>();
         if (evaluacion.excede()) {
-            if (evaluacion.politica().politicaVencimiento() == PoliticaVencimiento.BLOQUEAR) {
+            if (evaluacion.politica() == PoliticaVencimiento.BLOQUEAR) {
                 throw new CreditoBloqueadoException(
-                        evaluacion.deuda(), evaluacion.politica().cupo(), evaluacion.planillasVencidas());
+                        evaluacion.deuda(), evaluacion.cupo(), evaluacion.planillasVencidas(), evaluacion.advertencias());
             }
-            advertencias.add(new AdvertenciaCreditoDTO(
-                    "El comerciante excede el crédito permitido.",
-                    evaluacion.deuda(), evaluacion.politica().cupo(), evaluacion.planillasVencidas()));
+            advertencias.addAll(evaluacion.advertencias());
         }
 
         // 2. Verificar que no exista planilla ya para ese comerciante en esa fecha
@@ -136,7 +134,7 @@ public class PlanillaService {
                     .unidadesDespachadas(totalUnidades)
                     .unidadesDevueltas(0)
                     .precioVenta(item.precioUnitario())
-                    .precioPublico(item.precioPublico())
+                    .precioPublico(p.getPrecioVenta())   // RF66 — precio al público: el del catálogo, no lo informa el cliente
                     .build());
 
             // Solo descontar del stock global las unidades que no venían de devoluciones anteriores
@@ -232,6 +230,9 @@ public class PlanillaService {
     // RF65 — Extender (prorrogar) la fecha límite de pago de una planilla cerrada
     // ══════════════════════════════════════════════════════════════════════
 
+    /** Máximo de días que el Gerente puede correr la fecha límite de una planilla (espejo de MAX_DIAS_PRORROGA, creditoUtils.js). */
+    private static final int MAX_DIAS_PRORROGA = 15;
+
     @RequiereRol("ADMINISTRADOR")
     @Auditable(accion = "PLANILLA_CAMBIAR_FECHA_LIMITE", entidad = "PlanillaComerciante")
     public void cambiarFechaLimite(UUID planillaId, CambiarFechaLimiteRequest req) {
@@ -242,6 +243,20 @@ public class PlanillaService {
         if (!Boolean.TRUE.equals(planilla.getCerrada())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "La planilla aún no está liquidada; no tiene fecha límite de pago.");
+        }
+        if (req.motivo() == null || req.motivo().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El motivo es obligatorio: queda registrado en auditoría.");
+        }
+        var actual = planilla.getFechaLimitePago();
+        long dias = actual != null ? java.time.temporal.ChronoUnit.DAYS.between(actual, req.fechaLimitePago()) : 1;
+        if (dias <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La nueva fecha debe ser posterior a la fecha límite actual.");
+        }
+        if (dias > MAX_DIAS_PRORROGA) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Máximo " + MAX_DIAS_PRORROGA + " días adicionales.");
         }
         planilla.setFechaLimitePago(req.fechaLimitePago());
         planillaRepository.save(planilla);
@@ -263,6 +278,7 @@ public class PlanillaService {
         int totalDevueltas   = 0;
         int totalVendidas    = 0;
         BigDecimal sumaGanancia = BigDecimal.ZERO;
+        BigDecimal sumaVendido  = BigDecimal.ZERO;
         List<ItemImpresionPlanillaDTO> items = new ArrayList<>();
 
         for (ItemPlanilla item : itemEntities) {
@@ -271,6 +287,8 @@ public class PlanillaService {
             totalDevueltas   += dto.unidadesDevueltas();
             totalVendidas    += dto.unidadesVendidas();
             sumaGanancia      = sumaGanancia.add(dto.subtotal());
+            BigDecimal precioPublico = dto.precioPublico() != null ? dto.precioPublico() : dto.precioVenta();
+            sumaVendido = sumaVendido.add(precioPublico.multiply(BigDecimal.valueOf(dto.unidadesVendidas())));
             items.add(dto);
         }
 
@@ -284,8 +302,8 @@ public class PlanillaService {
         var usuario     = planilla.getUsuario();
         IdentidadDTO identidad = identidadService.obtener();
 
-        BigDecimal saldoPendiente = Boolean.TRUE.equals(planilla.getCerrada())
-                ? totalGanancia.subtract(planilla.getEfectivoRecibido() != null ? planilla.getEfectivoRecibido() : BigDecimal.ZERO)
+        BigDecimal saldo = Boolean.TRUE.equals(planilla.getCerrada())
+                ? totalGanancia.subtract(planilla.getEfectivoRecibido() != null ? planilla.getEfectivoRecibido() : BigDecimal.ZERO).max(BigDecimal.ZERO)
                 : null;
 
         return new PlanillaImpresionResponseDTO(
@@ -306,11 +324,14 @@ public class PlanillaService {
                 totalDevueltas,
                 totalVendidas,
                 totalGanancia,
+                totalGanancia,
+                sumaVendido,
                 planilla.getEfectivoRecibido(),
                 planilla.getGananciaComerciante(),
                 planilla.getEsquemaAplicado(),
+                planilla.getValorEsquema(),
                 planilla.getFechaLimitePago(),
-                saldoPendiente,
+                saldo,
                 new PlanillaImpresionResponseDTO.Identidad(
                         identidad.nombreComercial(),
                         identidad.logoUrl(),
