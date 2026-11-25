@@ -307,7 +307,7 @@ class IdentidadDistribuidoraTest {
         PlanillaComercianteRepository planillaRepo = mock(PlanillaComercianteRepository.class);
         ItemPlanillaRepository itemRepo = mock(ItemPlanillaRepository.class);
         PlanillaService planillaService = new PlanillaService(
-                null, planillaRepo, itemRepo, null, null, null, service);
+                null, planillaRepo, itemRepo, null, null, null, service, null);
 
         Usuario usuario = TestHelper.buildUsuario("uid-ventas", "ventas@gelox-test.com", RolUsuario.ENCARGADO_VENTAS, true);
         Comerciante comerciante = Comerciante.builder().id(UUID.randomUUID()).nombre("Comerciante Test").build();
