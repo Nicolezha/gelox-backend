@@ -6,8 +6,8 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 
-/** RF66 — Cuerpo de PUT /api/liquidacion/esquema. valor: % para COMISION, monto para TARIFA_FIJA. */
+/** RF66 — Cuerpo de PUT /api/liquidacion/esquema. valor: % para COMISION, monto fijo para TARIFA_FIJA; null en MARGEN. */
 public record EsquemaLiquidacionRequest(
         @NotNull TipoEsquemaLiquidacion tipo,
-        @NotNull @PositiveOrZero BigDecimal valor
+        @PositiveOrZero BigDecimal valor
 ) {}

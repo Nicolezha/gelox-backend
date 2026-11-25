@@ -5,25 +5,24 @@ import com.gelox.backend.entities.TipoEsquemaLiquidacion;
 import java.math.BigDecimal;
 
 /**
- * RF66 — por cada ítem liquidado, calcula cuánto factura la distribuidora al
- * comerciante (montoCobrado) y, si se registró precio al público, cuánto le
- * queda al comerciante de su venta (gananciaComerciante = ventaAlPublico -
- * montoCobrado). Cada {@link com.gelox.backend.entities.TipoEsquemaLiquidacion}
- * tiene su propia implementación; {@link CalculoLiquidacionResolver} elige la
- * que corresponde al esquema vigente.
+ * RF66 — calcula, para TODA la planilla, cuánto gana el comerciante y cuánto
+ * factura la distribuidora. Espejo exacto de calcularLiquidacion() en
+ * creditoUtils.js del frontend: COMISION y TARIFA_FIJA son agregados de toda
+ * la planilla (no se pueden calcular ítem por ítem); solo MARGEN es
+ * naturalmente aditivo por ítem.
  */
 public interface CalculoLiquidacion {
 
     TipoEsquemaLiquidacion tipo();
 
     /**
-     * @param precioVenta      precio al comerciante (siempre presente).
-     * @param precioPublico    precio al público registrado en el despacho (puede ser null).
-     * @param unidadesVendidas despachadas - devueltas.
-     * @param valorEsquema     valor del esquema vigente (0 para MARGEN, % para COMISION, monto por unidad para TARIFA_FIJA).
+     * @param totalPublico     Σ vendidas × (precioPublico ?? precioVenta) de toda la planilla.
+     * @param totalComerciante Σ vendidas × precioVenta (precio al comerciante) de toda la planilla.
+     * @param unidades         total de unidades vendidas en la planilla.
+     * @param valorEsquema     valor del esquema vigente (no se usa en MARGEN).
      */
-    Linea calcular(BigDecimal precioVenta, BigDecimal precioPublico, int unidadesVendidas, BigDecimal valorEsquema);
+    Resultado calcular(BigDecimal totalPublico, BigDecimal totalComerciante, int unidades, BigDecimal valorEsquema);
 
-    /** gananciaComerciante es null cuando el ítem no registró precio al público. */
-    record Linea(BigDecimal montoCobrado, BigDecimal gananciaComerciante) {}
+    /** gananciaComerciante: lo que se queda el comerciante. montoCobrado: lo que factura la distribuidora. */
+    record Resultado(BigDecimal montoCobrado, BigDecimal gananciaComerciante) {}
 }

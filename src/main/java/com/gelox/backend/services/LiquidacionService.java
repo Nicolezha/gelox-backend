@@ -4,13 +4,13 @@ import com.gelox.backend.credito.CalculoLiquidacion;
 import com.gelox.backend.credito.CalculoLiquidacionResolver;
 import com.gelox.backend.credito.CreditoService;
 import com.gelox.backend.credito.EsquemaLiquidacionService;
-import com.gelox.backend.dto.DetalleCalculadoDTO;
 import com.gelox.backend.dto.DevolucionItemDTO;
 import com.gelox.backend.dto.LiquidacionRequestDTO;
 import com.gelox.backend.dto.LiquidacionResponseDTO;
 import com.gelox.backend.entities.EsquemaLiquidacion;
 import com.gelox.backend.entities.ItemPlanilla;
 import com.gelox.backend.entities.PlanillaComerciante;
+import com.gelox.backend.entities.TipoEsquemaLiquidacion;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.exceptions.DevolucionInvalidaException;
@@ -67,11 +67,15 @@ public class LiquidacionService {
         EsquemaLiquidacion esquema = esquemaLiquidacionService.vigente();
         CalculoLiquidacion calculo = calculoResolver.paraTipo(esquema.getTipo());
 
-        // 3. Procesar cada devolución
-        List<DetalleCalculadoDTO> detalles = new ArrayList<>();
-        BigDecimal gananciaTotal = BigDecimal.ZERO;
-        BigDecimal gananciaComercianteTotal = BigDecimal.ZERO;
-        boolean algunaGananciaComerciante = false;
+        // 3. Procesar cada devolución y acumular los totales de TODA la planilla
+        //    (COMISION y TARIFA_FIJA no son aditivos por ítem — espejo de calcularLiquidacion() del frontend)
+        BigDecimal totalPublico = BigDecimal.ZERO;
+        BigDecimal totalComerciante = BigDecimal.ZERO;
+        int unidadesTotal = 0;
+        List<ItemPlanilla> itemsProcesados = new ArrayList<>();
+        List<BigDecimal> pvpPorItem = new ArrayList<>();
+        List<Integer> vendidasPorItem = new ArrayList<>();
+        boolean algunPrecioPublico = false;
 
         for (DevolucionItemDTO dev : request.devoluciones()) {
 
@@ -91,48 +95,55 @@ public class LiquidacionService {
                         + "despachadas (" + despachadas + ") para el ítem " + dev.detalleId());
             }
 
-            // c. Calcular según el esquema de liquidación vigente (RF66)
             int unidadesVendidas = despachadas - devueltas;
-            CalculoLiquidacion.Linea linea = calculo.calcular(
-                    item.getPrecioVenta(), item.getPrecioPublico(), unidadesVendidas, esquema.getValor());
+            BigDecimal precioComerciante = item.getPrecioVenta();
+            BigDecimal precioPublico = item.getPrecioPublico();
+            if (precioPublico != null) algunPrecioPublico = true;
+            BigDecimal precioPublicoEfectivo = precioPublico != null ? precioPublico : precioComerciante;
 
-            // d. Persistir devolución y ganancia del comerciante en el detalle
+            totalComerciante = totalComerciante.add(precioComerciante.multiply(BigDecimal.valueOf(unidadesVendidas)));
+            totalPublico = totalPublico.add(precioPublicoEfectivo.multiply(BigDecimal.valueOf(unidadesVendidas)));
+            unidadesTotal += unidadesVendidas;
+
+            // c. Persistir la devolución
             item.setUnidadesDevueltas(devueltas);
-            item.setGananciaComerciante(linea.gananciaComerciante());
-            itemPlanillaRepository.save(item);
+            itemsProcesados.add(item);
+            pvpPorItem.add(precioPublico);
+            vendidasPorItem.add(unidadesVendidas);
 
             // Las unidades devueltas quedan con el comerciante (no regresan al stock global).
             // Se recuperan como saldo_anterior en la siguiente planilla de ese comerciante.
-
-            gananciaTotal = gananciaTotal.add(linea.montoCobrado());
-            if (linea.gananciaComerciante() != null) {
-                algunaGananciaComerciante = true;
-                gananciaComercianteTotal = gananciaComercianteTotal.add(linea.gananciaComerciante());
-            }
-
-            detalles.add(new DetalleCalculadoDTO(
-                    item.getId(),
-                    despachadas,
-                    devueltas,
-                    unidadesVendidas,
-                    item.getPrecioVenta(),
-                    linea.montoCobrado(),
-                    linea.gananciaComerciante()));
         }
 
-        BigDecimal gananciaComercianteFinal = algunaGananciaComerciante ? gananciaComercianteTotal : null;
-        BigDecimal efectivoRecibido = request.efectivoRecibido() != null ? request.efectivoRecibido() : gananciaTotal;
+        // 4. Aplicar el esquema vigente a los totales de la planilla
+        CalculoLiquidacion.Resultado resultado = calculo.calcular(totalPublico, totalComerciante, unidadesTotal, esquema.getValor());
+        BigDecimal montoCobrado = resultado.montoCobrado();
+        BigDecimal gananciaComerciante = resultado.gananciaComerciante();
 
-        // RF65 — fecha límite de pago: fecha de cierre + plazo de la política de crédito efectiva del comerciante
+        // MARGEN es aditivo por ítem: guardar la ganancia de cada uno (útil para el comprobante impreso)
+        if (esquema.getTipo() == TipoEsquemaLiquidacion.MARGEN) {
+            for (int i = 0; i < itemsProcesados.size(); i++) {
+                ItemPlanilla item = itemsProcesados.get(i);
+                BigDecimal pvp = pvpPorItem.get(i);
+                item.setGananciaComerciante(pvp == null ? null
+                        : pvp.subtract(item.getPrecioVenta()).multiply(BigDecimal.valueOf(vendidasPorItem.get(i))));
+            }
+        }
+        itemsProcesados.forEach(itemPlanillaRepository::save);
+
+        BigDecimal efectivoRecibido = request.efectivoRecibido() != null ? request.efectivoRecibido() : montoCobrado;
+        BigDecimal saldo = montoCobrado.subtract(efectivoRecibido).max(BigDecimal.ZERO);
+
+        // RF65 — fecha límite de pago: solo si queda saldo (fecha de cierre + plazo de la política efectiva)
         int plazoDias = creditoService.plazoDiasEfectivo(planilla.getComerciante().getId());
         LocalDateTime ahora = LocalDateTime.now(ZONA_BOGOTA);
-        var fechaLimitePago = ahora.toLocalDate().plusDays(plazoDias);
+        var fechaLimitePago = saldo.signum() > 0 ? ahora.toLocalDate().plusDays(plazoDias) : null;
 
-        // 5-6. Marcar planilla como liquidada y persistir
+        // 5. Marcar planilla como liquidada y persistir
         planilla.setCerrada(true);
         planilla.setTimestampCierre(ahora);
-        planilla.setTotalGanancia(gananciaTotal);
-        planilla.setGananciaComerciante(gananciaComercianteFinal);
+        planilla.setTotalGanancia(montoCobrado);
+        planilla.setGananciaComerciante(algunPrecioPublico ? gananciaComerciante : null);
         planilla.setEsquemaAplicado(esquema.getTipo());
         planilla.setValorEsquema(esquema.getValor());
         planilla.setEfectivoRecibido(efectivoRecibido);
@@ -143,11 +154,12 @@ public class LiquidacionService {
         eventoSistemaService.registrarEvento(
                 TipoEvento.CIERRE_CAJA,
                 String.format("Cierre de planilla de %s. Total liquidado: $%s.",
-                        planilla.getComerciante().getNombre(), gananciaTotal.toPlainString()),
+                        planilla.getComerciante().getNombre(), montoCobrado.toPlainString()),
                 usuario != null ? usuario.getId() : null);
 
-        // 7. Retornar respuesta
-        return new LiquidacionResponseDTO(planilla.getId(), ahora, detalles, gananciaTotal,
-                esquema.getTipo(), gananciaComercianteFinal, efectivoRecibido, fechaLimitePago);
+        // 6. Retornar comprobante
+        return new LiquidacionResponseDTO(planilla.getId(), ahora, esquema.getTipo(), esquema.getValor(),
+                totalPublico, algunPrecioPublico ? gananciaComerciante : null, montoCobrado,
+                efectivoRecibido, saldo, fechaLimitePago);
     }
 }

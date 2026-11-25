@@ -6,9 +6,8 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 
 /**
- * TARIFA_FIJA — la distribuidora factura un monto fijo por unidad vendida
- * (valorEsquema), sin importar el precio. La ganancia del comerciante es la
- * venta al público menos esa tarifa (null si no se registró precio al público).
+ * TARIFA_FIJA — el comerciante gana un valor fijo por planilla liquidada
+ * (valorEsquema), sin importar cuánto vendió; el resto lo factura la distribuidora.
  */
 @Component
 public class TarifaFijaCalculo implements CalculoLiquidacion {
@@ -19,12 +18,8 @@ public class TarifaFijaCalculo implements CalculoLiquidacion {
     }
 
     @Override
-    public Linea calcular(BigDecimal precioVenta, BigDecimal precioPublico, int unidadesVendidas, BigDecimal valorEsquema) {
-        BigDecimal unidades = BigDecimal.valueOf(unidadesVendidas);
-        BigDecimal montoCobrado = valorEsquema.multiply(unidades);
-        BigDecimal gananciaComerciante = precioPublico == null
-                ? null
-                : precioPublico.multiply(unidades).subtract(montoCobrado);
-        return new Linea(montoCobrado, gananciaComerciante);
+    public Resultado calcular(BigDecimal totalPublico, BigDecimal totalComerciante, int unidades, BigDecimal valorEsquema) {
+        BigDecimal ganancia = unidades > 0 ? MargenCalculo.clamp(valorEsquema, totalPublico) : BigDecimal.ZERO;
+        return new Resultado(totalPublico.subtract(ganancia), ganancia);
     }
 }
