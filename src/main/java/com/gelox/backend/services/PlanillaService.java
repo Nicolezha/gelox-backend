@@ -287,8 +287,7 @@ public class PlanillaService {
             totalDevueltas   += dto.unidadesDevueltas();
             totalVendidas    += dto.unidadesVendidas();
             sumaGanancia      = sumaGanancia.add(dto.subtotal());
-            BigDecimal precioPublico = dto.precioPublico() != null ? dto.precioPublico() : dto.precioVenta();
-            sumaVendido = sumaVendido.add(precioPublico.multiply(BigDecimal.valueOf(dto.unidadesVendidas())));
+            sumaVendido = sumaVendido.add(item.precioPublicoEfectivo().multiply(BigDecimal.valueOf(dto.unidadesVendidas())));
             items.add(dto);
         }
 

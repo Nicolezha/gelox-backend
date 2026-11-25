@@ -12,10 +12,10 @@ import java.time.ZoneId;
 import java.util.UUID;
 
 /**
- * RF66 — Esquema de liquidación vigente de la distribuidora (FP-15 §2.17.2).
- * Es un historial: la fila con {@code vigenteDesde} más reciente es la
- * actual. Cada planilla guarda una copia del esquema y el valor con los que
- * se liquidó, para que un cambio posterior no altere planillas ya cerradas.
+ * RF66 — Esquema de liquidación vigente de la distribuidora (FP-15 §2.14.1 y §2.17.2).
+ * Hay una sola fila por distribuidora y se actualiza en su sitio. El historial
+ * queda en la copia que guarda cada planilla (que un cambio posterior no altera)
+ * y en la auditoría ESQUEMA_LIQUIDACION_CAMBIAR.
  */
 @Data
 @Builder
@@ -24,7 +24,8 @@ import java.util.UUID;
 @Entity
 @EntityListeners(TenantEntityListener.class)
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
-@Table(name = "esquema_liquidacion")
+@Table(name = "esquema_liquidacion",
+        uniqueConstraints = @UniqueConstraint(name = "uq_esquema_liquidacion_tenant", columnNames = "tenant_id"))
 public class EsquemaLiquidacion implements TenantAware {
 
     @Id
@@ -39,21 +40,29 @@ public class EsquemaLiquidacion implements TenantAware {
     @Column(name = "tipo", nullable = false, length = 12)
     private TipoEsquemaLiquidacion tipo;
 
-    /** MARGEN no usa valor (queda en 0); COMISION es un % (0–100); TARIFA_FIJA es el monto fijo. */
-    @Column(name = "valor", nullable = false, precision = 15, scale = 4)
-    @Builder.Default
-    private BigDecimal valor = BigDecimal.ZERO;
+    /** MARGEN no usa valor (null); COMISION es un % (0 &lt; valor ≤ 100); TARIFA_FIJA es el monto fijo. */
+    @Column(name = "valor", precision = 12, scale = 2)
+    private BigDecimal valor;
 
     @Column(name = "vigente_desde", nullable = false)
     private LocalDateTime vigenteDesde;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    /** Usuario que hizo el último cambio; null en la fila sembrada por la migración. */
+    @Column(name = "actualizado_por")
+    private UUID actualizadoPor;
 
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now(ZoneId.of("America/Bogota"));
         if (vigenteDesde == null) vigenteDesde = now;
-        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now(ZoneId.of("America/Bogota"));
     }
 }

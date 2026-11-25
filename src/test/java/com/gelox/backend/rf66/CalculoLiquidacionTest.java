@@ -46,6 +46,15 @@ class CalculoLiquidacionTest {
     }
 
     @Test
+    @DisplayName("MARGEN con precio al público menor que el del comerciante: igual se cobra el precio al comerciante")
+    void margen_publicoMenorQueComerciante_cobraElPrecioAlComerciante() {
+        CalculoLiquidacion.Resultado r = new MargenCalculo().calcular(BigDecimal.ZERO, TOTAL_COMERCIANTE, UNIDADES, null);
+
+        assertThat(r.montoCobrado()).isEqualByComparingTo("24000");
+        assertThat(r.gananciaComerciante()).isEqualByComparingTo("0");
+    }
+
+    @Test
     @DisplayName("COMISION: el comerciante gana el porcentaje del total público; la distribuidora cobra el resto")
     void comision_gananciaEsElPorcentajeDelTotalPublico() {
         CalculoLiquidacion.Resultado r = new ComisionCalculo().calcular(TOTAL_PUBLICO, TOTAL_COMERCIANTE, UNIDADES, BigDecimal.valueOf(20));

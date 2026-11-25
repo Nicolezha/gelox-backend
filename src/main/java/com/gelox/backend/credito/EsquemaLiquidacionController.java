@@ -2,9 +2,11 @@ package com.gelox.backend.credito;
 
 import com.gelox.backend.credito.dto.EsquemaLiquidacionDTO;
 import com.gelox.backend.credito.dto.EsquemaLiquidacionRequest;
+import com.gelox.backend.entities.Usuario;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,7 +27,9 @@ public class EsquemaLiquidacionController {
     }
 
     @PutMapping
-    public ResponseEntity<EsquemaLiquidacionDTO> actualizar(@Valid @RequestBody EsquemaLiquidacionRequest req) {
-        return ResponseEntity.ok(esquemaLiquidacionService.actualizar(req));
+    public ResponseEntity<EsquemaLiquidacionDTO> actualizar(
+            @Valid @RequestBody EsquemaLiquidacionRequest req,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(esquemaLiquidacionService.actualizar(req, usuario));
     }
 }
