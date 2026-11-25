@@ -34,11 +34,14 @@ public record PlanillaImpresionResponseDTO(
         int        totalUnidadesDevueltas,
         int        totalUnidadesVendidas,
         BigDecimal totalGanancia,
+        BigDecimal montoCobrado,          // RF66 — alias de totalGanancia (nombre del contrato nuevo)
+        BigDecimal totalVendido,          // RF66 — Σ vendidas × precio al público
         BigDecimal efectivoRecibido,
         BigDecimal gananciaComerciante,
         TipoEsquemaLiquidacion esquemaAplicado,
+        BigDecimal valorEsquema,
         LocalDate fechaLimitePago,
-        BigDecimal saldoPendiente,
+        BigDecimal saldo,
 
         Identidad identidad
 ) {

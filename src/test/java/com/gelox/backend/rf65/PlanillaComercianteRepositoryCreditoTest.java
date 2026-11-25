@@ -14,15 +14,15 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * RF65 — saldo y planillas vencidas de un comerciante (FP-15 §2.17.1): el
- * saldo de cada planilla cerrada es total_ganancia − efectivo_recibido, la
- * deuda es la suma de esos saldos, y una planilla está vencida si su saldo
- * es positivo y la fecha_limite_pago ya pasó.
+ * RF65 — findCerradasPorComercianteOrdenadas devuelve las planillas cerradas
+ * de la más antigua a la más reciente: es el orden que CreditoService usa
+ * para repartir los abonos (FIFO), espejo de distribuirAbono() del frontend.
  */
 @DataJpaTest(properties = {
         "spring.flyway.enabled=false",
@@ -50,68 +50,39 @@ class PlanillaComercianteRepositoryCreditoTest {
         em.flush();
     }
 
-    PlanillaComerciante planillaCerrada(BigDecimal totalGanancia, BigDecimal efectivoRecibido, LocalDate fechaLimitePago) {
+    PlanillaComerciante planilla(LocalDate fecha, boolean cerrada) {
         return em.merge(PlanillaComerciante.builder()
                 .tenantId(TENANT).comerciante(comerciante).usuario(usuario)
-                .fecha(LocalDate.now()).cerrada(true)
-                .totalGanancia(totalGanancia).efectivoRecibido(efectivoRecibido)
-                .fechaLimitePago(fechaLimitePago)
+                .fecha(fecha).cerrada(cerrada).totalGanancia(BigDecimal.valueOf(10000))
                 .build());
     }
 
     @Test
-    @DisplayName("sin planillas, el saldo es cero y no hay vencidas")
-    void sinPlanillas_saldoCero() {
-        assertThat(planillaRepository.sumarSaldoCerradas(comerciante.getId())).isEqualByComparingTo("0");
-        assertThat(planillaRepository.contarVencidas(comerciante.getId(), LocalDate.now())).isZero();
+    @DisplayName("sin planillas, devuelve una lista vacía")
+    void sinPlanillas_listaVacia() {
+        assertThat(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).isEmpty();
     }
 
     @Test
-    @DisplayName("el saldo de varias planillas cerradas se suma (total_ganancia − efectivo_recibido)")
-    void variasPlanillasCerradas_sumaLosSaldos() {
-        planillaCerrada(BigDecimal.valueOf(50000), BigDecimal.valueOf(20000), LocalDate.now().plusDays(10));
-        planillaCerrada(BigDecimal.valueOf(30000), BigDecimal.valueOf(30000), LocalDate.now().plusDays(10));
+    @DisplayName("devuelve las planillas cerradas de la más antigua a la más reciente")
+    void devuelveLasCerradas_delaMasAntiguaALaMasReciente() {
+        PlanillaComerciante reciente = planilla(LocalDate.now().minusDays(1), true);
+        PlanillaComerciante antigua  = planilla(LocalDate.now().minusDays(10), true);
+        PlanillaComerciante media    = planilla(LocalDate.now().minusDays(5), true);
         em.flush();
 
-        assertThat(planillaRepository.sumarSaldoCerradas(comerciante.getId())).isEqualByComparingTo("30000");
+        List<PlanillaComerciante> resultado = planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId());
+
+        assertThat(resultado).extracting(PlanillaComerciante::getId)
+                .containsExactly(antigua.getId(), media.getId(), reciente.getId());
     }
 
     @Test
-    @DisplayName("una planilla abierta (no cerrada) no entra en el saldo")
-    void planillaAbierta_noSuma() {
-        em.merge(PlanillaComerciante.builder()
-                .tenantId(TENANT).comerciante(comerciante).usuario(usuario)
-                .fecha(LocalDate.now()).cerrada(false)
-                .totalGanancia(BigDecimal.valueOf(99999)).build());
+    @DisplayName("una planilla abierta (no cerrada) no aparece en el resultado")
+    void planillaAbierta_noAparece() {
+        planilla(LocalDate.now(), false);
         em.flush();
 
-        assertThat(planillaRepository.sumarSaldoCerradas(comerciante.getId())).isEqualByComparingTo("0");
-    }
-
-    @Test
-    @DisplayName("planilla con saldo positivo y fecha límite vencida cuenta como vencida")
-    void saldoPositivoYFechaVencida_cuentaComoVencida() {
-        planillaCerrada(BigDecimal.valueOf(50000), BigDecimal.ZERO, LocalDate.now().minusDays(1));
-        em.flush();
-
-        assertThat(planillaRepository.contarVencidas(comerciante.getId(), LocalDate.now())).isEqualTo(1);
-    }
-
-    @Test
-    @DisplayName("planilla con saldo ya en cero, aunque la fecha límite pasó, no cuenta como vencida")
-    void saldoEnCero_noCuentaComoVencidaAunqueLaFechaPaso() {
-        planillaCerrada(BigDecimal.valueOf(50000), BigDecimal.valueOf(50000), LocalDate.now().minusDays(1));
-        em.flush();
-
-        assertThat(planillaRepository.contarVencidas(comerciante.getId(), LocalDate.now())).isZero();
-    }
-
-    @Test
-    @DisplayName("planilla con saldo positivo pero fecha límite futura no cuenta como vencida todavía")
-    void saldoPositivoConFechaFutura_noCuentaComoVencida() {
-        planillaCerrada(BigDecimal.valueOf(50000), BigDecimal.ZERO, LocalDate.now().plusDays(5));
-        em.flush();
-
-        assertThat(planillaRepository.contarVencidas(comerciante.getId(), LocalDate.now())).isZero();
+        assertThat(planillaRepository.findCerradasPorComercianteOrdenadas(comerciante.getId())).isEmpty();
     }
 }

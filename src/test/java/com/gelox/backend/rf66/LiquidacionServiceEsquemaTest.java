@@ -42,10 +42,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
- * RF66 — liquidarPlanilla aplica el esquema vigente (FP-15 §2.17.2). MARGEN
- * debe reproducir exactamente el total histórico (precioVenta * unidades
- * vendidas); COMISION y TARIFA_FIJA cambian cuánto se factura y calculan la
- * ganancia del comerciante cuando hay precio al público.
+ * RF66 — liquidarPlanilla aplica el esquema vigente a TODA la planilla
+ * (FP-15 §2.17.2), espejo del contrato de PlanillaDiaria.jsx. MARGEN sin
+ * precio al público debe reproducir exactamente el total histórico
+ * (precioVenta * unidadesVendidas).
  */
 @ExtendWith(MockitoExtension.class)
 class LiquidacionServiceEsquemaTest {
@@ -104,19 +104,34 @@ class LiquidacionServiceEsquemaTest {
     }
 
     @Test
-    @DisplayName("MARGEN reproduce exactamente el total histórico: precioVenta * unidadesVendidas")
-    void margen_reproduceElTotalHistorico() {
+    @DisplayName("MARGEN sin precio al público reproduce exactamente el total histórico: precioVenta * unidadesVendidas")
+    void margen_sinPrecioPublico_reproduceElTotalHistorico() {
         when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, BigDecimal.ZERO));
 
         LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(planilla.getId(), devolver(2, null), usuario);
 
         // 8 unidades vendidas * 1000 = 8000, igual al cálculo de siempre
-        assertThat(response.gananciaTotal()).isEqualByComparingTo("8000");
+        assertThat(response.montoCobrado()).isEqualByComparingTo("8000");
         assertThat(response.esquemaAplicado()).isEqualTo(TipoEsquemaLiquidacion.MARGEN);
-        assertThat(response.gananciaComercianteTotal()).isNull();
+        assertThat(response.gananciaComerciante()).isNull();
         assertThat(response.efectivoRecibido()).isEqualByComparingTo("8000");
-        assertThat(response.fechaLimitePago()).isEqualTo(LocalDate.now().plusDays(5));
+        assertThat(response.saldo()).isEqualByComparingTo("0");
+        assertThat(response.fechaLimitePago()).isNull();
         assertThat(planilla.getTotalGanancia()).isEqualByComparingTo("8000");
+    }
+
+    @Test
+    @DisplayName("MARGEN con precio al público: la ganancia del comerciante es la diferencia de precios")
+    void margen_conPrecioPublico_calculaGananciaComerciante() {
+        item.setPrecioPublico(BigDecimal.valueOf(1500));
+        when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, BigDecimal.ZERO));
+
+        LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(planilla.getId(), devolver(0, null), usuario);
+
+        // 10 * 1000 = 10000 factura la distribuidora; 10 * (1500-1000) = 5000 gana el comerciante
+        assertThat(response.montoCobrado()).isEqualByComparingTo("10000");
+        assertThat(response.gananciaComerciante()).isEqualByComparingTo("5000");
+        assertThat(response.totalVendido()).isEqualByComparingTo("15000");
     }
 
     @Test
@@ -128,54 +143,50 @@ class LiquidacionServiceEsquemaTest {
 
         LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(planilla.getId(), devolver(0, null), usuario);
 
-        // venta al público = 10 * 1500 = 15000; comisión 20% = 3000; ganancia comerciante = 12000
-        assertThat(response.gananciaTotal()).isEqualByComparingTo("3000");
-        assertThat(response.gananciaComercianteTotal()).isEqualByComparingTo("12000");
+        // venta al público = 10 * 1500 = 15000; comisión 20% = 3000 para el comerciante; 12000 factura la distribuidora
+        assertThat(response.gananciaComerciante()).isEqualByComparingTo("3000");
+        assertThat(response.montoCobrado()).isEqualByComparingTo("12000");
     }
 
     @Test
-    @DisplayName("TARIFA_FIJA factura un monto fijo por unidad vendida, sin importar el precio")
-    void tarifaFija_facturaMontoFijoPorUnidad() {
+    @DisplayName("TARIFA_FIJA factura la venta al público menos el valor fijo que gana el comerciante")
+    void tarifaFija_facturaElRestante() {
+        item.setPrecioPublico(BigDecimal.valueOf(1500));
         when(esquemaLiquidacionService.vigente())
-                .thenReturn(esquema(TipoEsquemaLiquidacion.TARIFA_FIJA, BigDecimal.valueOf(100)));
+                .thenReturn(esquema(TipoEsquemaLiquidacion.TARIFA_FIJA, BigDecimal.valueOf(2000)));
 
         LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(planilla.getId(), devolver(0, null), usuario);
 
-        assertThat(response.gananciaTotal()).isEqualByComparingTo("1000");
+        // venta al público = 15000; el comerciante gana 2000 fijos; la distribuidora factura 13000
+        assertThat(response.gananciaComerciante()).isEqualByComparingTo("2000");
+        assertThat(response.montoCobrado()).isEqualByComparingTo("13000");
     }
 
     @Test
-    @DisplayName("sin efectivoRecibido indicado, se asume pago completo (igual a la ganancia total)")
+    @DisplayName("sin efectivoRecibido indicado, se asume pago completo (igual al monto cobrado)")
     void sinEfectivoRecibido_asumePagoCompleto() {
         when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, BigDecimal.ZERO));
 
         LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(planilla.getId(), devolver(0, null), usuario);
 
-        assertThat(response.efectivoRecibido()).isEqualByComparingTo(response.gananciaTotal());
-        assertThat(planilla.getEfectivoRecibido()).isEqualByComparingTo(response.gananciaTotal());
+        assertThat(response.efectivoRecibido()).isEqualByComparingTo(response.montoCobrado());
+        assertThat(planilla.getEfectivoRecibido()).isEqualByComparingTo(response.montoCobrado());
+        assertThat(response.saldo()).isEqualByComparingTo("0");
+        assertThat(response.fechaLimitePago()).isNull();
     }
 
     @Test
-    @DisplayName("con efectivoRecibido parcial, se guarda el valor indicado (queda saldo pendiente)")
-    void conEfectivoRecibidoParcial_guardaElValorIndicado() {
+    @DisplayName("con efectivoRecibido parcial, queda saldo y se fija la fecha límite de pago")
+    void conEfectivoRecibidoParcial_quedaSaldoYFechaLimite() {
         when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, BigDecimal.ZERO));
 
         LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(
                 planilla.getId(), devolver(0, BigDecimal.valueOf(4000)), usuario);
 
-        assertThat(response.gananciaTotal()).isEqualByComparingTo("10000");
+        assertThat(response.montoCobrado()).isEqualByComparingTo("10000");
         assertThat(response.efectivoRecibido()).isEqualByComparingTo("4000");
-        assertThat(planilla.getEfectivoRecibido()).isEqualByComparingTo("4000");
-    }
-
-    @Test
-    @DisplayName("la fecha límite de pago es la fecha de cierre más el plazo de la política efectiva")
-    void fechaLimitePago_esFechaCierreMasPlazo() {
-        when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, BigDecimal.ZERO));
-        when(creditoService.plazoDiasEfectivo(planilla.getComerciante().getId())).thenReturn(15);
-
-        LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(planilla.getId(), devolver(0, null), usuario);
-
-        assertThat(response.fechaLimitePago()).isEqualTo(LocalDate.now().plusDays(15));
+        assertThat(response.saldo()).isEqualByComparingTo("6000");
+        assertThat(response.fechaLimitePago()).isEqualTo(LocalDate.now().plusDays(5));
+        assertThat(planilla.getFechaLimitePago()).isEqualTo(LocalDate.now().plusDays(5));
     }
 }

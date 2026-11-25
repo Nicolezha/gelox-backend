@@ -1,8 +1,7 @@
 package com.gelox.backend.credito;
 
-import com.gelox.backend.credito.dto.AbonoDTO;
 import com.gelox.backend.credito.dto.AbonoRequest;
-import com.gelox.backend.credito.dto.CreditoComercianteDTO;
+import com.gelox.backend.credito.dto.CreditoVistaDTO;
 import com.gelox.backend.credito.dto.PoliticaCreditoDTO;
 import com.gelox.backend.credito.dto.PoliticaCreditoRequest;
 import com.gelox.backend.entities.Usuario;
@@ -13,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 /** RF65 — Política de crédito, estado de crédito por comerciante y abonos (FP-15 §2.17.1). */
@@ -34,29 +32,23 @@ public class CreditoController {
     }
 
     @GetMapping("/api/comerciantes/{id}/credito")
-    public ResponseEntity<CreditoComercianteDTO> obtenerCredito(@PathVariable UUID id) {
+    public ResponseEntity<CreditoVistaDTO> obtenerCredito(@PathVariable UUID id) {
         return ResponseEntity.ok(creditoService.obtenerCreditoComerciante(id));
     }
 
-    @PutMapping("/api/comerciantes/{id}/credito/excepcion")
-    public ResponseEntity<PoliticaCreditoDTO> definirExcepcion(
+    @PutMapping("/api/comerciantes/{id}/credito")
+    public ResponseEntity<CreditoVistaDTO> definirExcepcion(
             @PathVariable UUID id, @Valid @RequestBody PoliticaCreditoRequest req) {
         return ResponseEntity.ok(creditoService.definirExcepcion(id, req));
     }
 
-    @DeleteMapping("/api/comerciantes/{id}/credito/excepcion")
-    public ResponseEntity<Void> eliminarExcepcion(@PathVariable UUID id) {
-        creditoService.eliminarExcepcion(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/api/comerciantes/{id}/abonos")
-    public ResponseEntity<List<AbonoDTO>> listarAbonos(@PathVariable UUID id) {
-        return ResponseEntity.ok(creditoService.listarAbonos(id));
+    @DeleteMapping("/api/comerciantes/{id}/credito")
+    public ResponseEntity<CreditoVistaDTO> eliminarExcepcion(@PathVariable UUID id) {
+        return ResponseEntity.ok(creditoService.eliminarExcepcion(id));
     }
 
     @PostMapping("/api/comerciantes/{id}/abonos")
-    public ResponseEntity<AbonoDTO> registrarAbono(
+    public ResponseEntity<CreditoVistaDTO> registrarAbono(
             @PathVariable UUID id,
             @Valid @RequestBody AbonoRequest req,
             @AuthenticationPrincipal Usuario usuario) {

@@ -7,10 +7,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * COMISION — la distribuidora se queda un porcentaje (valorEsquema, 0-100)
- * de la venta al público; el resto es la ganancia del comerciante. Si no se
- * registró precio al público, se factura el mismo porcentaje sobre
- * precioVenta y no se calcula ganancia del comerciante.
+ * COMISION — el comerciante gana un porcentaje fijo (valorEsquema, 0-100) del
+ * total vendido al público en la jornada; el resto lo factura la distribuidora.
  */
 @Component
 public class ComisionCalculo implements CalculoLiquidacion {
@@ -21,13 +19,10 @@ public class ComisionCalculo implements CalculoLiquidacion {
     }
 
     @Override
-    public Linea calcular(BigDecimal precioVenta, BigDecimal precioPublico, int unidadesVendidas, BigDecimal valorEsquema) {
-        BigDecimal unidades = BigDecimal.valueOf(unidadesVendidas);
-        BigDecimal baseUnitaria = precioPublico != null ? precioPublico : precioVenta;
-        BigDecimal ventaTotal = baseUnitaria.multiply(unidades);
-        BigDecimal montoCobrado = ventaTotal.multiply(valorEsquema)
-                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-        BigDecimal gananciaComerciante = precioPublico == null ? null : ventaTotal.subtract(montoCobrado);
-        return new Linea(montoCobrado, gananciaComerciante);
+    public Resultado calcular(BigDecimal totalPublico, BigDecimal totalComerciante, int unidades, BigDecimal valorEsquema) {
+        BigDecimal ganancia = MargenCalculo.clamp(
+                totalPublico.multiply(valorEsquema).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP),
+                totalPublico);
+        return new Resultado(totalPublico.subtract(ganancia), ganancia);
     }
 }

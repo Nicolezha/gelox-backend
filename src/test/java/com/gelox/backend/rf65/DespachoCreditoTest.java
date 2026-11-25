@@ -3,7 +3,6 @@ package com.gelox.backend.rf65;
 import com.gelox.backend.TestHelper;
 import com.gelox.backend.credito.CreditoBloqueadoException;
 import com.gelox.backend.credito.CreditoService;
-import com.gelox.backend.credito.dto.PoliticaCreditoDTO;
 import com.gelox.backend.dto.CrearDespachoRequest;
 import com.gelox.backend.dto.CrearDespachoResponse;
 import com.gelox.backend.dto.ItemDespachoRequest;
@@ -46,7 +45,9 @@ import static org.mockito.Mockito.when;
 /**
  * RF65 — al crear un despacho se evalúa el crédito del comerciante: con
  * política BLOQUEAR y crédito excedido se rechaza (409); con SOLO_ALERTA se
- * despacha igual, pero la respuesta trae advertencias (FP-15 §2.17.1).
+ * despacha igual, pero la respuesta trae advertencias (FP-15 §2.17.1). El
+ * precio al público del ítem sale del catálogo (producto.precioVenta), no lo
+ * informa el cliente.
  */
 @ExtendWith(MockitoExtension.class)
 class DespachoCreditoTest {
@@ -78,6 +79,7 @@ class DespachoCreditoTest {
         producto.setNombre("Bolis de mango");
         producto.setActivo(true);
         producto.setStockActual(100);
+        producto.setPrecioVenta(BigDecimal.valueOf(1500));   // precio al público (catálogo)
         usuario = TestHelper.buildUsuario("uid-ventas", "ventas@gelox-test.com", RolUsuario.ENCARGADO_VENTAS, true);
 
         when(comercianteRepository.findById(comerciante.getId())).thenReturn(Optional.of(comerciante));
@@ -96,18 +98,22 @@ class DespachoCreditoTest {
         TenantContext.clear();
     }
 
-    CrearDespachoRequest request(BigDecimal precioPublico) {
+    CrearDespachoRequest request() {
         return new CrearDespachoRequest(comerciante.getId(), LocalDate.now(),
-                List.of(new ItemDespachoRequest(producto.getId(), 10, BigDecimal.valueOf(1000), 0, precioPublico)));
+                List.of(new ItemDespachoRequest(producto.getId(), 10, BigDecimal.valueOf(1000), 0)));
+    }
+
+    CreditoService.Evaluacion evaluacion(PoliticaVencimiento politica, BigDecimal deuda, BigDecimal cupo, long planillasVencidas) {
+        return new CreditoService.Evaluacion(politica, cupo, deuda, planillasVencidas);
     }
 
     @Test
     @DisplayName("comerciante sin exceder el crédito: despacha sin advertencias")
     void sinExcederCredito_despachaSinAdvertencias() {
         when(creditoService.evaluar(comerciante.getId())).thenReturn(
-                new CreditoService.Evaluacion(politica(PoliticaVencimiento.BLOQUEAR), BigDecimal.ZERO, 0, false));
+                evaluacion(PoliticaVencimiento.BLOQUEAR, BigDecimal.ZERO, BigDecimal.valueOf(50000), 0));
 
-        CrearDespachoResponse response = planillaService.crearDespacho(request(null), usuario);
+        CrearDespachoResponse response = planillaService.crearDespacho(request(), usuario);
 
         assertThat(response.advertencias()).isEmpty();
     }
@@ -116,10 +122,9 @@ class DespachoCreditoTest {
     @DisplayName("crédito excedido con política BLOQUEAR: 409 y no se despacha nada")
     void creditoExcedidoConBloquear_lanza409YNoDespacha() {
         when(creditoService.evaluar(comerciante.getId())).thenReturn(
-                new CreditoService.Evaluacion(politica(PoliticaVencimiento.BLOQUEAR),
-                        BigDecimal.valueOf(80000), 0, true));
+                evaluacion(PoliticaVencimiento.BLOQUEAR, BigDecimal.valueOf(80000), BigDecimal.valueOf(50000), 0));
 
-        assertThatThrownBy(() -> planillaService.crearDespacho(request(null), usuario))
+        assertThatThrownBy(() -> planillaService.crearDespacho(request(), usuario))
                 .isInstanceOf(CreditoBloqueadoException.class);
 
         verify(itemPlanillaRepository, never()).save(any());
@@ -127,33 +132,26 @@ class DespachoCreditoTest {
     }
 
     @Test
-    @DisplayName("crédito excedido con política SOLO_ALERTA: despacha igual pero con advertencias")
+    @DisplayName("crédito excedido con política SOLO_ALERTA: despacha igual pero con advertencia CUPO_SUPERADO")
     void creditoExcedidoConSoloAlerta_despachaConAdvertencias() {
         when(creditoService.evaluar(comerciante.getId())).thenReturn(
-                new CreditoService.Evaluacion(politica(PoliticaVencimiento.SOLO_ALERTA),
-                        BigDecimal.valueOf(80000), 1, true));
+                evaluacion(PoliticaVencimiento.SOLO_ALERTA, BigDecimal.valueOf(80000), BigDecimal.valueOf(50000), 1));
 
-        CrearDespachoResponse response = planillaService.crearDespacho(request(null), usuario);
+        CrearDespachoResponse response = planillaService.crearDespacho(request(), usuario);
 
-        assertThat(response.advertencias()).hasSize(1);
-        assertThat(response.advertencias().get(0).deuda()).isEqualByComparingTo("80000");
-        assertThat(response.advertencias().get(0).planillasVencidas()).isEqualTo(1);
+        assertThat(response.advertencias()).extracting("codigo").containsExactlyInAnyOrder("CUPO_SUPERADO", "PLANILLA_VENCIDA");
     }
 
     @Test
-    @DisplayName("el precio al público del ítem se persiste en el despacho")
-    void persisteElPrecioAlPublicoDelItem() {
+    @DisplayName("el precio al público del ítem se toma del catálogo (producto.precioVenta), no del cliente")
+    void elPrecioAlPublico_saleDelCatalogo() {
         when(creditoService.evaluar(comerciante.getId())).thenReturn(
-                new CreditoService.Evaluacion(politica(PoliticaVencimiento.SOLO_ALERTA), BigDecimal.ZERO, 0, false));
+                evaluacion(PoliticaVencimiento.SOLO_ALERTA, BigDecimal.ZERO, BigDecimal.valueOf(50000), 0));
 
-        planillaService.crearDespacho(request(BigDecimal.valueOf(1500)), usuario);
+        planillaService.crearDespacho(request(), usuario);
 
         var captor = org.mockito.ArgumentCaptor.forClass(com.gelox.backend.entities.ItemPlanilla.class);
         verify(itemPlanillaRepository).save(captor.capture());
         assertThat(captor.getValue().getPrecioPublico()).isEqualByComparingTo("1500");
-    }
-
-    private PoliticaCreditoDTO politica(PoliticaVencimiento vencimiento) {
-        return new PoliticaCreditoDTO(BigDecimal.valueOf(50000), 5, vencimiento, false);
     }
 }

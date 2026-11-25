@@ -5,15 +5,13 @@ import com.gelox.backend.entities.PoliticaVencimiento;
 
 import java.math.BigDecimal;
 
-/** RF65 — una política de crédito (por defecto o excepción). */
+/** RF65 — política de crédito por defecto de la distribuidora. */
 public record PoliticaCreditoDTO(
         BigDecimal cupo,
         Integer plazoDias,
-        PoliticaVencimiento politicaVencimiento,
-        boolean esExcepcion
+        PoliticaVencimiento politica
 ) {
     public static PoliticaCreditoDTO from(PoliticaCredito p) {
-        return new PoliticaCreditoDTO(p.getCupo(), p.getPlazoDias(), p.getPoliticaVencimiento(),
-                p.getComerciante() != null);
+        return new PoliticaCreditoDTO(p.getCupo(), p.getPlazoDias(), p.getPoliticaVencimiento());
     }
 }
