@@ -3,9 +3,10 @@ package com.gelox.backend.services;
 import com.gelox.backend.dto.CrearProductoDTO;
 import com.gelox.backend.dto.EditarProductoDTO;
 import com.gelox.backend.dto.ProductoResponseDTO;
-import com.gelox.backend.entities.CategoriaProducto;
+import com.gelox.backend.entities.Categoria;
 import com.gelox.backend.entities.Producto;
 import com.gelox.backend.entities.TipoEvento;
+import com.gelox.backend.repositories.CategoriaRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
@@ -24,11 +25,12 @@ import java.util.UUID;
 public class ProductoService {
 
     private final ProductoRepository productoRepository;
+    private final CategoriaRepository categoriaRepository;
     private final EventoSistemaService eventoSistemaService;
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     public ProductoResponseDTO crearProducto(CrearProductoDTO dto, UUID usuarioId) {
-        validarCategoria(dto.getCategoria());
+        Categoria categoria = resolverCategoria(dto.getCategoria());
 
         if (productoRepository.existsByCodigoTecnico(dto.getCodigoTecnico())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -40,7 +42,7 @@ public class ProductoService {
         producto.setNombre(dto.getNombre());
         producto.setPrecioVenta(dto.getPrecioVenta());
         producto.setPrecioCosto(dto.getPrecioCosto());
-        producto.setCategoria(CategoriaProducto.valueOf(dto.getCategoria()));
+        producto.setCategoria(categoria);
         producto.setStockActual(dto.getStockActual() != null ? dto.getStockActual() : 0);
         producto.setStockMinimo(dto.getStockMinimo() != null ? dto.getStockMinimo() : 0);
         producto.setStockMedio(dto.getStockMedio() != null ? dto.getStockMedio() : 0);
@@ -62,7 +64,7 @@ public class ProductoService {
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     public ProductoResponseDTO editarProducto(UUID id, EditarProductoDTO dto, UUID usuarioId) {
-        validarCategoria(dto.getCategoria());
+        Categoria categoria = resolverCategoria(dto.getCategoria());
 
         Producto producto = productoRepository.findById(id)
                 .filter(TenantContext::pertenece)
@@ -74,7 +76,7 @@ public class ProductoService {
         producto.setNombre(dto.getNombre());
         producto.setPrecioVenta(dto.getPrecioVenta());
         producto.setPrecioCosto(dto.getPrecioCosto());
-        producto.setCategoria(CategoriaProducto.valueOf(dto.getCategoria()));
+        producto.setCategoria(categoria);
         if (dto.getStockMinimo() != null) producto.setStockMinimo(dto.getStockMinimo());
         if (dto.getStockMedio()      != null) producto.setStockMedio(dto.getStockMedio());
         if (dto.getUnidadesPorCaja() != null) producto.setUnidadesPorCaja(dto.getUnidadesPorCaja());
@@ -158,13 +160,11 @@ public class ProductoService {
                         "Producto no encontrado con id: " + id));
     }
 
-    private void validarCategoria(String categoria) {
-        try {
-            CategoriaProducto.valueOf(categoria);
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Categoría inválida. Use: PALETAS, CONOS o FAMILIARES");
-        }
+    private Categoria resolverCategoria(String nombre) {
+        return (nombre == null ? java.util.Optional.<Categoria>empty()
+                : categoriaRepository.findByNombreIgnoreCase(nombre.trim()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Categoría inválida: " + nombre));
     }
 
     private ProductoResponseDTO toDTO(Producto p) {
@@ -179,7 +179,7 @@ public class ProductoService {
                 p.getStockMedio(),
                 p.getImagenUrl(),
                 p.getDescripcion(),
-                p.getCategoria() != null ? p.getCategoria().name() : null,
+                p.getCategoria() != null ? p.getCategoria().getNombre() : null,
                 p.getActivo(),
                 p.getCreatedAt(),
                 p.getUpdatedAt(),

@@ -31,7 +31,7 @@ public record ItemImpresionPlanillaDTO(
                 prod.getId(),
                 prod.getNombre(),
                 prod.getCodigoTecnico(),
-                prod.getCategoria() != null ? prod.getCategoria().name() : null,
+                prod.getCategoria() != null ? prod.getCategoria().getNombre() : null,
                 item.getUnidadesDespachadas(),
                 item.getUnidadesDevueltas(),
                 vendidas,

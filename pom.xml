@@ -95,6 +95,13 @@
             <version>5.3.0</version>
         </dependency>
 
+        <!-- OpenPDF — generación de PDF (RF68 reportes financieros exportables) -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>2.0.3</version>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

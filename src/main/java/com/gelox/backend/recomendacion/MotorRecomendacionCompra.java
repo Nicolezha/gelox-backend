@@ -2,6 +2,7 @@ package com.gelox.backend.recomendacion;
 
 import com.gelox.backend.entities.AjustePresupuesto;
 import com.gelox.backend.entities.Producto;
+import com.gelox.backend.entities.Proveedor;
 import com.gelox.backend.entities.UrgenciaRecomendacion;
 import com.gelox.backend.recomendacion.DemandaRepository.DemandaDia;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +12,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -44,7 +46,7 @@ public class MotorRecomendacionCompra {
     private static final DecimalFormat NUMERO =
             new DecimalFormat("#,##0.#", DecimalFormatSymbols.getInstance(Locale.forLanguageTag("es-CO")));
 
-    private final int tiempoEntrega;    // L
+    private final int tiempoEntrega;    // L global: productos sin proveedor o sin tiempo de entrega
     private final int periodoRevision;  // R
 
     public MotorRecomendacionCompra(
@@ -82,9 +84,16 @@ public class MotorRecomendacionCompra {
                             BigDecimal costoTotal) {}
 
     /** Variables intermedias de un producto antes de priorizar. */
-    private record Calculo(Producto producto, double d, double f, double demandaAjustada,
+    private record Calculo(Producto producto, Entrega entrega, double d, double f, double demandaAjustada,
                            double ss, double rop, Double cobertura, UrgenciaRecomendacion urgencia,
                            double score, double q, int cajas, double margenPct) {}
+
+    /**
+     * Tiempo de entrega de un producto (RF63). {@code dias} es L en días calendario, que es la unidad
+     * de la demanda diaria; {@code diasProveedor} y {@code habiles} son lo que configuró el proveedor.
+     * {@code proveedor} nulo = se usó el L global.
+     */
+    record Entrega(Proveedor proveedor, int dias, int diasProveedor, boolean habiles) {}
 
     public Resultado calcular(List<Producto> productos, List<DemandaDia> demanda, BigDecimal presupuesto) {
         return calcular(productos, demanda, presupuesto, LocalDate.now(ZONA_BOGOTA));
@@ -103,7 +112,7 @@ public class MotorRecomendacionCompra {
                 excluidos.add(new ProductoExcluido(p, motivo));
                 continue;
             }
-            Calculo c = calcularProducto(p, series.getOrDefault(p.getId(), new double[N]));
+            Calculo c = calcularProducto(p, series.getOrDefault(p.getId(), new double[N]), entrega(p, hoy));
             if (c.cajas() > 0) {
                 candidatos.add(c);
             }
@@ -159,11 +168,11 @@ public class MotorRecomendacionCompra {
     // Fórmulas por producto (2.10.2 y 2.10.3)
     // ══════════════════════════════════════════════════════════════════════
 
-    private Calculo calcularProducto(Producto p, double[] serie) {
+    private Calculo calcularProducto(Producto p, double[] serie, Entrega entrega) {
         int stock = stockActual(p);
         int minimo = p.getStockMinimo() == null ? 0 : p.getStockMinimo();
         int unidadesCaja = p.getUnidadesPorCaja();
-        int L = tiempoEntrega;
+        int L = entrega.dias();
         int R = periodoRevision;
 
         double suma = 0;
@@ -211,8 +220,57 @@ public class MotorRecomendacionCompra {
         double q = Math.max(0, demanda * (L + R) + ss - stock);
         int cajas = (int) Math.ceil(redondearDouble(q / unidadesCaja));
 
-        return new Calculo(p, d, f, demanda, ss, rop, cobertura, urgencia, score, q, cajas,
+        return new Calculo(p, entrega, d, f, demanda, ss, rop, cobertura, urgencia, score, q, cajas,
                 margenPorcentaje(p));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Tiempo de entrega por proveedor (RF63)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * L del producto: {@code proveedor.tiempo_entrega_dias}; sin proveedor, o con 0 (el valor por
+     * defecto de la columna, es decir, sin configurar), el L global. Con {@code dias_habiles} se
+     * cuentan días de lunes a viernes desde {@code hoy} y L son los días calendario hasta esa fecha:
+     * 1 día hábil un viernes son 3 días (llega el lunes). No descuenta festivos.
+     */
+    Entrega entrega(Producto p, LocalDate hoy) {
+        Proveedor proveedor = p.getProveedor();
+        Integer dias = proveedor == null ? null : proveedor.getTiempoEntregaDias();
+        if (dias == null || dias <= 0) {
+            return new Entrega(null, tiempoEntrega, tiempoEntrega, false);
+        }
+        boolean habiles = !Boolean.FALSE.equals(proveedor.getDiasHabiles());
+        int calendario = habiles ? diasCalendario(hoy, dias) : dias;
+        return new Entrega(proveedor, calendario, dias, habiles);
+    }
+
+    /** Días calendario desde {@code desde} hasta completar {@code habiles} días de lunes a viernes. */
+    public static int diasCalendario(LocalDate desde, int habiles) {
+        LocalDate fecha = desde;
+        int contados = 0;
+        while (contados < habiles) {
+            fecha = fecha.plusDays(1);
+            DayOfWeek dia = fecha.getDayOfWeek();
+            if (dia != DayOfWeek.SATURDAY && dia != DayOfWeek.SUNDAY) contados++;
+        }
+        return (int) ChronoUnit.DAYS.between(desde, fecha);
+    }
+
+    /** «el proveedor tarda 2 días» · «Nutresa tarda 1 día hábil (3 días calendario)». */
+    private static String textoEntrega(Entrega e) {
+        String quien = e.proveedor() == null ? "el proveedor" : e.proveedor().getNombre();
+        return quien + " tarda " + duracion(e);
+    }
+
+    private static String duracion(Entrega e) {
+        if (!e.habiles()) return dias(e.dias());
+        String texto = e.diasProveedor() + (e.diasProveedor() == 1 ? " día hábil" : " días hábiles");
+        return e.dias() == e.diasProveedor() ? texto : texto + " (" + dias(e.dias()) + " calendario)";
+    }
+
+    private static String dias(int n) {
+        return n + (n == 1 ? " día" : " días");
     }
 
     /** m% = (precio_venta − costo unitario) ÷ precio_venta; 0 si precio_venta = 0. */
@@ -246,16 +304,18 @@ public class MotorRecomendacionCompra {
         Producto p = c.producto();
         int stock = stockActual(p);
         StringBuilder texto = new StringBuilder();
+        boolean entregaMencionada = false;
 
         switch (c.urgencia()) {
             case CRITICO -> {
                 if (c.demandaAjustada() == 0) {
                     texto.append("Crítico: ").append(stock).append(" unidades, por debajo del mínimo configurado (")
                             .append(p.getStockMinimo()).append("). Sin ventas en los últimos ").append(N).append(" días.");
-                } else if (c.cobertura() < tiempoEntrega) {
-                    texto.append("Crítico: quedan ").append(numero(c.cobertura())).append(" días de inventario y el proveedor tarda ")
-                            .append(tiempoEntrega).append(" días. Promedio de ").append(numero(c.d()))
+                } else if (c.cobertura() < c.entrega().dias()) {
+                    texto.append("Crítico: quedan ").append(numero(c.cobertura())).append(" días de inventario y ")
+                            .append(textoEntrega(c.entrega())).append(". Promedio de ").append(numero(c.d()))
                             .append(" unidades/día en ").append(N).append(" días.");
+                    entregaMencionada = true;
                 } else {
                     texto.append("Crítico: ").append(stock).append(" unidades, por debajo del stock de seguridad (")
                             .append(numero(c.ss())).append("). Promedio de ").append(numero(c.d()))
@@ -266,7 +326,12 @@ public class MotorRecomendacionCompra {
                     .append(numero(c.rop())).append("). Alcanza para ").append(numero(c.cobertura())).append(" días.");
             case ESTABLE -> texto.append("Estable: cubre ").append(numero(c.cobertura()))
                     .append(" días; se sugiere completar hasta el próximo pedido (")
-                    .append(tiempoEntrega).append("+").append(periodoRevision).append(" días).");
+                    .append(c.entrega().dias()).append("+").append(periodoRevision).append(" días).");
+        }
+
+        // Con proveedor configurado se dice siempre cuánto tarda (el L global no se repite)
+        if (!entregaMencionada && c.entrega().proveedor() != null) {
+            texto.append(" ").append(capitalizar(textoEntrega(c.entrega()))).append(" en entregar.");
         }
 
         if (c.f() != 1) {
@@ -304,6 +369,10 @@ public class MotorRecomendacionCompra {
             series.computeIfAbsent(dia.productoId(), k -> new double[N])[(int) i] += dia.unidades();
         }
         return series;
+    }
+
+    private static String capitalizar(String texto) {
+        return texto.isEmpty() ? texto : Character.toUpperCase(texto.charAt(0)) + texto.substring(1);
     }
 
     private static int stockActual(Producto p) {

@@ -31,6 +31,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -87,7 +89,8 @@ class PedidoDesdeRecomendacionTest {
         lenient().when(recomendacionRepo.save(any())).thenAnswer(i -> i.getArgument(0));
         lenient().when(pedidoRepo.findById(pedido.getId())).thenReturn(Optional.of(pedido));
         lenient().when(pedidoService.crearPedido(any(), any()))
-                .thenReturn(Map.of("pedidoId", pedido.getId(), "excel", new byte[0]));
+                .thenReturn(List.of(new PedidoProveedorService.PedidoCreado(pedido.getId(), UUID.randomUUID(), "Nutresa",
+                        new BigDecimal("11000.00"), "Pedido_Nutresa.xlsx", new byte[0], List.of(), List.of(), null)));
     }
 
     @AfterEach

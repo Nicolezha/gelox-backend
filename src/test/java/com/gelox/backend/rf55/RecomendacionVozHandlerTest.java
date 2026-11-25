@@ -265,7 +265,7 @@ class RecomendacionVozHandlerTest {
                 conDecision(frutos, DecisionItem.APROBADO, 1)), "118720");
         UUID pedidoId = UUID.randomUUID();
         when(decisionService.generarPedido(recomendacionId, usuario))
-                .thenReturn(new PedidoGeneradoDTO(pedidoId, "/api/inventario/pedidos/" + pedidoId + "/exportar"));
+                .thenReturn(new PedidoGeneradoDTO(pedidoId, "/api/inventario/pedidos/" + pedidoId + "/exportar", List.of()));
 
         VozResultado r = decidir.interpretar(ctx(Map.of("accion", "GENERAR_PEDIDO")));
 

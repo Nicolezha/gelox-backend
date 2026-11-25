@@ -1,5 +1,6 @@
 package com.gelox.backend.services;
 
+import com.gelox.backend.TestHelper;
 import com.gelox.backend.entities.EstadoPedido;
 import com.gelox.backend.entities.ItemPedidoProveedor;
 import com.gelox.backend.entities.PedidoProveedor;
@@ -8,6 +9,7 @@ import com.gelox.backend.plataforma.IdentidadDistribuidoraService;
 import com.gelox.backend.repositories.PedidoProveedorRepository;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -42,8 +44,13 @@ class PedidoProveedorServiceExportarTest {
     @Mock
     IdentidadDistribuidoraService identidadService;
 
-    @InjectMocks
     PedidoProveedorService service;
+
+    @BeforeEach
+    void armarServicio() {
+        service = new PedidoProveedorService(pedidoRepo, null, null, null, null, null,
+                TestHelper.exportador(identidadService), null, null);
+    }
 
     @Test
     void pedidoInexistente_lanza404() {
@@ -57,8 +64,6 @@ class PedidoProveedorServiceExportarTest {
 
     @Test
     void pedidoExistente_devuelveUnXlsxValidoConSusItems() throws Exception {
-        ReflectionTestUtils.setField(service, "plantillaExcel", new ClassPathResource("templates/catalogo.xlsx"));
-
         Producto producto = new Producto();
         producto.setId(UUID.randomUUID());
         producto.setCodigoTecnico("SKU-TEST-001");
@@ -92,8 +97,6 @@ class PedidoProveedorServiceExportarTest {
 
     @Test
     void lasCantidadesQuedanEnLaUnidadDeCadaFilaYLaPlantillaNoCambia() throws Exception {
-        ReflectionTestUtils.setField(service, "plantillaExcel", new ClassPathResource("templates/catalogo.xlsx"));
-
         PedidoProveedor pedido = PedidoProveedor.builder()
                 .id(UUID.randomUUID()).fecha(LocalDate.now()).estado(EstadoPedido.PENDIENTE).build();
         pedido.setItems(List.of(
