@@ -10,5 +10,6 @@ public record CrearDespachoResponse(
         UUID comercianteId,
         LocalDate fecha,
         List<ItemDespachoResponseDTO> items,
-        BigDecimal totalValorDespachado
+        BigDecimal totalValorDespachado,
+        List<AdvertenciaCreditoDTO> advertencias   // RF65 — no vacío cuando la política es SOLO_ALERTA y el comerciante excede el crédito
 ) {}

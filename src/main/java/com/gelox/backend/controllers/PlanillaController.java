@@ -1,6 +1,7 @@
 package com.gelox.backend.controllers;
 
 import com.gelox.backend.dto.ActualizarDespachoItemRequest;
+import com.gelox.backend.dto.CambiarFechaLimiteRequest;
 import com.gelox.backend.dto.CrearDespachoRequest;
 import com.gelox.backend.dto.CrearDespachoResponse;
 import com.gelox.backend.dto.LiquidacionRequestDTO;
@@ -51,6 +52,14 @@ public class PlanillaController {
             @Valid @RequestBody LiquidacionRequestDTO request,
             @AuthenticationPrincipal Usuario usuario) {
         return ResponseEntity.ok(liquidacionService.liquidarPlanilla(id, request, usuario));
+    }
+
+    @PatchMapping("/{id}/fecha-limite")
+    public ResponseEntity<Void> cambiarFechaLimite(
+            @PathVariable UUID id,
+            @Valid @RequestBody CambiarFechaLimiteRequest req) {
+        planillaService.cambiarFechaLimite(id, req);
+        return ResponseEntity.ok().build();
     }
 
     // ── GET /api/planillas/{id}/imprimir ──────────────────────────────────

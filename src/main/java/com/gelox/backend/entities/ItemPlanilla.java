@@ -40,4 +40,12 @@ public class ItemPlanilla {
     // Postgres GENERATED column — never set from JPA
     @Column(name = "ganancia", insertable = false, updatable = false)
     private BigDecimal ganancia;
+
+    /** RF65 — copia del precio al público al momento del despacho (null si no se indicó). */
+    @Column(name = "precio_publico", precision = 15, scale = 2)
+    private BigDecimal precioPublico;
+
+    /** RF66 — lo que le corresponde al comerciante por este ítem, calculado al liquidar. */
+    @Column(name = "ganancia_comerciante", precision = 15, scale = 2)
+    private BigDecimal gananciaComerciante;
 }

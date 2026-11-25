@@ -9,5 +9,6 @@ public record DetalleCalculadoDTO(
         int unidadesDevueltas,
         int unidadesVendidas,
         BigDecimal precioDeVenta,
-        BigDecimal ganancia
+        BigDecimal ganancia,
+        BigDecimal gananciaComerciante   // RF66 — null si el ítem no tiene precio al público
 ) {}

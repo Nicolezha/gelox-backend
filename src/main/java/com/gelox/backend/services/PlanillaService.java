@@ -1,6 +1,10 @@
 package com.gelox.backend.services;
 
+import com.gelox.backend.credito.CreditoBloqueadoException;
+import com.gelox.backend.credito.CreditoService;
 import com.gelox.backend.dto.ActualizarDespachoItemRequest;
+import com.gelox.backend.dto.AdvertenciaCreditoDTO;
+import com.gelox.backend.dto.CambiarFechaLimiteRequest;
 import com.gelox.backend.dto.CrearDespachoRequest;
 import com.gelox.backend.dto.CrearDespachoResponse;
 import com.gelox.backend.dto.ItemDespachoRequest;
@@ -15,6 +19,7 @@ import com.gelox.backend.repositories.ComercianteRepository;
 import com.gelox.backend.repositories.ItemPlanillaRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
 import com.gelox.backend.repositories.ProductoRepository;
+import com.gelox.backend.gobierno.Auditable;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +45,7 @@ public class PlanillaService {
     private final InventarioService inventarioService;
     private final EventoSistemaService eventoSistemaService;
     private final IdentidadDistribuidoraService identidadService;
+    private final CreditoService creditoService;   // RF65
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public CrearDespachoResponse crearDespacho(CrearDespachoRequest req, Usuario usuario) {
@@ -52,6 +58,19 @@ public class PlanillaService {
         if (!Boolean.TRUE.equals(comerciante.getActivo())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "El comerciante no está activo.");
+        }
+
+        // RF65 — evaluar crédito del comerciante antes de despachar
+        CreditoService.Evaluacion evaluacion = creditoService.evaluar(comerciante.getId());
+        List<AdvertenciaCreditoDTO> advertencias = new ArrayList<>();
+        if (evaluacion.excede()) {
+            if (evaluacion.politica().politicaVencimiento() == PoliticaVencimiento.BLOQUEAR) {
+                throw new CreditoBloqueadoException(
+                        evaluacion.deuda(), evaluacion.politica().cupo(), evaluacion.planillasVencidas());
+            }
+            advertencias.add(new AdvertenciaCreditoDTO(
+                    "El comerciante excede el crédito permitido.",
+                    evaluacion.deuda(), evaluacion.politica().cupo(), evaluacion.planillasVencidas()));
         }
 
         // 2. Verificar que no exista planilla ya para ese comerciante en esa fecha
@@ -117,6 +136,7 @@ public class PlanillaService {
                     .unidadesDespachadas(totalUnidades)
                     .unidadesDevueltas(0)
                     .precioVenta(item.precioUnitario())
+                    .precioPublico(item.precioPublico())
                     .build());
 
             // Solo descontar del stock global las unidades que no venían de devoluciones anteriores
@@ -154,7 +174,8 @@ public class PlanillaService {
                 comerciante.getId(),
                 req.fecha(),
                 responseItems,
-                totalValorDespachado);
+                totalValorDespachado,
+                advertencias);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -208,6 +229,24 @@ public class PlanillaService {
         }
     }
 
+    // RF65 — Extender (prorrogar) la fecha límite de pago de una planilla cerrada
+    // ══════════════════════════════════════════════════════════════════════
+
+    @RequiereRol("ADMINISTRADOR")
+    @Auditable(accion = "PLANILLA_CAMBIAR_FECHA_LIMITE", entidad = "PlanillaComerciante")
+    public void cambiarFechaLimite(UUID planillaId, CambiarFechaLimiteRequest req) {
+        PlanillaComerciante planilla = planillaRepository.findById(planillaId)
+                .filter(TenantContext::pertenece)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Planilla no encontrada"));
+        if (!Boolean.TRUE.equals(planilla.getCerrada())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La planilla aún no está liquidada; no tiene fecha límite de pago.");
+        }
+        planilla.setFechaLimitePago(req.fechaLimitePago());
+        planillaRepository.save(planilla);
+    }
+
     // RF39 — Datos para impresión de planilla
     // ══════════════════════════════════════════════════════════════════════
 
@@ -245,6 +284,10 @@ public class PlanillaService {
         var usuario     = planilla.getUsuario();
         IdentidadDTO identidad = identidadService.obtener();
 
+        BigDecimal saldoPendiente = Boolean.TRUE.equals(planilla.getCerrada())
+                ? totalGanancia.subtract(planilla.getEfectivoRecibido() != null ? planilla.getEfectivoRecibido() : BigDecimal.ZERO)
+                : null;
+
         return new PlanillaImpresionResponseDTO(
                 planilla.getId(),
                 planilla.getFecha(),
@@ -264,6 +307,10 @@ public class PlanillaService {
                 totalVendidas,
                 totalGanancia,
                 planilla.getEfectivoRecibido(),
+                planilla.getGananciaComerciante(),
+                planilla.getEsquemaAplicado(),
+                planilla.getFechaLimitePago(),
+                saldoPendiente,
                 new PlanillaImpresionResponseDTO.Identidad(
                         identidad.nombreComercial(),
                         identidad.logoUrl(),
