@@ -96,10 +96,10 @@ Nota: `total_ganancia` sigue siendo lo que se cobra al comerciante (ingreso del 
 ### RF63 — Proveedores por distribuidora
 | ID | Caso de prueba | Tipo | Precondición | Pasos | Resultado esperado |
 |----|----------------|------|--------------|-------|--------------------|
-| CP-63-01 | Registrar proveedor | Funcional | Gerente o Encargado de Inventarios de B | POST /api/proveedores con nombre, NIT, `contacto_nombre`, `telefono`, `correo`, `tiempo_entrega_dias` 2, `dias_habiles` true y `monto_minimo_pedido` 300.000 | 201; aparece en `/inventarios/proveedores` |
-| CP-63-02 | Editar proveedor | Funcional | CP-63-01 ejecutado | PUT /api/proveedores/{id} cambiando el tiempo de entrega | 200 y valor nuevo |
-| CP-63-03 | Desactivar y activar | Funcional | CP-63-01 ejecutado | PATCH /api/proveedores/{id}/activar dos veces | Cambia el estado; el inactivo no se ofrece al crear productos |
-| CP-63-04 | Datos inválidos | Funcional | — | POST sin nombre y con tiempo de entrega o monto negativos | 400 |
+| CP-63-01 | Registrar proveedor | Funcional | Gerente o Encargado de Inventarios de B | POST /api/proveedores con nombre, NIT, `contacto_nombre`, `telefono`, `correo`, `tiempo_entrega_dias` 2, `dias_habiles` true y `monto_minimo_pedido` 300.000 | 201; aparece en `/inventarios/proveedores`; fila PROVEEDOR_CREAR |
+| CP-63-02 | Editar proveedor | Funcional | CP-63-01 ejecutado | PUT /api/proveedores/{id} cambiando el tiempo de entrega | 200 y valor nuevo; fila PROVEEDOR_EDITAR |
+| CP-63-03 | Desactivar y activar | Funcional | CP-63-01 ejecutado | PATCH /api/proveedores/{id}/activar?activo=false y luego PATCH …/activar | Cambia el estado; el inactivo no se ofrece al crear productos; fila PROVEEDOR_ACTIVAR |
+| CP-63-04 | Datos inválidos | Funcional | — | POST sin nombre; con tiempo de entrega o monto negativos; con un NIT ya registrado; GET con Encargado de Ventas | 400; 400; 409 «Ya existe un proveedor con ese NIT»; 403 |
 | CP-63-05 | Proveedor de otra distribuidora | Aislamiento | Proveedor de A | GET y PUT por id con el token de B | 404 |
 | CP-63-06 | Recomendación con tiempo de entrega por proveedor | Integración | Productos de B con Proveedor QA Uno (2 días) y QA Dos (5 días) | POST /api/recomendaciones | El punto de reorden usa el tiempo de entrega de cada proveedor en días hábiles; Nutresa de Mágico Sabor usa 1 día hábil (el ejemplo de RF54 de FP-15 §2.10.6 se ajusta a este valor) |
 | CP-63-07 | Un pedido por proveedor | Integración | Recomendación de CP-63-06 con aprobados de los dos proveedores | POST /api/recomendaciones/{id}/pedido | Se crea un pedido por proveedor |
@@ -108,15 +108,15 @@ Nota: `total_ganancia` sigue siendo lo que se cobra al comerciante (ingreso del 
 ### RF64 — Catálogo multimarca, categorías y unidades
 | ID | Caso de prueba | Tipo | Precondición | Pasos | Resultado esperado |
 |----|----------------|------|--------------|-------|--------------------|
-| CP-64-01 | Crear producto multimarca | Funcional | Proveedor activo de B | Crear producto con SKU, marca, proveedor, categoría, costo, precio y unidad con factor 24 | Se guarda y se ve en el catálogo |
-| CP-64-02 | SKU repetido | Funcional | CP-64-01 ejecutado | Crear otro producto con el mismo SKU en B | 409 |
-| CP-64-03 | Crear categoría propia | Funcional | — | Crear «Bebidas» desde el formulario de producto | Disponible en B y no en A |
+| CP-64-01 | Crear producto multimarca | Funcional | Proveedor activo de B | POST /api/catalogo/productos con SKU, marca, proveedor, categoría, costo, precio, unidad base y factor 24 (`factores`) | 201; se ve en `/inventarios/catalogo`; fila PRODUCTO_CREAR |
+| CP-64-02 | SKU repetido | Funcional | CP-64-01 ejecutado | Crear otro producto con el mismo SKU en B | 409 «El SKU ya está registrado en el catálogo» (sin SKU se usa el código técnico) |
+| CP-64-03 | Crear categoría y unidad propias | Funcional | — | POST /api/categorias «Bebidas» (luego repetido y sin nombre); GET y POST /api/unidades | Categoría 201 y solo en B; repetida → 409; sin nombre → 400; Encargado de Ventas → 403 al crear |
 | CP-64-04 | Editar producto | Funcional | CP-64-01 ejecutado | Cambiar proveedor, categoría y factor | Se guardan los valores nuevos |
 | CP-64-05 | Venta con factor de conversión | Integración | Entrada de 2 cajas (factor 24 = 48 unidades) | Vender 30 unidades | El inventario queda en 18 unidades |
 | CP-64-06 | Producto en la landing | Integración | CP-64-01 ejecutado | Abrir `/tienda/:subdominio` de B | El producto aparece en su categoría propia |
 | CP-64-07 | Categorías migradas de Mágico Sabor | Regresión | V10 aplicada | GET /productos/conos, /familiares, /paletas y landing de `magicosabor` | Agrupan igual que antes de V10 |
 | CP-64-08 | Producto o categoría de otra distribuidora | Aislamiento | Producto y categoría de A | GET y PUT por id con el token de B | 404 |
-| CP-64-09 | Cuota de productos alcanzada | Cuotas | B con 5 productos y plan de máx. 5 | Crear el producto n.º 6 | 409 «Cuota del plan alcanzada»; no se guarda |
+| CP-64-09 | Cuota de productos alcanzada | Cuotas | B con 5 productos y plan de máx. 5 | Crear el producto n.º 6 y reactivar un producto inactivo (PATCH /api/catalogo/productos/{id}/activar) | 409 «Cuota del plan alcanzada» en ambos; no se guarda |
 
 ---
 
@@ -127,22 +127,23 @@ El crédito de la venta rural queda fuera de alcance (FP-15, decisión D2); no s
 
 | ID | Caso de prueba | Tipo | Precondición | Pasos | Resultado esperado |
 |----|----------------|------|--------------|-------|--------------------|
-| CP-65-01 | Definir política | Funcional | Gerente de B; comerciante registrado | PUT /api/comerciantes/{id}/credito {cupo: 50000, plazoDias: 0, politica: BLOQUEAR} | 200; la sección Crédito muestra cupo, plazo, política y deuda actual |
+| CP-65-01 | Definir política | Funcional | Gerente de B; comerciante registrado | PUT /api/credito/politica {cupo: 50000, plazoDias: 0, politica: SOLO_ALERTA} (política de la distribuidora, pantalla `/ajustes/liquidacion`); luego PUT /api/comerciantes/{id}/credito {cupo: 50000, plazoDias: 0, politica: BLOQUEAR} (excepción del comerciante) | 200; la sección Crédito del comerciante muestra cupo, plazo, política y deuda actual |
 | CP-65-02 | Valores inválidos | Funcional | — | PUT con cupo o plazo negativos | 400 |
 | CP-65-03 | Despacho que supera el cupo | Funcional | Comerciante con política BLOQUEAR y deuda cerca de $ 50.000 | Crear un despacho que supere el cupo | 409 {codigo: CREDITO_BLOQUEADO, deuda, cupo, planillasVencidas}; la planilla no se crea y la pantalla muestra el aviso |
 | CP-65-04 | Planilla vencida con alerta | Funcional | Comerciante con política SOLO_ALERTA y planilla vencida | Crear un despacho | Se crea y la respuesta trae advertencias [{tipo: CUPO_SUPERADO \| PLANILLA_VENCIDA}]; aviso en Planilla Diaria |
 | CP-65-05 | Comerciante cerca del cupo | Funcional | Deuda cercana al cupo | Abrir Planilla Diaria | Aviso de cupo |
-| CP-65-06 | Rol sin permiso | Funcional | Encargado de Ventas de B | PUT /api/comerciantes/{id}/credito | 403 |
+| CP-65-06 | Rol sin permiso | Funcional | Encargado de Ventas de B | PUT /api/credito/politica y PUT /api/comerciantes/{id}/credito | 403 (puede consultar con GET) |
 | CP-65-07 | Política de otra distribuidora | Aislamiento | Comerciante de A | GET y PUT con el token de B | 404 |
 | CP-65-08 | Cambio de política auditado | Auditoría | CP-65-01 ejecutado | Consultar `/api/plataforma/auditoria` filtrando por B | Fila con acción CREDITO_POLITICA_CAMBIAR |
 | CP-65-09 | Política por defecto | Funcional | Comerciante sin excepción | GET /api/comerciantes/{id}/credito | Política efectiva = la de la distribuidora (cupo $ 50.000, plazo 0, SOLO_ALERTA) |
-| CP-65-10 | Abono | Funcional | Ejemplo 3.3 (deuda $ 53.200) | POST /api/comerciantes/{id}/abonos con $ 25.000 como Encargado de Ventas | 201; se aplica a la planilla más antigua; deuda $ 28.200; fila ABONO_REGISTRAR |
-| CP-65-11 | Prórroga de fecha límite | Funcional | Planilla vencida con saldo | PATCH /api/planillas/{id}/fecha-limite como Gerente | 200; la planilla deja de contar como vencida; fila PLANILLA_CAMBIAR_FECHA_LIMITE. Con Encargado de Ventas → 403 |
+| CP-65-10 | Abono | Funcional | Ejemplo 3.3 (deuda $ 53.200) | POST /api/comerciantes/{id}/abonos con $ 25.000 como Encargado de Ventas | 201; se aplica a la planilla más antigua; deuda $ 28.200; fila ABONO_REGISTRAR. Un abono mayor que la deuda → 400 «El abono supera la deuda actual» |
+| CP-65-11 | Prórroga de fecha límite | Funcional | Planilla liquidada, vencida y con saldo | PATCH /api/planillas/{id}/fecha-limite {fechaLimitePago, motivo} como Gerente | 200; la planilla deja de contar como vencida; fila PLANILLA_CAMBIAR_FECHA_LIMITE. Sin motivo → 400; fecha igual o anterior a la actual → 400; más de 15 días adicionales → 400; planilla sin liquidar → 409; Encargado de Ventas → 403 |
+| CP-65-12 | Quitar la excepción del comerciante | Funcional | Comerciante con excepción (CP-65-01) | DELETE /api/comerciantes/{id}/credito y luego GET | Vuelve a la política de la distribuidora; fila CREDITO_POLITICA_CAMBIAR |
 
 ### RF66 — Esquema de liquidación y planilla diaria
 | ID | Caso de prueba | Tipo | Precondición | Pasos | Resultado esperado |
 |----|----------------|------|--------------|-------|--------------------|
-| CP-66-01 | Configurar esquema | Funcional | Gerente de B | PUT /api/liquidacion/esquema con MARGEN, luego COMISION 18 % y luego TARIFA_FIJA 15.000 | 200 cada vez; pantalla `/ajustes/liquidacion` muestra el vigente |
+| CP-66-01 | Configurar esquema | Funcional | Gerente de B | PUT /api/liquidacion/esquema con MARGEN, luego COMISION 18 % y luego TARIFA_FIJA 15.000; repetir con COMISION 0 o mayor que 100 y con TARIFA_FIJA negativa | 200 cada vez y fila ESQUEMA_LIQUIDACION_CAMBIAR; pantalla `/ajustes/liquidacion` muestra el vigente. Comisión fuera de (0, 100] o tarifa negativa → 400 |
 | CP-66-02 | Liquidar con MARGEN | Integración | Planilla del ejemplo 3.3; esquema MARGEN | Liquidar la planilla | Se cobra (`total_ganancia`) $ 103.200 y ganancia del comerciante $ 16.800 |
 | CP-66-03 | Liquidar con COMISION | Integración | Misma planilla; esquema COMISION 18 % | Liquidar | Se cobra $ 98.400 y ganancia del comerciante $ 21.600 |
 | CP-66-04 | Liquidar con TARIFA_FIJA | Integración | Misma planilla; TARIFA_FIJA 15.000 | Liquidar | Se cobra $ 105.000 y ganancia del comerciante $ 15.000 |
@@ -151,7 +152,7 @@ El crédito de la venta rural queda fuera de alcance (FP-15, decisión D2); no s
 | CP-66-07 | Rol sin permiso | Funcional | Encargado de Ventas de B | PUT /api/liquidacion/esquema | 403 |
 | CP-66-08 | Esquema de otra distribuidora | Aislamiento | Esquemas distintos en A y B | GET /api/liquidacion/esquema con cada token | Cada una ve solo el suyo |
 | CP-66-09 | Liquidación auditada | Auditoría | CP-66-02 ejecutado | Consultar la auditoría | Fila PLANILLA_LIQUIDAR |
-| CP-66-10 | Efectivo recibido parcial | Funcional | Planilla del ejemplo 3.3; esquema MARGEN | Liquidar con `efectivoRecibido` 80.000; repetir sin `efectivoRecibido`; repetir con un valor mayor que el total y con uno negativo | Saldo $ 23.200 y `fecha_limite_pago` = fecha de la planilla (plazo 0). Sin `efectivoRecibido` se toma igual al total cobrado (saldo 0). Mayor que el total o negativo → 400 |
+| CP-66-10 | Efectivo recibido parcial | Funcional | Planilla del ejemplo 3.3; esquema MARGEN | Liquidar con `efectivoRecibido` 80.000; repetir sin `efectivoRecibido`; repetir con un valor mayor que el total y con uno negativo | Saldo $ 23.200 y `fecha_limite_pago` = fecha de cierre + plazo (plazo 0: el mismo día). Sin `efectivoRecibido` se toma igual al total cobrado: saldo 0 y sin fecha límite. Mayor que el total o negativo → 400 |
 | CP-66-11 | Producto sin precio al público | Funcional | Planilla con un producto sin precio al público; esquema MARGEN | Liquidar la planilla | Ganancia 0 en ese ítem, el monto cobrado no cambia y la respuesta trae una advertencia |
 
 ---
@@ -162,10 +163,13 @@ El crédito de la venta rural queda fuera de alcance (FP-15, decisión D2); no s
 | ID | Caso de prueba | Tipo | Precondición | Pasos | Resultado esperado |
 |----|----------------|------|--------------|-------|--------------------|
 | CP-67-01 | Guardar plantilla | Funcional | Proveedor QA Uno | PUT /api/proveedores/{id}/plantilla en modo GENERAR_FILAS con orden de columnas, encabezados y códigos de homologación | 200; vista previa en `/inventarios/plantillas` con las primeras filas; fila PLANTILLA_EXPORTACION_CAMBIAR en la auditoría |
-| CP-67-02 | Plantilla sin columnas | Funcional | — | PUT de una plantilla GENERAR_FILAS sin columnas | 400 |
+| CP-67-02 | Plantilla sin columnas | Funcional | — | PUT de una plantilla GENERAR_FILAS sin columnas; sin modo; columna sin encabezado | 400 «Agrega al menos una columna a la plantilla»; 400; 400 |
+| CP-67-09 | Vista previa sin guardar | Funcional | Proveedor QA Uno | POST /api/proveedores/{id}/plantilla/vista-previa con una plantilla modificada y luego GET …/plantilla | Devuelve encabezados, filas y productos sin código; el GET sigue con la plantilla guardada |
+| CP-67-10 | Códigos de homologación | Funcional | Productos de Proveedor QA Uno | PUT /api/proveedores/{id}/homologaciones con códigos; repetir con el mismo código en dos productos y con un producto dos veces | 200; mismo código en dos productos → 409; producto repetido → 400; código vacío quita la homologación |
+| CP-67-11 | Rol sin permiso | Funcional | Encargado de Ventas de B | GET y PUT /api/proveedores/{id}/plantilla | 403 (plantillas: Gerente y Encargado de Inventarios) |
 | CP-67-03 | Pedido manual con plantilla | Integración | CP-67-01 ejecutado | Crear un pedido manual a Proveedor QA Uno y abrir el Excel | Columnas en el orden y con los encabezados de la plantilla, y códigos de homologación |
 | CP-67-04 | Pedido desde recomendación | Integración | CP-67-01 y CP-63-07 ejecutados | Abrir el Excel del pedido de Proveedor QA Uno | Exportado con su plantilla |
-| CP-67-05 | Pedido por voz | Integración | CP-67-01 ejecutado | Dictar un pedido de un producto de Proveedor QA Uno y confirmar | El asistente pide o infiere el proveedor; el Excel usa su plantilla |
+| CP-67-05 | Pedido por voz | Integración | CP-67-01 ejecutado | Dictar un pedido de un producto de Proveedor QA Uno y confirmar | El asistente infiere el proveedor de cada producto, lo dice en el resumen y genera un pedido por proveedor; el Excel usa su plantilla |
 | CP-67-06 | Plantilla de Nutresa | Regresión | Nutresa en Mágico Sabor en modo RELLENAR_CATALOGO (`templates/catalogo.xlsx`, fila de encabezados 4) | Crear un pedido y abrir el Excel | Mismo Excel de hoy; `PedidoProveedorServiceExportarTest` en verde |
 | CP-67-07 | Plantilla de otra distribuidora | Aislamiento | Proveedor de A | GET y PUT /api/proveedores/{id}/plantilla con el token de B | 404 |
 | CP-67-08 | Producto sin código para el proveedor | Funcional | Producto sin código de homologación | Crear un pedido con ese producto | El pedido se exporta igual y la respuesta lista los productos sin código |
@@ -173,14 +177,14 @@ El crédito de la venta rural queda fuera de alcance (FP-15, decisión D2); no s
 ### RF68 — Reportes financieros en Excel y PDF
 | ID | Caso de prueba | Tipo | Precondición | Pasos | Resultado esperado |
 |----|----------------|------|--------------|-------|--------------------|
-| CP-68-01 | Exportar a Excel | Funcional | Período con ventas y pedidos | Botón «Exportar Excel» (GET /api/reportes/financiero/excel) | Descarga `reporte-financiero-{subdominio}-{desde}-{hasta}.xlsx` con las hojas «Resumen», «Inversión vs ingresos», «Rentabilidad por canal» y «Top 5 comerciantes», con los mismos valores de la pantalla Reportes |
+| CP-68-01 | Exportar a Excel | Funcional | Período con ventas y pedidos | Botón «Exportar Excel» (GET /api/reportes/financiero/excel?tipo=RANGO&fechaInicio&fechaFin; `tipo` = DIA, SEMANA, MES, ANIO o RANGO) | Descarga `reporte-financiero-{subdominio}-{desde}-{hasta}.xlsx` con las hojas «Resumen», «Inversión vs ingresos», «Rentabilidad por canal» y «Top 5 comerciantes», con los mismos valores de la pantalla Reportes |
 | CP-68-02 | Exportar a PDF | Funcional | Mismo período | Botón «Exportar PDF» (GET /api/reportes/financiero/pdf) | Mismos valores que el Excel y la pantalla |
 | CP-68-03 | Identidad en el encabezado | Funcional | Identidades distintas en A y B | Exportar en cada distribuidora | Logo, nombre y color de cada una |
 | CP-68-04 | Período sin datos | Funcional | Período sin ventas | Exportar Excel y PDF | Archivos con valores en cero, sin 500 |
 | CP-68-05 | Período inválido | Funcional | — | Exportar con inicio > fin | 400 |
 | CP-68-06 | Rol sin permiso | Funcional | Encargado de Inventarios | GET …/excel y …/pdf | 403 |
 | CP-68-07 | Datos de otra distribuidora | Aislamiento | Ventas en A y B | Exportar con el token de B | Solo datos de B |
-| CP-68-08 | Secciones elegidas | Funcional | Período con datos | Exportar con `secciones` = resumen y Top 5 | Solo esos bloques, más el encabezado (que siempre va) |
+| CP-68-08 | Secciones elegidas | Funcional | Período con datos | Exportar con `secciones=RESUMEN,TOP5_COMERCIANTES` (valores: RESUMEN, INVERSION_INGRESOS, RENTABILIDAD_CANAL, TOP5_COMERCIANTES) | Solo esos bloques, más el encabezado (que siempre va) |
 
 ---
 
@@ -200,29 +204,29 @@ El crédito de la venta rural queda fuera de alcance (FP-15, decisión D2); no s
 |----|----------------|------|--------------|-------|--------------------|
 | CP-70-01 | Crear plan | Funcional | Superadministrador | POST /api/plataforma/planes con nombre (máx. 30), descripción, precio mensual y cuotas de usuarios, productos, comerciantes, almacenamiento MB y llamadas IA/mes; una cuota vacía = sin límite | 201; aparece en `/plataforma/planes` |
 | CP-70-02 | Editar plan | Funcional | CP-70-01 ejecutado | PUT /api/plataforma/planes/{id} | 200 y valores nuevos |
-| CP-70-03 | Asignar plan | Funcional | Plan y distribuidora B | PATCH /api/plataforma/distribuidoras/{id}/plan {planId, motivo} y alta de una distribuidora con `planId` | El plan queda asignado y se ve en el detalle |
-| CP-70-04 | Cuota de usuarios | Cuotas | B con 3 usuarios activos contando al gerente titular, y plan de máx. 3 | Crear el usuario n.º 4 | 409 «Cuota del plan alcanzada»; no se crea en Firebase ni en la base |
+| CP-70-03 | Asignar plan | Funcional | Plan y distribuidora B | PATCH /api/plataforma/distribuidoras/{id}/plan {planId, motivo} y alta de una distribuidora con `planId` | El plan queda asignado y se ve en el detalle con el uso de cuotas. El mismo plan → 409; sin motivo → 400; plan inexistente → 404; `planId` inexistente en el alta → 400 |
+| CP-70-04 | Cuota de usuarios | Cuotas | B con 3 usuarios activos contando al gerente titular, y plan de máx. 3 | Crear el usuario n.º 4; luego deshabilitar uno, crear otro y volver a habilitar el deshabilitado | 409 «Cuota del plan alcanzada» en el n.º 4 y en la rehabilitación; no se crea en Firebase ni en la base |
 | CP-70-05 | Cuota de productos | Cuotas | Ver CP-64-09 | Crear el producto n.º 6 | 409 |
-| CP-70-06a | Cuota de IA | Cuotas | Llamadas IA del mes en el límite (20) | Hacer una consulta por voz más | La voz sigue funcionando con el clasificador de respaldo (OpenNLP) y avisa; no hay 409 |
+| CP-70-06a | Cuota de IA | Cuotas | Llamadas IA del mes en el límite (20) | Hacer una consulta por voz más | 200: la voz sigue funcionando con el clasificador de respaldo (OpenNLP) y `comando_voz.metodo_clasificacion` deja de ser LLM; no hay 409. Hoy no se muestra aviso al usuario (solo queda en el log del backend) |
 | CP-70-06b | Cuota de almacenamiento | Cuotas | Almacenamiento cerca de 10 MB | Subir un archivo que pasa de 10 MB | 409 CUOTA_PLAN_ALCANZADA; el archivo no se guarda |
 | CP-70-07 | Planes migrados | Regresión | V9 aplicada | Operar con Mágico Sabor | Sigue operando con el plan PILOTO migrado de su texto, sin límites (máximos nulos) |
 | CP-70-08 | Gerente en planes | Funcional | Gerente de A | GET /api/plataforma/planes | 403 |
 | CP-70-09 | Cambio de plan auditado | Auditoría | CP-70-03 ejecutado | Consultar la auditoría | Fila PLAN_ASIGNAR con plan anterior, nuevo y motivo |
-| CP-70-10 | Cuota de comerciantes | Cuotas | B con 3 comerciantes activos y plan de máx. 3 | Crear el 4.º; luego desactivar uno, crear otro y volver a activar el desactivado | 409 en el 4.º y en la reactivación; no se guarda |
-| CP-70-11 | Cuerpo del 409 | Cuotas | CP-70-04 | Revisar la respuesta y la pantalla | `{error: "Cuota del plan alcanzada: usuarios (3 de 3).", codigo: "CUOTA_PLAN_ALCANZADA", cuota: "USUARIOS", limite: 3, usado: 3}`; la pantalla muestra «Cuota del plan alcanzada» |
+| CP-70-10 | Cuota de comerciantes | Cuotas | B con 3 comerciantes activos y plan de máx. 3 | Crear el 4.º; luego desactivar uno, crear otro y volver a activar el desactivado (PATCH /api/comerciantes/{id}/estado) | 409 en el 4.º y en la reactivación; no se guarda |
+| CP-70-11 | Cuerpo del 409 | Cuotas | CP-70-04 | Revisar la respuesta y la pantalla | `{error: "Cuota del plan alcanzada", codigo: "CUOTA_PLAN_ALCANZADA", cuota: "USUARIOS", limite: 3, usado: 3}` (en ALMACENAMIENTO_MB, `limite` y `usado` en MB); la pantalla arma el detalle con esos campos: «Cuota del plan alcanzada: usuarios (3 de 3). Contacta al Superadministrador para cambiar de plan.» (`utils/errores.js`, `ModalCuotaAlcanzada`) |
 | CP-70-12 | Validaciones del plan | Funcional | Plan existente con distribuidoras | Crear un plan con nombre repetido; con cuota o precio negativo; borrar un plan con distribuidoras | Nombre repetido → 409; cuota o precio negativo → 400; borrar un plan con distribuidoras → 409 |
-| CP-70-13 | Bajar a un plan menor | Funcional | B con más usuarios que el límite del plan nuevo | Asignar a B un plan con menos usuarios de los que tiene | Se asigna; no se deshabilita nada; las altas nuevas responden 409 |
+| CP-70-13 | Bajar a un plan menor | Funcional | B con más usuarios que el límite del plan nuevo | Asignar a B un plan con menos usuarios de los que tiene | Se asigna; la respuesta y el detalle de PLAN_ASIGNAR traen `cuotasExcedidas`; no se deshabilita nada; las altas nuevas responden 409 |
 
 ### RF71 — Log de auditoría
 | ID | Caso de prueba | Tipo | Precondición | Pasos | Resultado esperado |
 |----|----------------|------|--------------|-------|--------------------|
-| CP-71-01 | Operaciones de usuarios auditadas | Auditoría | Gerente de B | Crear, editar y deshabilitar un usuario | Filas USUARIO_CREAR, USUARIO_EDITAR y USUARIO_DESHABILITAR con fecha_hora, ip, tenant_id, usuario_id, rol, accion, entidad, entidad_id y detalle (JSON) |
+| CP-71-01 | Operaciones de usuarios auditadas | Auditoría | Gerente de B | Crear, editar, deshabilitar y habilitar un usuario | Filas USUARIO_CREAR, USUARIO_EDITAR, USUARIO_DESHABILITAR y USUARIO_HABILITAR con fecha_hora, ip, tenant_id, usuario_id, rol, accion, entidad, entidad_id y detalle (JSON) |
 | CP-71-02 | Aprovisionamiento y cambio de estado auditados | Auditoría | Superadministrador | Registrar una distribuidora, pasarla a «Suspendido por mora» y reactivarla | Filas DISTRIBUIDORA_APROVISIONAR y DISTRIBUIDORA_CAMBIAR_ESTADO; tenant_id vacío en las acciones del Superadministrador |
 | CP-71-03 | Operación fallida | Auditoría | Cuota alcanzada (CP-70-04) | Intentar crear el usuario | No queda fila de operación exitosa |
 | CP-71-04 | Consulta con filtros | Funcional | Filas de A y B | GET /api/plataforma/auditoria con filtros distribuidora, usuario, desde, hasta y acción; pantalla `/plataforma/auditoria` | Solo las filas que cumplen el filtro, paginadas; GET /api/plataforma/auditoria/acciones y /auditoria/usuarios llenan los filtros |
 | CP-71-05 | Gerente en auditoría | Funcional | Gerente de A | GET /api/plataforma/auditoria | 403 |
-| CP-71-06 | Seguridad auditada | Auditoría | Usuario de B; distribuidora suspendida | Iniciar y cerrar sesión, cambiar la contraseña e intentar entrar con una distribuidora suspendida | Filas SESION_INICIAR, SESION_CERRAR, CONTRASENA_CAMBIAR (el detalle no trae la contraseña) y ACCESO_BLOQUEADO |
-| CP-71-07 | Otras acciones | Auditoría | Gerente de B y Superadministrador | Crear un producto, reenviar el acceso al gerente y cambiar la identidad visual | Filas PRODUCTO_CREAR, DISTRIBUIDORA_REENVIAR_ACCESO e IDENTIDAD_ACTUALIZAR |
+| CP-71-06 | Seguridad auditada | Auditoría | Usuario de B; distribuidora suspendida | Iniciar (POST /api/auth/verificar) y cerrar sesión (POST /api/auth/cerrar-sesion), cambiar la contraseña, intentar entrar con una distribuidora suspendida y llamar con un token inválido | Filas SESION_INICIAR, SESION_CERRAR, CONTRASENA_CAMBIAR (el detalle no trae la contraseña), ACCESO_BLOQUEADO (403) y TOKEN_INVALIDO (401) |
+| CP-71-07 | Otras acciones | Auditoría | Gerente de B y Superadministrador | Crear un producto, reenviar el acceso al gerente y cambiar la identidad visual | Filas PRODUCTO_CREAR, DISTRIBUIDORA_REENVIAR_ACCESO e IDENTIDAD_ACTUALIZAR. La lista completa de acciones es la de `gobierno/AccionAuditoria.java` (26 códigos, la misma que devuelve /auditoria/acciones) |
 | CP-71-08 | Rango de fechas inválido | Funcional | Superadministrador | GET /api/plataforma/auditoria con desde > hasta | 400 |
 
 ---
@@ -261,7 +265,7 @@ Responsables: INT-01 a INT-04 Daniela Garcia Peñaranda (212), INT-05 Angie Niko
 
 | ID | Caso de prueba | Tipo | Precondición | Pasos | Resultado esperado |
 |----|----------------|------|--------------|-------|--------------------|
-| CP-REG-05 | Suite backend completa | Regresión | Rama `main` | `./mvnw test` | 0 fallos (479 pruebas antes de la iteración más rf63 … rf71) |
+| CP-REG-05 | Suite backend completa | Regresión | Rama `main` | `./mvnw test` | 0 fallos (479 pruebas antes de la iteración más rf63 … rf71; al 26/11 hay 634 métodos `@Test` en `src/test`) |
 | CP-REG-06 | Pruebas tocadas por 188, 189, 190 y 194 | Regresión | — | Correr rf52, rf54 (con el ejemplo ajustado a 1 día hábil), rf56, voz/ y `PedidoProveedorServiceExportarTest` | 0 fallos |
 | CP-REG-07 | API de la Iteración 2 | Regresión | Render | Ejecutar Postman `GELOX_IT2` y `GELOX_RF55_RF57` | Todas en verde |
 | CP-REG-08 | Flujos en el navegador | Regresión | Render | Venta por voz, pedido por voz, recomendación de compras, cambio de estado de una distribuidora, landing `/tienda/:subdominio` y liquidación de una planilla de Mágico Sabor con MARGEN | Igual que en la Iteración 2; la liquidación da el mismo `total_ganancia` que antes |
@@ -279,11 +283,11 @@ Criterios de aceptación de HU-18 y HU-19 tomados de la Planificación de Alcanc
 | RF64 | HU-19: catálogo multimarca con SKU propio, marca/proveedor, categoría, costos y precios | CP-64-01, 02, 04 | |
 | RF64 | HU-19: categorías propias por distribuidora | CP-64-03, 07 | |
 | RF64 | HU-19: unidades de medida y factores de conversión (compra al por mayor, venta fraccionada) | CP-64-05, 06 | |
-| RF65 | HU-19: cupo máximo, plazo máximo de pago y política ante vencimiento | CP-65-01 … 11 | |
+| RF65 | HU-19: cupo máximo, plazo máximo de pago y política ante vencimiento | CP-65-01 … 12 | |
 | RF66 | HU-19: esquema de liquidación (margen por producto, comisión porcentual o tarifa fija) | CP-66-01 … 11 | |
 | RF66 | HU-19: generar y bloquear la planilla diaria aplicando el esquema | CP-66-02 … 06, 09 | |
-| RF67 | HU-19: diseñar y guardar plantillas (orden de columnas, encabezados, códigos de homologación) por proveedor | CP-67-01 … 08 | |
-| RF67 | HU-19: generar el archivo del pedido con la plantilla del proveedor al cerrar el pedido | CP-67-01 … 08 | |
+| RF67 | HU-19: diseñar y guardar plantillas (orden de columnas, encabezados, códigos de homologación) por proveedor | CP-67-01 … 11 | |
+| RF67 | HU-19: generar el archivo del pedido con la plantilla del proveedor al cerrar el pedido | CP-67-03 … 08 | |
 | RF68 | HU-19: reportes financieros en Excel y PDF; identidad en reportes exportables (cierra lo que quedó pendiente de RF60, decisión D6 de la IT2) | CP-68-01 … 08 | |
 | RF69 | HU-18 c5: dashboard con distribuidoras activas, usuarios, volumen transaccional, almacenamiento y llamadas a IA | CP-69-01 … 05 | |
 | RF70 | HU-18 c6: planes de suscripción y cuotas por distribuidora | CP-70-01 … 13 | |
@@ -363,7 +367,7 @@ Riesgo de calendario: 211–214 son el mismo sábado 28/11 que el merge de 201; 
 ## Criterios de Aceptación Globales
 - Toda entidad nueva de una distribuidora (proveedor, categoría, factor, política, esquema, plantilla, código de homologación) responde 404 desde otra distribuidora.
 - `/api/plataforma/panel`, `/planes` y `/auditoria` responden 403 a todo rol distinto de SUPERADMINISTRADOR.
-- Al alcanzar la cuota de usuarios, productos, comerciantes o almacenamiento la operación responde 409 CUOTA_PLAN_ALCANZADA y no guarda nada. La cuota de llamadas IA no bloquea: la voz sigue con el clasificador de respaldo (OpenNLP) y avisa.
+- Al alcanzar la cuota de usuarios, productos, comerciantes o almacenamiento la operación responde 409 CUOTA_PLAN_ALCANZADA y no guarda nada. La cuota de llamadas IA no bloquea: la voz sigue con el clasificador de respaldo (OpenNLP) (hoy sin aviso en pantalla).
 - Cada operación crítica exitosa deja su fila de auditoría con fecha_hora, IP, distribuidora y usuario.
 - Los comportamientos de la Iteración 2 se mantienen como valores por defecto: Excel de Nutresa (plantilla RELLENAR_CATALOGO), liquidación con MARGEN con el mismo `total_ganancia` y tiempo de entrega global (`recomendacion.tiempo-entrega-dias`) solo como respaldo para un producto sin proveedor; con V10, Nutresa usa 1 día hábil.
 - Ningún endpoint responde 500 ante períodos sin datos o configuraciones vacías.

@@ -369,6 +369,21 @@ Registro de defectos (`DEFECTOS_IT2.md`, T144): DEF-NN, RF, caso, descripción, 
 
 ---
 
+## Cambios posteriores (Iteración 3) que afectan la regresión
+
+Los casos de arriba son los de la Iteración 2 y no se reescriben. Al repetirlos como regresión en la Iteración 3 (tareas 214 y 222, `QA_Plan_Iteracion3.md`), el resultado esperado cambia así, según el código de `develop` al 26/11/2026:
+
+| Caso | Qué cambió | Resultado esperado hoy |
+|------|------------|------------------------|
+| CP-56-01, CP-30, CP-34 | RF63: un pedido por proveedor | `POST /api/recomendaciones/{id}/pedido` responde `{pedidoId, exportUrl, pedidos[{pedidoId, proveedorId, proveedorNombre, total, exportUrl, advertenciaMontoMinimo}]}`; `pedidoId` y `exportUrl` son los del primer pedido |
+| CP-56-04 | RF67: plantilla por proveedor | El Excel de Nutresa sale de su plantilla RELLENAR_CATALOGO (`templates/catalogo.xlsx`, encabezados en la fila 4), igual que antes |
+| CP-58-01, CP-36 | RF70: planes de suscripción | `POST /api/plataforma/distribuidoras` exige `planId` (UUID de `plan_suscripcion`) en vez del texto del plan; sin él → 400 |
+| CP-54-01, CP-54-02 | RF63: tiempo de entrega por proveedor | El punto de reorden usa el tiempo de entrega del proveedor (Nutresa: 1 día hábil) en vez de los 2 días globales |
+| CP-62-02 | RF70: cuota de usuarios | Si la distribuidora está en el límite de su plan → 409 CUOTA_PLAN_ALCANZADA (Mágico Sabor, plan PILOTO, no tiene límites) |
+| Auditoría | RF71 | Crear, editar, deshabilitar y habilitar usuarios, el alta, el cambio de estado, el reenvío de acceso y la identidad visual dejan fila en `auditoria` |
+
+---
+
 ## Criterios de Aceptación Globales
 - Ningún recurso de una distribuidora es visible ni modificable desde otra: por id responde 404 y los listados solo traen lo propio.
 - Las rutas `/api/plataforma/**` responden 403 a todo rol distinto de SUPERADMINISTRADOR, y el SUPERADMINISTRADOR recibe 403 en las rutas de negocio.
