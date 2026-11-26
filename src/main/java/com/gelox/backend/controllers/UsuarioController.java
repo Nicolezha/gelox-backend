@@ -4,6 +4,7 @@ import com.gelox.backend.dto.CrearUsuarioDTO;
 import com.gelox.backend.dto.EditarUsuarioDTO;
 import com.gelox.backend.dto.UsuarioResponseDTO;
 import com.gelox.backend.gobierno.CuotaAlcanzadaException;
+import com.gelox.backend.services.ImagenSubida;
 import com.gelox.backend.services.SupabaseStorageService;
 import com.gelox.backend.services.UsuarioService;
 import jakarta.validation.Valid;
@@ -82,7 +83,8 @@ public class UsuarioController {
             }
 
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(usuarioService.crearUsuario(dto));
+                    .body(ImagenSubida.usar(storageService, dto.getFotoUrl(),
+                            () -> usuarioService.crearUsuario(dto)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (CuotaAlcanzadaException e) {
@@ -131,7 +133,8 @@ public class UsuarioController {
                 dto.setFotoUrl(storageService.subirImagen(foto, "usuarios"));
             }
 
-            return ResponseEntity.ok(usuarioService.editarUsuario(id, dto));
+            return ResponseEntity.ok(ImagenSubida.usar(storageService, dto.getFotoUrl(),
+                    () -> usuarioService.editarUsuario(id, dto)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (CuotaAlcanzadaException e) {

@@ -468,15 +468,18 @@ class MotorRecomendacionCompraTest {
     }
 
     @Test
-    @DisplayName("Proveedor con tiempo de entrega 0 (sin configurar) → L global y sin frase de entrega")
-    void proveedorSinTiempoUsaElGlobal() {
+    @DisplayName("Proveedor con tiempo de entrega 0 → entrega el mismo día: L = 0, no el global")
+    void proveedorConCeroDiasEntregaElMismoDia() {
         Producto p = producto("Alta rotación", 15, 0, 12, "30000", "4000");
-        p.setProveedor(proveedor("Sin configurar", 0, true));
+        p.setProveedor(proveedor("Local", 0, true));
 
         ItemCalculado i = item(motor.calcular(List.of(p), diezDiarias(p, HOY), bd("1000000"), HOY), p);
 
-        assertThat(i.puntoReorden()).isEqualByComparingTo("20.00");   // 10 × 2
-        assertThat(i.justificacion()).contains("el proveedor tarda 2 días");
+        assertThat(i.puntoReorden()).isEqualByComparingTo("0.00");    // 10 × 0
+        assertThat(i.cajasSugeridas()).isEqualTo(5);                  // 10 × 7 − 15 = 55 uds, cajas de 12
+        assertThat(i.justificacion())
+                .contains("(0+7 días)")
+                .contains("Local entrega el mismo día.");
     }
 
     @Test

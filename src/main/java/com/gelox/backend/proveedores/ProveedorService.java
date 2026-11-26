@@ -13,9 +13,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * RF63 — proveedores de la distribuidora. Uno de otra distribuidora responde 404.
@@ -31,13 +32,13 @@ public class ProveedorService {
     @Transactional(readOnly = true)
     public List<ProveedorDTO> listar(String q, Boolean activo) {
         String texto = q == null ? "" : q.trim();
-        return proveedorRepository.buscar(texto, activo).stream().map(ProveedorDTO::de).toList();
+        return aDTO(proveedorRepository.buscar(texto, activo));
     }
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO"})
     @Transactional(readOnly = true)
     public ProveedorDTO obtener(UUID id) {
-        return ProveedorDTO.de(buscar(id));
+        return aDTO(buscar(id));
     }
 
     @Auditable(accion = "PROVEEDOR_CREAR", entidad = "Proveedor")
@@ -49,7 +50,7 @@ public class ProveedorService {
         }
         Proveedor p = new Proveedor();
         aplicar(p, req, nit);
-        return ProveedorDTO.de(proveedorRepository.save(p));
+        return aDTO(proveedorRepository.save(p));
     }
 
     @Auditable(accion = "PROVEEDOR_EDITAR", entidad = "Proveedor")
@@ -61,7 +62,7 @@ public class ProveedorService {
             throw yaExisteNit();
         }
         aplicar(p, req, nit);
-        return ProveedorDTO.de(proveedorRepository.save(p));
+        return aDTO(proveedorRepository.save(p));
     }
 
     /** Activa (o, con {@code activo=false}, inactiva) al proveedor. */
@@ -70,7 +71,7 @@ public class ProveedorService {
     public ProveedorDTO activar(UUID id, boolean activo) {
         Proveedor p = buscar(id);
         p.setActivo(activo);
-        return ProveedorDTO.de(proveedorRepository.save(p));
+        return aDTO(proveedorRepository.save(p));
     }
 
     /** findById no pasa por el filtro de tenant: el de otra distribuidora responde 404. */
@@ -86,10 +87,26 @@ public class ProveedorService {
         p.setContactoNombre(limpiar(req.contactoNombre()));
         p.setTelefono(limpiar(req.telefono()));
         p.setCorreo(limpiar(req.correo()));
-        if (req.tiempoEntregaDias() != null) p.setTiempoEntregaDias(req.tiempoEntregaDias());
-        if (req.diasHabiles() != null)       p.setDiasHabiles(req.diasHabiles());
-        if (req.montoMinimoPedido() != null) p.setMontoMinimoPedido(req.montoMinimoPedido());
-        if (p.getMontoMinimoPedido() == null) p.setMontoMinimoPedido(BigDecimal.ZERO);
+        p.setTiempoEntregaDias(req.tiempoEntregaDias());
+        if (req.diasHabiles() != null) p.setDiasHabiles(req.diasHabiles());
+        p.setMontoMinimoPedido(req.montoMinimoPedido());
+    }
+
+    private ProveedorDTO aDTO(Proveedor proveedor) {
+        return aDTO(List.of(proveedor)).get(0);
+    }
+
+    /** Una consulta de productos y otra de plantillas para toda la lista. */
+    private List<ProveedorDTO> aDTO(List<Proveedor> proveedores) {
+        if (proveedores.isEmpty()) return List.of();
+        List<UUID> ids = proveedores.stream().map(Proveedor::getId).toList();
+        Map<UUID, Long> productos = proveedorRepository.contarProductosActivos(ids).stream()
+                .collect(Collectors.toMap(f -> (UUID) f[0], f -> (Long) f[1]));
+        Map<UUID, String> plantillas = proveedorRepository.nombresDePlantillas(ids).stream()
+                .collect(Collectors.toMap(f -> (UUID) f[0], f -> (String) f[1]));
+        return proveedores.stream()
+                .map(p -> ProveedorDTO.de(p, productos.getOrDefault(p.getId(), 0L), plantillas.get(p.getId())))
+                .toList();
     }
 
     private static String limpiar(String texto) {

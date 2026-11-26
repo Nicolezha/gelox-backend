@@ -237,7 +237,7 @@ class CuotaEnServiciosTest {
         ResultadoClasificacion r = new ProcesadorLenguajeLlm(cliente, respaldo, cuotaService)
                 .procesar("vendí tres paletas");
 
-        assertThat(r).isSameAs(esperado);
+        assertThat(r).isEqualTo(esperado.conAviso(ProcesadorLenguajeLlm.AVISO_CUOTA_AGOTADA));
         verify(cliente, never()).clasificar(anyString());
     }
 
@@ -259,13 +259,22 @@ class CuotaEnServiciosTest {
     }
 
     @Test
+    @DisplayName("El mensaje de almacenamiento da lo usado en MB, sin ceros sobrantes")
+    void mensajeDeAlmacenamiento() {
+        assertThat(new CuotaAlcanzadaException(TipoCuota.ALMACENAMIENTO_MB, 10, new BigDecimal("9.50")).getReason())
+                .isEqualTo("Cuota del plan alcanzada: almacenamiento (MB) (9.5 de 10).");
+        assertThat(new CuotaAlcanzadaException(TipoCuota.ALMACENAMIENTO_MB, 10, new BigDecimal("10.00")).getReason())
+                .isEqualTo("Cuota del plan alcanzada: almacenamiento (MB) (10 de 10).");
+    }
+
+    @Test
     @DisplayName("El 409 sale con {error, codigo: CUOTA_PLAN_ALCANZADA, cuota, limite, usado}")
     void cuerpoDel409() {
         ResponseEntity<Map<String, Object>> respuesta = new GlobalExceptionHandler()
                 .handleCuotaAlcanzada(new CuotaAlcanzadaException(TipoCuota.USUARIOS, 3, 3L));
 
         assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(respuesta.getBody()).containsEntry("error", "Cuota del plan alcanzada")
+        assertThat(respuesta.getBody()).containsEntry("error", "Cuota del plan alcanzada: usuarios (3 de 3).")
                 .containsEntry("codigo", "CUOTA_PLAN_ALCANZADA")
                 .containsEntry("cuota", "USUARIOS")
                 .containsEntry("limite", 3L)

@@ -28,9 +28,21 @@ public class ClasificadorIntencion implements ProcesadorLenguaje {
     /**
      * @param probabilidadIntencion probabilidad del modelo cuando hubo predicción, aunque al final se usen las reglas
      * @param metodo                MODELO, REGLAS o null si ninguna de las dos reconoció la frase
+     * @param aviso                 mensaje para el usuario sobre cómo se interpretó (RF70); null si no hay
      */
     public record ResultadoClasificacion(TipoIntencionVoz intencion, Map<String, String> slots,
-                                         Double probabilidadIntencion, MetodoClasificacion metodo) {
+                                         Double probabilidadIntencion, MetodoClasificacion metodo,
+                                         String aviso) {
+        public ResultadoClasificacion(TipoIntencionVoz intencion,
+                                      Map<String, String> slots,
+                                      Double probabilidadIntencion,
+                                      MetodoClasificacion metodo) {
+            this(intencion, slots, probabilidadIntencion, metodo, null);
+        }
+
+        public ResultadoClasificacion conAviso(String texto) {
+            return new ResultadoClasificacion(intencion, slots, probabilidadIntencion, metodo, texto);
+        }
     }
 
     private final ModeloIntencion modelo;
