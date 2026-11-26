@@ -23,6 +23,7 @@ import com.gelox.backend.services.EventoSistemaService;
 import com.gelox.backend.services.InventarioService;
 import com.gelox.backend.services.LiquidacionService;
 import com.gelox.backend.tenant.TenantContext;
+import jakarta.validation.Validation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +31,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -38,7 +41,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -84,10 +91,10 @@ class LiquidacionServiceEsquemaTest {
                 .precioVenta(BigDecimal.valueOf(1000))
                 .build();
 
-        when(planillaRepository.findById(planilla.getId())).thenReturn(Optional.of(planilla));
-        when(itemPlanillaRepository.findByIdAndPlanillaId(item.getId(), planilla.getId())).thenReturn(Optional.of(item));
-        when(planillaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(creditoService.plazoDiasEfectivo(any())).thenReturn(5);
+        lenient().when(planillaRepository.findById(planilla.getId())).thenReturn(Optional.of(planilla));
+        lenient().when(itemPlanillaRepository.findByIdAndPlanillaId(item.getId(), planilla.getId())).thenReturn(Optional.of(item));
+        lenient().when(planillaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(creditoService.plazoDiasEfectivo(any())).thenReturn(5);
     }
 
     @AfterEach
@@ -241,5 +248,41 @@ class LiquidacionServiceEsquemaTest {
         assertThat(response.saldo()).isEqualByComparingTo("6000");
         assertThat(response.fechaLimitePago()).isEqualTo(LocalDate.now().plusDays(5));
         assertThat(planilla.getFechaLimitePago()).isEqualTo(LocalDate.now().plusDays(5));
+    }
+
+    @Test
+    @DisplayName("efectivoRecibido mayor que el total cobrado: 400 y la planilla sigue abierta")
+    void efectivoMayorQueElTotal_lanza400() {
+        when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, null));
+
+        assertThatThrownBy(() -> liquidacionService.liquidarPlanilla(
+                planilla.getId(), devolver(0, new BigDecimal("10000.01")), usuario))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        assertThat(planilla.getCerrada()).isFalse();
+        verify(planillaRepository, never()).save(any());
+        verify(itemPlanillaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("efectivoRecibido igual al total (con otra escala decimal) se acepta")
+    void efectivoIgualAlTotal_seAcepta() {
+        when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, null));
+
+        LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(
+                planilla.getId(), devolver(0, new BigDecimal("10000.00")), usuario);
+
+        assertThat(response.saldo()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("efectivoRecibido negativo no pasa la validación de la petición")
+    void efectivoNegativo_noPasaLaValidacion() {
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            assertThat(factory.getValidator().validate(devolver(0, BigDecimal.valueOf(-1))))
+                    .extracting(v -> v.getPropertyPath().toString())
+                    .containsExactly("efectivoRecibido");
+        }
     }
 }
