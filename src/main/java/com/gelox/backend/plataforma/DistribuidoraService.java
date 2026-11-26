@@ -8,6 +8,7 @@ import com.gelox.backend.entities.PoliticaVencimiento;
 import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.TipoEsquemaLiquidacion;
 import com.gelox.backend.entities.TipoEvento;
+import com.gelox.backend.entities.UnidadMedida;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.exceptions.CampoInvalidoException;
 import com.gelox.backend.gobierno.Auditable;
@@ -25,6 +26,7 @@ import com.gelox.backend.plataforma.dto.DistribuidoraDTO;
 import com.gelox.backend.repositories.DistribuidoraRepository;
 import com.gelox.backend.repositories.EsquemaLiquidacionRepository;
 import com.gelox.backend.repositories.PoliticaCreditoRepository;
+import com.gelox.backend.repositories.UnidadMedidaRepository;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.EmailService;
@@ -74,6 +76,10 @@ public class DistribuidoraService {
     /** Cupo inicial de la política de crédito (plazo 0 y SOLO_ALERTA), igual que el sembrado de V10. */
     private static final BigDecimal CUPO_CREDITO_DEFECTO = BigDecimal.valueOf(50_000);
 
+    /** Código → nombre, igual que el sembrado de V10. */
+    private static final Map<String, String> UNIDADES_INICIALES =
+            Map.of("UN", "Unidad", "CJ", "Caja", "BOL", "Bolsa");
+
     private static final String ALFABETO_PASSWORD =
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     private static final int LARGO_PASSWORD = 12;
@@ -89,6 +95,7 @@ public class DistribuidoraService {
     private final AuditoriaRepository auditoriaRepository;     // RF70 — fechaPlan (último PLAN_ASIGNAR)
     private final PoliticaCreditoRepository politicaCreditoRepository;         // RF65 — política inicial
     private final EsquemaLiquidacionRepository esquemaLiquidacionRepository;   // RF66 — esquema inicial
+    private final UnidadMedidaRepository unidadMedidaRepository;               // RF64 — unidades iniciales
 
     // ─────────────────────────────────────────────────────────────────
     // RF58 — Aprovisionamiento
@@ -103,10 +110,10 @@ public class DistribuidoraService {
         String correo = req.correoGerente().trim().toLowerCase();
 
         if (distribuidoraRepository.existsByNit(nit)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe una distribuidora con ese NIT");
+            throw new CampoInvalidoException(HttpStatus.CONFLICT, "Ya existe una distribuidora con ese NIT", "nit");
         }
         if (distribuidoraRepository.existsBySubdominio(subdominio)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ese subdominio ya está en uso");
+            throw new CampoInvalidoException(HttpStatus.CONFLICT, "Ese subdominio ya está en uso", "subdominio");
         }
         // RF70 — plan_suscripcion.id (antes de consultar Firebase); distribuidora.plan se llena con su nombre
         PlanSuscripcion plan = (req.planId() == null ? Optional.<PlanSuscripcion>empty()
@@ -114,7 +121,7 @@ public class DistribuidoraService {
                 .orElseThrow(() -> new CampoInvalidoException(HttpStatus.BAD_REQUEST,
                         "Selecciona un plan válido", "planId"));
         if (usuarioRepository.existsByCorreo(correo) || existeEnFirebase(correo)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un usuario con ese correo");
+            throw correoEnUso();
         }
 
         Distribuidora distribuidora = distribuidoraRepository.save(Distribuidora.builder()
@@ -143,7 +150,7 @@ public class DistribuidoraService {
                     .setDisplayName(req.nombreGerente().trim()));
         } catch (FirebaseAuthException e) {
             if (e.getAuthErrorCode() == AuthErrorCode.EMAIL_ALREADY_EXISTS) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un usuario con ese correo");
+                throw correoEnUso();
             }
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "No se pudo crear la cuenta del gerente en Firebase");
@@ -405,8 +412,22 @@ public class DistribuidoraService {
         }
     }
 
-    /** Sin estas dos filas la distribuidora no podría despachar ni liquidar planillas (RF65, RF66). */
+    private static CampoInvalidoException correoEnUso() {
+        return new CampoInvalidoException(HttpStatus.CONFLICT, "Ya existe un usuario con ese correo", "correoGerente");
+    }
+
+    /**
+     * Lo mismo que V10 sembró a las distribuidoras que ya existían: las unidades UN, CJ y BOL (RF64) y
+     * la política de crédito y el esquema, sin los que no podría despachar ni liquidar (RF65, RF66).
+     */
     private void crearConfiguracionComercialInicial(UUID tenantId) {
+        UNIDADES_INICIALES.forEach((codigo, nombre) -> {
+            UnidadMedida unidad = new UnidadMedida();
+            unidad.setTenantId(tenantId);
+            unidad.setCodigo(codigo);
+            unidad.setNombre(nombre);
+            unidadMedidaRepository.save(unidad);
+        });
         politicaCreditoRepository.save(PoliticaCredito.builder()
                 .tenantId(tenantId)
                 .cupo(CUPO_CREDITO_DEFECTO)

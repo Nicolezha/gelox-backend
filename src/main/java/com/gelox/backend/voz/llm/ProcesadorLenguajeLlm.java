@@ -34,6 +34,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ProcesadorLenguajeLlm implements ProcesadorLenguaje {
 
+    /** RF70 — lo ve el usuario cuando su distribuidora agotó las consultas de voz con IA del mes. */
+    public static final String AVISO_CUOTA_AGOTADA =
+            "Se alcanzó la cuota mensual de consultas de voz con IA. El asistente sigue con el reconocimiento básico.";
+
     private final LlmCliente cliente;
     private final ClasificadorIntencion respaldo;
     private final CuotaService cuotaService;
@@ -43,7 +47,7 @@ public class ProcesadorLenguajeLlm implements ProcesadorLenguaje {
         if (!cliente.configurado()) return respaldo.clasificar(texto);
         if (!cuotaService.disponible(TipoCuota.LLAMADAS_IA_MES)) {
             log.info("Cuota de llamadas IA del mes agotada, se usa el clasificador anterior");
-            return respaldo.clasificar(texto);
+            return respaldo.clasificar(texto).conAviso(AVISO_CUOTA_AGOTADA);
         }
 
         JsonNode json;

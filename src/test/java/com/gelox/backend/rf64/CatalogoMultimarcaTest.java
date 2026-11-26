@@ -176,6 +176,57 @@ class CatalogoMultimarcaTest {
         assertThatThrownBy(() -> service.editarProducto(id, req, gerente)).satisfies(e -> assertEstado(e, HttpStatus.CONFLICT));
     }
 
+    // ── unidades por caja ────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("editar con unidadesPorCaja 0 quita el factor de caja (queda vacío, no 0)")
+    void unidadesPorCajaCeroLimpia() {
+        UUID id = UUID.randomUUID();
+        Producto existente = new Producto();
+        existente.setId(id);
+        existente.setNombre("Cono");
+        existente.setUnidadesPorCaja(24);
+        when(catalogoRepository.findByIdAndActivoTrue(id)).thenReturn(Optional.of(existente));
+
+        service.editarProducto(id, new EditarProductoRequest(), gerente);
+        assertThat(existente.getUnidadesPorCaja()).isEqualTo(24);   // no enviado = sin cambios
+
+        EditarProductoRequest req = new EditarProductoRequest();
+        req.setUnidadesPorCaja(0);
+        service.editarProducto(id, req, gerente);
+        assertThat(existente.getUnidadesPorCaja()).isNull();
+    }
+
+    @Test
+    @DisplayName("unidadesPorCaja negativa → 400 y no se guarda")
+    void unidadesPorCajaNegativa() {
+        CrearProductoRequest req = crear();
+        req.setUnidadesPorCaja(-1);
+
+        assertThatThrownBy(() -> service.crearProducto(req, gerente))
+                .satisfies(e -> assertEstado(e, HttpStatus.BAD_REQUEST));
+        verify(catalogoRepository, never()).save(any());
+    }
+
+    // ── filtros del listado ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("filtro de stock desconocido → 400")
+    void filtroStockInvalido() {
+        assertThatThrownBy(() -> service.listarProductos(null, null, null, null, "alto", 0, 20, gerente))
+                .satisfies(e -> assertEstado(e, HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
+    @DisplayName("filtrar por un proveedor de otra distribuidora → 404")
+    void filtroProveedorAjeno() {
+        Proveedor ajeno = proveedor(OTRO_TENANT, true);
+        when(proveedorRepository.findById(ajeno.getId())).thenReturn(Optional.of(ajeno));
+
+        assertThatThrownBy(() -> service.listarProductos(null, null, null, ajeno.getId(), null, 0, 20, gerente))
+                .satisfies(e -> assertEstado(e, HttpStatus.NOT_FOUND));
+    }
+
     // ── marca, proveedor y categoría ─────────────────────────────────────
 
     @Test

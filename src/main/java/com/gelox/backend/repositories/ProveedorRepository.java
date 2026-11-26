@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +21,18 @@ public interface ProveedorRepository extends JpaRepository<Proveedor, UUID> {
             ORDER BY p.nombre ASC
             """)
     List<Proveedor> buscar(@Param("q") String q, @Param("activo") Boolean activo);
+
+    /** Filas [proveedorId, cantidad] de productos activos; un proveedor sin productos no aparece. */
+    @Query("""
+            SELECT p.proveedor.id, COUNT(p) FROM Producto p
+            WHERE p.activo = true AND p.proveedor.id IN :ids
+            GROUP BY p.proveedor.id
+            """)
+    List<Object[]> contarProductosActivos(@Param("ids") Collection<UUID> ids);
+
+    /** Filas [proveedorId, nombre de la plantilla de exportación] (una plantilla por proveedor). */
+    @Query("SELECT t.proveedor.id, t.nombre FROM PlantillaExportacion t WHERE t.proveedor.id IN :ids")
+    List<Object[]> nombresDePlantillas(@Param("ids") Collection<UUID> ids);
 
     boolean existsByNit(String nit);
 

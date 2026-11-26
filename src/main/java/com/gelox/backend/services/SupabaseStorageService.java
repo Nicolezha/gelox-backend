@@ -122,6 +122,36 @@ public class SupabaseStorageService {
         return url;
     }
 
+    /**
+     * Borra una imagen subida a este bucket y su fila en archivo_almacenado, para que deje de contar
+     * en la cuota. Nunca lanza: se usa al deshacer otra operación y no debe ocultar su error.
+     */
+    public void eliminarImagen(String url) {
+        String prefijo = supabaseUrl + "/storage/v1/object/public/" + bucket + "/";
+        if (url == null || !url.startsWith(prefijo)) return;
+        String borrado = supabaseUrl + "/storage/v1/object/" + bucket + "/" + url.substring(prefijo.length());
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(borrado))
+                    .header("Authorization", "Bearer " + serviceKey)
+                    .DELETE()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200 && response.statusCode() != 204) {
+                // El archivo sigue ocupando espacio: su fila se conserva
+                log.error("No se pudo borrar {} de Supabase Storage: HTTP {} {}",
+                        url, response.statusCode(), response.body());
+                return;
+            }
+            archivoRepository.deleteByUrl(url);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Se interrumpió el borrado de {}", url);
+        } catch (Exception e) {
+            log.error("No se pudo borrar {}: {}", url, e.getMessage());
+        }
+    }
+
     /** RF70 — fila en archivo_almacenado; si falla, el archivo ya subido se conserva. */
     private void registrarArchivo(UUID tenantId, String carpeta, String url, long bytes) {
         if (tenantId == null) return;

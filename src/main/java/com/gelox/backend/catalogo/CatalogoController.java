@@ -6,6 +6,7 @@ import com.gelox.backend.catalogo.dto.EditarProductoRequest;
 import com.gelox.backend.catalogo.dto.FactorConversionRequest;
 import com.gelox.backend.catalogo.dto.PagedResponse;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.services.ImagenSubida;
 import com.gelox.backend.services.SupabaseStorageService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -45,12 +46,15 @@ public class CatalogoController {
     public ResponseEntity<PagedResponse<CatalogoProductoDTO>> listar(
             @RequestParam(required = false) String categoria,
             @RequestParam(required = false) UUID   categoriaId,
+            @RequestParam(required = false) String q,            // nombre, SKU, código técnico o marca
+            @RequestParam(required = false) UUID   proveedorId,
+            @RequestParam(required = false) String stock,        // bajo | medio | sin
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Usuario usuario) {
 
         return ResponseEntity.ok(
-                catalogoService.listarProductos(categoria, categoriaId, page, size, usuario));
+                catalogoService.listarProductos(categoria, categoriaId, q, proveedorId, stock, page, size, usuario));
     }
 
     // ── RF19 — crear (JSON) ───────────────────────────────────────────────────
@@ -110,7 +114,8 @@ public class CatalogoController {
         }
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(catalogoService.crearProducto(request, usuario));
+                .body(ImagenSubida.usar(storageService, request.getImagenUrl(),
+                        () -> catalogoService.crearProducto(request, usuario)));
     }
 
     // ── RF20 — editar (JSON) ──────────────────────────────────────────────────
@@ -168,7 +173,8 @@ public class CatalogoController {
             request.setImagenUrl(storageService.subirImagen(imagen, "productos"));
         }
 
-        return ResponseEntity.ok(catalogoService.editarProducto(id, request, usuario));
+        return ResponseEntity.ok(ImagenSubida.usar(storageService, request.getImagenUrl(),
+                () -> catalogoService.editarProducto(id, request, usuario)));
     }
 
     // ── RF20 — activar (revertir inactivación) ───────────────────────────────

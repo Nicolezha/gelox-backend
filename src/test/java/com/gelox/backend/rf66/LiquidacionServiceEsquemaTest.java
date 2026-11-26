@@ -120,7 +120,8 @@ class LiquidacionServiceEsquemaTest {
         // 8 unidades vendidas * 1000 = 8000, igual al cálculo de siempre
         assertThat(response.montoCobrado()).isEqualByComparingTo("8000");
         assertThat(response.esquemaAplicado()).isEqualTo(TipoEsquemaLiquidacion.MARGEN);
-        assertThat(response.gananciaComerciante()).isNull();
+        assertThat(response.gananciaComerciante()).isEqualByComparingTo("0");
+        assertThat(response.advertencias()).extracting(a -> a.codigo()).containsExactly("SIN_PRECIO_PUBLICO");
         assertThat(response.efectivoRecibido()).isEqualByComparingTo("8000");
         assertThat(response.saldo()).isEqualByComparingTo("0");
         assertThat(response.fechaLimitePago()).isNull();
@@ -179,8 +180,9 @@ class LiquidacionServiceEsquemaTest {
 
         assertThat(response.montoCobrado()).isEqualByComparingTo("10000");
         assertThat(response.totalVendido()).isEqualByComparingTo("10000");
-        assertThat(response.gananciaComerciante()).isNull();
-        assertThat(item.getGananciaComerciante()).isNull();
+        assertThat(response.gananciaComerciante()).isEqualByComparingTo("0");
+        assertThat(item.getGananciaComerciante()).isEqualByComparingTo("0");
+        assertThat(response.advertencias()).extracting(a -> a.tipo()).containsExactly("SIN_PRECIO_PUBLICO");
         assertThat(planilla.getTotalGanancia()).isEqualByComparingTo("10000");
     }
 
@@ -206,6 +208,23 @@ class LiquidacionServiceEsquemaTest {
         assertThat(response.montoCobrado()).isEqualByComparingTo("58000");
         assertThat(response.gananciaComerciante()).isEqualByComparingTo("5000");
         assertThat(response.totalVendido()).isEqualByComparingTo("63000");
+        assertThat(sinPrecio.getGananciaComerciante()).isEqualByComparingTo("0");
+        assertThat(response.advertencias()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("la fecha límite sale de la fecha de la planilla + plazo, no del día en que se liquida")
+    void fechaLimite_seCuentaDesdeLaFechaDeLaPlanilla() {
+        planilla.setFecha(LocalDate.now().minusDays(10));
+        item.setPrecioPublico(BigDecimal.valueOf(1500));
+        when(esquemaLiquidacionService.vigente()).thenReturn(esquema(TipoEsquemaLiquidacion.MARGEN, null));
+
+        LiquidacionResponseDTO response = liquidacionService.liquidarPlanilla(
+                planilla.getId(), devolver(0, BigDecimal.ZERO), usuario);
+
+        assertThat(response.fechaLimitePago()).isEqualTo(LocalDate.now().minusDays(5));
+        assertThat(planilla.getFechaLimitePago()).isEqualTo(LocalDate.now().minusDays(5));
+        assertThat(response.advertencias()).isEmpty();
     }
 
     @Test

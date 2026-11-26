@@ -105,7 +105,8 @@ class AsignarPlanTest {
                 eventoSistemaService, emailService, distribuidoraEstadoCache, planRepository, cuotaService,
                 auditoriaRepository,
                 org.mockito.Mockito.mock(com.gelox.backend.repositories.PoliticaCreditoRepository.class),
-                org.mockito.Mockito.mock(com.gelox.backend.repositories.EsquemaLiquidacionRepository.class));
+                org.mockito.Mockito.mock(com.gelox.backend.repositories.EsquemaLiquidacionRepository.class),
+                org.mockito.Mockito.mock(com.gelox.backend.repositories.UnidadMedidaRepository.class));
         AspectJProxyFactory factory = new AspectJProxyFactory(real);
         factory.setProxyTargetClass(true);
         factory.addAspect(new AuditoriaAspect(new AuditoriaService(escritor)));

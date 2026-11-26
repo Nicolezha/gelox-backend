@@ -169,6 +169,39 @@ class ProveedorControllerTest {
     }
 
     @Test
+    @DisplayName("POST y PUT sin tiempo de entrega ni monto mínimo → 400 y no se guarda")
+    void tiempoYMontoObligatorios() throws Exception {
+        String sinDatos = "{\"nombre\":\"Local\"}";
+        for (var peticion : List.of(post("/api/proveedores"), put("/api/proveedores/" + PROVEEDOR))) {
+            mockMvc.perform(peticion.contentType(MediaType.APPLICATION_JSON).content(sinDatos)
+                            .with(authentication(como(RolUsuario.ADMINISTRADOR))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.tiempoEntregaDias").value("El tiempo de entrega es obligatorio"))
+                    .andExpect(jsonPath("$.montoMinimoPedido").value("El monto mínimo de pedido es obligatorio"));
+        }
+
+        verify(proveedorRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("GET /{id} trae productos asociados, plantilla y fecha de creación")
+    void obtenerConResumen() throws Exception {
+        Proveedor p = proveedor(TENANT, true);
+        p.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 14, 10, 40));
+        when(proveedorRepository.findById(PROVEEDOR)).thenReturn(Optional.of(p));
+        when(proveedorRepository.contarProductosActivos(List.of(PROVEEDOR)))
+                .thenReturn(List.<Object[]>of(new Object[]{PROVEEDOR, 64L}));
+        when(proveedorRepository.nombresDePlantillas(List.of(PROVEEDOR)))
+                .thenReturn(List.<Object[]>of(new Object[]{PROVEEDOR, "Pedido Nutresa"}));
+
+        mockMvc.perform(get("/api/proveedores/" + PROVEEDOR).with(authentication(como(RolUsuario.ADMINISTRADOR))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.productosAsociados").value(64))
+                .andExpect(jsonPath("$.plantilla").value("Pedido Nutresa"))
+                .andExpect(jsonPath("$.createdAt").value("2026-11-14T10:40:00"));
+    }
+
+    @Test
     @DisplayName("POST con un NIT que ya existe en la distribuidora → 409")
     void nitRepetido() throws Exception {
         when(proveedorRepository.existsByNit("890900050")).thenReturn(true);
@@ -221,7 +254,8 @@ class ProveedorControllerTest {
         when(proveedorRepository.findById(PROVEEDOR)).thenReturn(Optional.of(proveedor(TENANT, true)));
 
         mockMvc.perform(put("/api/proveedores/" + PROVEEDOR).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nombre\":\"Nutresa S.A.\",\"nit\":\"890900050\",\"montoMinimoPedido\":200000}")
+                        .content("{\"nombre\":\"Nutresa S.A.\",\"nit\":\"890900050\",\"tiempoEntregaDias\":1,"
+                                + "\"montoMinimoPedido\":200000}")
                         .with(authentication(como(RolUsuario.ADMINISTRADOR))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nombre").value("Nutresa S.A."))

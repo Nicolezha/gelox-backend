@@ -15,6 +15,7 @@ import com.gelox.backend.entities.PoliticaVencimiento;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.gobierno.Auditable;
+import com.gelox.backend.gobierno.AuditoriaDetalle;
 import com.gelox.backend.repositories.AbonoComercianteRepository;
 import com.gelox.backend.repositories.ComercianteRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
@@ -33,7 +34,9 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -92,11 +95,15 @@ public class CreditoService {
     @Auditable(accion = "CREDITO_POLITICA_CAMBIAR", entidad = "PoliticaCredito")
     public PoliticaCreditoDTO actualizarPoliticaDistribuidora(PoliticaCreditoRequest req, Usuario usuario) {
         PoliticaCredito politica = politicaPorDefecto();
+        Map<String, Object> antes = valoresDe(politica);
         politica.setCupo(req.cupo());
         politica.setPlazoDias(req.plazoDias());
         politica.setPoliticaVencimiento(req.politica());
         politica.setActualizadoPor(usuario.getId());
-        return PoliticaCreditoDTO.from(politicaRepository.save(politica));
+        PoliticaCreditoDTO dto = PoliticaCreditoDTO.from(politicaRepository.save(politica));
+        AuditoriaDetalle.entidadId(politica.getId());
+        auditarCambioDePolitica(null, antes, valoresDe(politica));
+        return dto;
     }
 
     // ── Crédito de un comerciante (política efectiva, deuda, planillas, abonos) ─
@@ -112,7 +119,11 @@ public class CreditoService {
     public CreditoVistaDTO definirExcepcion(UUID comercianteId, PoliticaCreditoRequest req, Usuario usuario) {
         Comerciante comerciante = validarComercianteDelTenant(comercianteId);
         UUID tenantId = TenantContext.requerido();
-        PoliticaCredito politica = politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId)
+        Optional<PoliticaCredito> existente = politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId);
+        // La que regía hasta ahora: la excepción activa o, si no había, la de la distribuidora
+        Map<String, Object> antes = valoresDe(existente.filter(p -> Boolean.TRUE.equals(p.getActivo()))
+                .orElseGet(this::politicaPorDefecto));
+        PoliticaCredito politica = existente
                 .orElseGet(() -> PoliticaCredito.builder().comerciante(comerciante).build());
         politica.setCupo(req.cupo());
         politica.setPlazoDias(req.plazoDias());
@@ -120,22 +131,28 @@ public class CreditoService {
         politica.setActivo(true);   // solo puede haber una fila por comerciante: si estaba inactiva, se reutiliza
         politica.setActualizadoPor(usuario.getId());
         politicaRepository.save(politica);
+        auditarCambioDePolitica(comerciante, antes, valoresDe(politica));
         return vistaDe(comercianteId);
     }
 
     @RequiereRol("ADMINISTRADOR")
     @Auditable(accion = "CREDITO_POLITICA_CAMBIAR", entidad = "PoliticaCredito")
     public CreditoVistaDTO eliminarExcepcion(UUID comercianteId) {
-        validarComercianteDelTenant(comercianteId);
+        Comerciante comerciante = validarComercianteDelTenant(comercianteId);
         UUID tenantId = TenantContext.requerido();
         politicaRepository.findByTenantIdAndComerciante_Id(tenantId, comercianteId)
-                .ifPresent(politicaRepository::delete);
+                .ifPresent(excepcion -> {
+                    PoliticaCredito defecto = politicaPorDefecto();
+                    PoliticaCredito regia = Boolean.TRUE.equals(excepcion.getActivo()) ? excepcion : defecto;
+                    auditarCambioDePolitica(comerciante, valoresDe(regia), valoresDe(defecto));
+                    politicaRepository.delete(excepcion);
+                });
         return vistaDe(comercianteId);
     }
 
     // ── Abonos ───────────────────────────────────────────────────────────────
 
-    @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
+    @RequiereRol("ADMINISTRADOR")
     @Auditable(accion = "ABONO_REGISTRAR", entidad = "AbonoComerciante")
     public CreditoVistaDTO registrarAbono(UUID comercianteId, AbonoRequest req, Usuario usuario) {
         Comerciante comerciante = validarComercianteDelTenant(comercianteId);
@@ -145,12 +162,18 @@ public class CreditoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El abono supera la deuda actual");
         }
 
-        abonoRepository.save(AbonoComerciante.builder()
+        AbonoComerciante abono = abonoRepository.save(AbonoComerciante.builder()
                 .comerciante(comerciante)
                 .valor(req.valor())
                 .observacion(req.observacion() != null && !req.observacion().isBlank() ? req.observacion().trim() : null)
                 .usuario(usuario)
                 .build());
+
+        Map<String, Object> detalle = new LinkedHashMap<>();
+        detalle.put("comerciante", comerciante.getNombre());
+        detalle.put("valor", req.valor());
+        AuditoriaDetalle.entidadId(abono.getId());
+        AuditoriaDetalle.poner(detalle);
 
         eventoSistemaService.registrarEvento(TipoEvento.ABONO_COMERCIANTE,
                 "Abono de $" + req.valor().toPlainString() + " de " + comerciante.getNombre() + ".",
@@ -175,6 +198,25 @@ public class CreditoService {
     }
 
     // ── Privados ─────────────────────────────────────────────────────────────
+
+    /** Foto de una política para la auditoría (se toma antes de modificar la entidad). */
+    private static Map<String, Object> valoresDe(PoliticaCredito p) {
+        Map<String, Object> valores = new LinkedHashMap<>();
+        valores.put("cupo", p.getCupo());
+        valores.put("plazoDias", p.getPlazoDias());
+        valores.put("politica", p.getPoliticaVencimiento());
+        return valores;
+    }
+
+    /** FP-15 §2.16.3 — cupo, plazo y política anteriores y nuevos. {@code comerciante} null = la de la distribuidora. */
+    private static void auditarCambioDePolitica(Comerciante comerciante, Map<String, Object> antes,
+                                                Map<String, Object> despues) {
+        Map<String, Object> detalle = new LinkedHashMap<>();
+        if (comerciante != null) detalle.put("comerciante", comerciante.getNombre());
+        detalle.put("antes", antes);
+        detalle.put("despues", despues);
+        AuditoriaDetalle.poner(detalle);
+    }
 
     private CreditoVistaDTO vistaDe(UUID comercianteId) {
         PoliticaCredito politicaDefecto = politicaPorDefecto();

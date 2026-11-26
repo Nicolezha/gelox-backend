@@ -3,6 +3,7 @@ package com.gelox.backend.controllers;
 import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.services.ComercianteService;
+import com.gelox.backend.services.ImagenSubida;
 import com.gelox.backend.services.SupabaseStorageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -85,7 +86,8 @@ public class ComercianteController {
                 tallaUniforme, placa, documento, tipoDocumento, eps, fotoUrl);
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(comercianteService.crear(req, usuario));
+                .body(ImagenSubida.usar(storageService, fotoUrl,
+                        () -> comercianteService.crear(req, usuario)));
     }
 
     // ── PUT /api/comerciantes/{id} — JSON (sin foto) ──────────────────────────
@@ -127,7 +129,8 @@ public class ComercianteController {
                 contactoEmergenciaNombre, contactoEmergenciaParentesco,
                 tallaUniforme, placa, documento, tipoDocumento, eps, fotoUrl);
 
-        return ResponseEntity.ok(comercianteService.editar(id, req, usuario));
+        return ResponseEntity.ok(ImagenSubida.usar(storageService, fotoUrl,
+                () -> comercianteService.editar(id, req, usuario)));
     }
 
     // ── PATCH /api/comerciantes/{id}/estado ───────────────────────────────────
