@@ -17,7 +17,10 @@ public record PedidoDetalleDTO(
         LocalDate                fecha,
         String                   estado,
         String                   notas,
-        List<ItemPedidoDetalleDTO> items
+        List<ItemPedidoDetalleDTO> items,
+        /** RF63 — proveedor del pedido; nulos en un pedido sin proveedor. */
+        UUID                     proveedorId,
+        String                   proveedorNombre
 ) {
     public static PedidoDetalleDTO from(PedidoProveedor p) {
         List<ItemPedidoDetalleDTO> itemsDTO = p.getItems()
@@ -30,7 +33,9 @@ public record PedidoDetalleDTO(
                 p.getFecha(),
                 p.getEstado() != null ? p.getEstado().name() : null,
                 p.getNotas(),
-                itemsDTO
+                itemsDTO,
+                p.getProveedor() != null ? p.getProveedor().getId() : null,
+                p.getProveedor() != null ? p.getProveedor().getNombre() : null
         );
     }
 }

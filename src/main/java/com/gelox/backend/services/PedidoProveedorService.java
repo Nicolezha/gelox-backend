@@ -482,9 +482,12 @@ public class PedidoProveedorService {
                         int totalUnidades = p.getItems() == null ? 0 : p.getItems().stream()
                                 .mapToInt(i -> i.getCantidadUnidades() != null ? i.getCantidadUnidades() : 0)
                                 .sum();
+                        Proveedor proveedor = p.getProveedor();
                         return new PedidoResumenDTO(
                                 p.getId(), p.getFecha(), p.getEstado().name(), p.getNotas(),
-                                totalCajas, totalUnidades);
+                                totalCajas, totalUnidades,
+                                proveedor != null ? proveedor.getId() : null,
+                                proveedor != null ? proveedor.getNombre() : null);
                     })
                     .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
         } else {
