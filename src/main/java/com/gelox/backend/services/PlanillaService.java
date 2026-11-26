@@ -1,6 +1,10 @@
 package com.gelox.backend.services;
 
+import com.gelox.backend.credito.CreditoBloqueadoException;
+import com.gelox.backend.credito.CreditoService;
 import com.gelox.backend.dto.ActualizarDespachoItemRequest;
+import com.gelox.backend.dto.AdvertenciaCreditoDTO;
+import com.gelox.backend.dto.CambiarFechaLimiteRequest;
 import com.gelox.backend.dto.CrearDespachoRequest;
 import com.gelox.backend.dto.CrearDespachoResponse;
 import com.gelox.backend.dto.ItemDespachoRequest;
@@ -15,6 +19,8 @@ import com.gelox.backend.repositories.ComercianteRepository;
 import com.gelox.backend.repositories.ItemPlanillaRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
 import com.gelox.backend.repositories.ProductoRepository;
+import com.gelox.backend.gobierno.Auditable;
+import com.gelox.backend.gobierno.AuditoriaDetalle;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +46,7 @@ public class PlanillaService {
     private final InventarioService inventarioService;
     private final EventoSistemaService eventoSistemaService;
     private final IdentidadDistribuidoraService identidadService;
+    private final CreditoService creditoService;   // RF65
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public CrearDespachoResponse crearDespacho(CrearDespachoRequest req, Usuario usuario) {
@@ -52,6 +59,17 @@ public class PlanillaService {
         if (!Boolean.TRUE.equals(comerciante.getActivo())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "El comerciante no está activo.");
+        }
+
+        // RF65 — evaluar crédito del comerciante antes de despachar
+        CreditoService.Evaluacion evaluacion = creditoService.evaluar(comerciante.getId());
+        List<AdvertenciaCreditoDTO> advertencias = new ArrayList<>();
+        if (evaluacion.excede()) {
+            if (evaluacion.politica() == PoliticaVencimiento.BLOQUEAR) {
+                throw new CreditoBloqueadoException(
+                        evaluacion.deuda(), evaluacion.cupo(), evaluacion.planillasVencidas(), evaluacion.advertencias());
+            }
+            advertencias.addAll(evaluacion.advertencias());
         }
 
         // 2. Verificar que no exista planilla ya para ese comerciante en esa fecha
@@ -117,6 +135,7 @@ public class PlanillaService {
                     .unidadesDespachadas(totalUnidades)
                     .unidadesDevueltas(0)
                     .precioVenta(item.precioUnitario())
+                    .precioPublico(p.getPrecioVenta())   // RF66 — precio al público: el del catálogo, no lo informa el cliente
                     .build());
 
             // Solo descontar del stock global las unidades que no venían de devoluciones anteriores
@@ -154,7 +173,8 @@ public class PlanillaService {
                 comerciante.getId(),
                 req.fecha(),
                 responseItems,
-                totalValorDespachado);
+                totalValorDespachado,
+                advertencias);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -208,6 +228,49 @@ public class PlanillaService {
         }
     }
 
+    // RF65 — Extender (prorrogar) la fecha límite de pago de una planilla cerrada
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** Máximo de días que el Gerente puede correr la fecha límite de una planilla (espejo de MAX_DIAS_PRORROGA, creditoUtils.js). */
+    private static final int MAX_DIAS_PRORROGA = 15;
+
+    @RequiereRol("ADMINISTRADOR")
+    @Auditable(accion = "PLANILLA_CAMBIAR_FECHA_LIMITE", entidad = "PlanillaComerciante")
+    public void cambiarFechaLimite(UUID planillaId, CambiarFechaLimiteRequest req) {
+        PlanillaComerciante planilla = planillaRepository.findById(planillaId)
+                .filter(TenantContext::pertenece)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Planilla no encontrada"));
+        if (!Boolean.TRUE.equals(planilla.getCerrada())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La planilla aún no está liquidada; no tiene fecha límite de pago.");
+        }
+        if (req.motivo() == null || req.motivo().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El motivo es obligatorio: queda registrado en auditoría.");
+        }
+        var actual = planilla.getFechaLimitePago();
+        long dias = actual != null ? java.time.temporal.ChronoUnit.DAYS.between(actual, req.fechaLimitePago()) : 1;
+        if (dias <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La nueva fecha debe ser posterior a la fecha límite actual.");
+        }
+        if (dias > MAX_DIAS_PRORROGA) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Máximo " + MAX_DIAS_PRORROGA + " días adicionales.");
+        }
+        planilla.setFechaLimitePago(req.fechaLimitePago());
+        planillaRepository.save(planilla);
+
+        // FP-15 §2.16.3 — fecha anterior y nueva, con el motivo. Las fechas van como texto:
+        // el serializador de la auditoría no admite LocalDate
+        Map<String, Object> detalle = new LinkedHashMap<>();
+        detalle.put("fechaAnterior", Objects.toString(actual, null));
+        detalle.put("fechaNueva", req.fechaLimitePago().toString());
+        detalle.put("motivo", req.motivo().trim());
+        AuditoriaDetalle.poner(detalle);
+    }
+
     // RF39 — Datos para impresión de planilla
     // ══════════════════════════════════════════════════════════════════════
 
@@ -224,6 +287,7 @@ public class PlanillaService {
         int totalDevueltas   = 0;
         int totalVendidas    = 0;
         BigDecimal sumaGanancia = BigDecimal.ZERO;
+        BigDecimal sumaVendido  = BigDecimal.ZERO;
         List<ItemImpresionPlanillaDTO> items = new ArrayList<>();
 
         for (ItemPlanilla item : itemEntities) {
@@ -232,6 +296,7 @@ public class PlanillaService {
             totalDevueltas   += dto.unidadesDevueltas();
             totalVendidas    += dto.unidadesVendidas();
             sumaGanancia      = sumaGanancia.add(dto.subtotal());
+            sumaVendido = sumaVendido.add(item.precioPublicoEfectivo().multiply(BigDecimal.valueOf(dto.unidadesVendidas())));
             items.add(dto);
         }
 
@@ -244,6 +309,10 @@ public class PlanillaService {
         var comerciante = planilla.getComerciante();
         var usuario     = planilla.getUsuario();
         IdentidadDTO identidad = identidadService.obtener();
+
+        BigDecimal saldo = Boolean.TRUE.equals(planilla.getCerrada())
+                ? totalGanancia.subtract(planilla.getEfectivoRecibido() != null ? planilla.getEfectivoRecibido() : BigDecimal.ZERO).max(BigDecimal.ZERO)
+                : null;
 
         return new PlanillaImpresionResponseDTO(
                 planilla.getId(),
@@ -263,7 +332,14 @@ public class PlanillaService {
                 totalDevueltas,
                 totalVendidas,
                 totalGanancia,
+                totalGanancia,
+                sumaVendido,
                 planilla.getEfectivoRecibido(),
+                planilla.getGananciaComerciante(),
+                planilla.getEsquemaAplicado(),
+                planilla.getValorEsquema(),
+                planilla.getFechaLimitePago(),
+                saldo,
                 new PlanillaImpresionResponseDTO.Identidad(
                         identidad.nombreComercial(),
                         identidad.logoUrl(),

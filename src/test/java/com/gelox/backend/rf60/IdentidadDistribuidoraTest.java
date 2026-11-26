@@ -274,8 +274,7 @@ class IdentidadDistribuidoraTest {
     void excelPedido_llevaNombreComercial() throws Exception {
         PedidoProveedorRepository pedidoRepo = mock(PedidoProveedorRepository.class);
         PedidoProveedorService pedidoService = new PedidoProveedorService(
-                pedidoRepo, null, null, null, null, null, service);
-        ReflectionTestUtils.setField(pedidoService, "plantillaExcel", new ClassPathResource("templates/catalogo.xlsx"));
+                pedidoRepo, null, null, null, null, null, TestHelper.exportador(service), null, null);
         PedidoProveedor pedido = PedidoProveedor.builder()
                 .id(UUID.randomUUID()).fecha(LocalDate.now()).estado(EstadoPedido.PENDIENTE).build();
         pedido.setItems(new ArrayList<>());
@@ -308,7 +307,7 @@ class IdentidadDistribuidoraTest {
         PlanillaComercianteRepository planillaRepo = mock(PlanillaComercianteRepository.class);
         ItemPlanillaRepository itemRepo = mock(ItemPlanillaRepository.class);
         PlanillaService planillaService = new PlanillaService(
-                null, planillaRepo, itemRepo, null, null, null, service);
+                null, planillaRepo, itemRepo, null, null, null, service, null);
 
         Usuario usuario = TestHelper.buildUsuario("uid-ventas", "ventas@gelox-test.com", RolUsuario.ENCARGADO_VENTAS, true);
         Comerciante comerciante = Comerciante.builder().id(UUID.randomUUID()).nombre("Comerciante Test").build();

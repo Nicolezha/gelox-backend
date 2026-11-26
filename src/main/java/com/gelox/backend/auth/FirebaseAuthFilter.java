@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gelox.backend.entities.EstadoDistribuidora;
 import com.gelox.backend.entities.RolUsuario;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.gobierno.AuditoriaService;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.tenant.DistribuidoraEstadoCache;
 import com.gelox.backend.tenant.TenantContext;
@@ -41,6 +42,7 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
     private final FirebaseAuth firebaseAuth;
     private final UsuarioRepository usuarioRepository;
     private final DistribuidoraEstadoCache distribuidoraEstadoCache;
+    private final AuditoriaService auditoriaService;   // RF71 — accesos bloqueados y tokens inválidos
 
     // Contacto de soporte de la plataforma (no de la distribuidora) para el 403 de distribuidora bloqueada
     @Value("${plataforma.soporte.correo:}")
@@ -93,6 +95,11 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
                     return;
                 }
                 if (estado.bloqueada()) {
+                    Map<String, Object> detalle = new LinkedHashMap<>();
+                    detalle.put("estado", estado.valor().name());
+                    detalle.put("ruta", request.getRequestURI());
+                    auditoriaService.registrar("ACCESO_BLOQUEADO", "Distribuidora", tenantId, detalle,
+                            tenantId, usuario);
                     responderBloqueo(response, estado);
                     return;
                 }
@@ -109,6 +116,10 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
 
         } catch (FirebaseAuthException e) {
             log.warn("Token Firebase inválido: {}", e.getMessage());
+            Map<String, Object> detalle = new LinkedHashMap<>();
+            detalle.put("motivo", e.getAuthErrorCode() != null ? e.getAuthErrorCode().name() : String.valueOf(e.getMessage()));
+            detalle.put("ruta", request.getRequestURI());
+            auditoriaService.registrar("TOKEN_INVALIDO", null, null, detalle, null, null);
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token inválido o expirado");
             return;
         } catch (ResponseStatusException e) {

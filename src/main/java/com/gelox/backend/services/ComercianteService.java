@@ -4,6 +4,8 @@ import com.gelox.backend.dto.*;
 import com.gelox.backend.entities.Comerciante;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.gobierno.CuotaService;
+import com.gelox.backend.gobierno.TipoCuota;
 import com.gelox.backend.repositories.ComercianteRepository;
 import com.gelox.backend.repositories.ItemPlanillaRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
@@ -31,6 +33,7 @@ public class ComercianteService {
     private final EventoSistemaService         eventoService;
     private final PlanillaComercianteRepository planillaRepo;
     private final ItemPlanillaRepository        itemPlanillaRepo;
+    private final CuotaService                  cuotaService;   // RF70 — cuotas del plan
 
     // ══════════════════════════════════════════════════════════════════════
     // RF34 — CRUD de comerciantes
@@ -52,6 +55,8 @@ public class ComercianteService {
      * Crea un nuevo comerciante y registra el evento en bitácora.
      */
     public ComercianteResponseDTO crear(CrearComercianteRequest req, Usuario usuarioActual) {
+        // RF70 — con la cuota de comerciantes alcanzada no se guarda nada
+        cuotaService.validar(TipoCuota.COMERCIANTES);
 
         Comerciante comerciante = Comerciante.builder()
                 .nombre(req.nombre())
@@ -119,6 +124,10 @@ public class ComercianteService {
 
         Comerciante comerciante = buscarOFallar(id);
         boolean estadoAnterior  = Boolean.TRUE.equals(comerciante.getActivo());
+        // RF70 — activar un comerciante inactivo ocupa un cupo del plan
+        if (!estadoAnterior && activo) {
+            cuotaService.validar(TipoCuota.COMERCIANTES);
+        }
         comerciante.setActivo(activo);
 
         Comerciante actualizado = comercianteRepo.save(comerciante);

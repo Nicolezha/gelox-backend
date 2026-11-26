@@ -31,6 +31,7 @@ public class VentaService {
     private final ProductoRepository     productoRepository;
     private final EventoSistemaService   eventoSistemaService;
     private final InventarioService      inventarioService;   // RF26
+    private final ConversionUnidadService conversionUnidadService;   // RF64
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS"})
     public VentaResponseDTO iniciarVenta(IniciarVentaRequest req, Usuario usuario) {
@@ -91,10 +92,11 @@ public class VentaService {
                     Producto p               = productosMap.get(item.productoId());
                     BigDecimal precio        = p.getPrecioVenta();
                     int upC                  = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
-                    int totalUnidades        = item.cajas() * upC + item.unidades();
+                    int otras                = conversionUnidadService.aUnidadBase(p, item.unidad(), item.cantidadUnidad());
+                    int totalUnidades        = item.cajas() * upC + item.unidades() + otras;
                     BigDecimal subtotal      = precio.multiply(BigDecimal.valueOf(totalUnidades))
                             .setScale(2, RoundingMode.HALF_UP);
-                    return new ItemCalculoResultado(item.productoId(), item.cajas(), item.unidades(), precio, subtotal);
+                    return new ItemCalculoResultado(item.productoId(), item.cajas(), item.unidades() + otras, precio, subtotal);
                 })
                 .toList();
 
@@ -132,8 +134,7 @@ public class VentaService {
         // 2b. Validar cantidades: cada ítem debe sumar al menos una unidad
         for (ItemVentaRequest item : req.items()) {
             Producto p = productosMap.get(item.productoId());
-            int upC = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
-            if (item.cajas() * upC + item.unidades() <= 0) {
+            if (totalBase(p, item) <= 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         String.format("El ítem '%s' debe tener al menos una unidad.", p.getNombre()));
             }
@@ -142,8 +143,7 @@ public class VentaService {
         // 3. Validar stock suficiente para todos antes de modificar cualquiera
         for (ItemVentaRequest item : req.items()) {
             Producto p = productosMap.get(item.productoId());
-            int upC = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
-            int totalUnidades = item.cajas() * upC + item.unidades();
+            int totalUnidades = totalBase(p, item);
             if (p.getStockActual() < totalUnidades) {
                 throw new StockInsuficienteException(
                         String.format("Stock insuficiente para '%s'. Disponible: %d, solicitado: %d.",
@@ -155,9 +155,7 @@ public class VentaService {
         BigDecimal total = req.items().stream()
                 .map(item -> {
                     Producto p = productosMap.get(item.productoId());
-                    int upC = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
-                    return p.getPrecioVenta()
-                        .multiply(BigDecimal.valueOf(item.cajas() * upC + item.unidades()));
+                    return p.getPrecioVenta().multiply(BigDecimal.valueOf(totalBase(p, item)));
                 })
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
@@ -176,8 +174,9 @@ public class VentaService {
         for (ItemVentaRequest item : req.items()) {
             Producto p           = productosMap.get(item.productoId());
             BigDecimal precio    = p.getPrecioVenta();
-            int upC              = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
-            int totalUnidades    = item.cajas() * upC + item.unidades();
+            int totalUnidades    = totalBase(p, item);
+            // lo que no son cajas queda en unidades base (incluye BOL y demás ya convertidas)
+            int unidadesBase     = totalUnidades - item.cajas() * (p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0);
             BigDecimal subtotal  = precio.multiply(BigDecimal.valueOf(totalUnidades))
                     .setScale(2, RoundingMode.HALF_UP);
 
@@ -185,7 +184,7 @@ public class VentaService {
                     .venta(venta)
                     .producto(p)
                     .cantidadCajas(item.cajas())
-                    .cantidadUnidades(item.unidades())
+                    .cantidadUnidades(unidadesBase)
                     .precioUnitario(precio)
                     .subtotal(subtotal)
                     .build());
@@ -198,7 +197,7 @@ public class VentaService {
                     p.getId(), totalUnidades, TipoMovimiento.SALIDA_VENTA, descripcion, usuario);
 
             itemsResponse.add(new ItemVentaResponseDTO(
-                    p.getId(), p.getNombre(), item.cajas(), item.unidades(), precio, subtotal));
+                    p.getId(), p.getNombre(), item.cajas(), unidadesBase, precio, subtotal));
         }
 
         eventoSistemaService.registrarEvento(
@@ -217,6 +216,16 @@ public class VentaService {
                 itemsResponse,
                 total,
                 venta.getMetodoDePago() != null ? venta.getMetodoDePago().name() : null);
+    }
+
+    /**
+     * Unidades base que lleva el ítem (en las que se descuenta el stock): cajas × unidades_por_caja
+     * (CJ → UN), las unidades sueltas y, si trae otra unidad, su cantidad convertida con factor_conversion.
+     */
+    private int totalBase(Producto p, ItemVentaRequest item) {
+        int upC = p.getUnidadesPorCaja() != null ? p.getUnidadesPorCaja() : 0;
+        return item.cajas() * upC + item.unidades()
+                + conversionUnidadService.aUnidadBase(p, item.unidad(), item.cantidadUnidad());
     }
 
     private VentaResponseDTO toDTO(Venta v) {

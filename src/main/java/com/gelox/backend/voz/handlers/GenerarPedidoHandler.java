@@ -13,18 +13,23 @@ import com.gelox.backend.voz.ResolvedorProducto;
 import com.gelox.backend.voz.VozContexto;
 import com.gelox.backend.voz.VozPendiente;
 import com.gelox.backend.voz.VozResultado;
+import com.gelox.backend.recomendacion.dto.PedidoGeneradoDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * RF52/RF53 — "genera un pedido con 20 cajas de Solo Lack y 15 de Festival".
+ * RF52/RF53 — "genera un pedido con 20 cajas de Solo Lack y 15 de Festival". RF63: se genera un
+ * pedido por proveedor de los productos, y el resumen lo dice antes de confirmar.
  * crearPedido no valida rol y /api/voz/** solo exige estar autenticado, así
  * que el filtro de rol vive aquí.
  */
@@ -104,10 +109,39 @@ public class GenerarPedidoHandler implements IntencionHandler {
             return new VozResultado(false, "No entendí ninguna cantidad válida. Intenta de nuevo.", Map.of(), null);
         }
 
-        CrearPedidoRequest payload = new CrearPedidoRequest(items, "Generado por voz");
-        String textoRespuesta = "Pedido: " + String.join(" y ", descripciones) + ". ¿Confirmas?";
+        // RF63 — se infiere el proveedor de cada producto: un pedido por proveedor
+        Map<UUID, PedidoProveedorService.ProveedorPedido> proveedores;
+        try {
+            proveedores = pedidoProveedorService.proveedoresDe(items.stream().map(ItemPedidoRequest::productoId).toList());
+        } catch (ResponseStatusException e) {
+            return new VozResultado(false, e.getReason() + ". Asígnale uno en el catálogo.", Map.of(), null);
+        }
+        Map<String, List<String>> porProveedor = new LinkedHashMap<>();
+        for (int i = 0; i < items.size(); i++) {
+            PedidoProveedorService.ProveedorPedido proveedor = proveedores.get(items.get(i).productoId());
+            porProveedor.computeIfAbsent(proveedor == null ? "" : proveedor.nombre(), k -> new ArrayList<>())
+                    .add(descripciones.get(i));
+        }
 
-        return new VozResultado(true, textoRespuesta, Map.of("items", datosItems), payload);
+        CrearPedidoRequest payload = new CrearPedidoRequest(items, "Generado por voz");
+        return new VozResultado(true, resumen(porProveedor), Map.of("items", datosItems), payload);
+    }
+
+    /**
+     * Un proveedor: «Pedido a Nutresa: 20 cajas de X y 15 cajas de Y. ¿Confirmas?» (sin proveedor
+     * conocido: «Pedido: …»). Varios: «Se generarán 2 pedidos: a Nutresa, 20 cajas de X; a Proveedor
+     * QA Uno, 15 cajas de Y. ¿Confirmas?».
+     */
+    private static String resumen(Map<String, List<String>> porProveedor) {
+        if (porProveedor.size() == 1) {
+            Map.Entry<String, List<String>> unico = porProveedor.entrySet().iterator().next();
+            String destino = unico.getKey().isEmpty() ? "" : " a " + unico.getKey();
+            return "Pedido" + destino + ": " + String.join(" y ", unico.getValue()) + ". ¿Confirmas?";
+        }
+        List<String> partes = new ArrayList<>();
+        porProveedor.forEach((proveedor, lineas) -> partes.add(
+                "a " + (proveedor.isEmpty() ? "otro proveedor" : proveedor) + ", " + String.join(" y ", lineas)));
+        return "Se generarán " + porProveedor.size() + " pedidos: " + String.join("; ", partes) + ". ¿Confirmas?";
     }
 
     @Override
@@ -115,14 +149,23 @@ public class GenerarPedidoHandler implements IntencionHandler {
     public VozResultado ejecutar(VozPendiente pendiente, Usuario usuario) {
         CrearPedidoRequest req = (CrearPedidoRequest) pendiente.payload();
 
-        Map<String, Object> resultado = pedidoProveedorService.crearPedido(req, usuario);
-        UUID pedidoId = (UUID) resultado.get("pedidoId");
+        List<PedidoProveedorService.PedidoCreado> creados = pedidoProveedorService.crearPedido(req, usuario);
+        PedidoGeneradoDTO generado = PedidoGeneradoDTO.de(creados);
 
+        // Mismas claves que POST /api/recomendaciones/{id}/pedido; pedidoId y exportUrl son del primero
         Map<String, Object> datos = Map.of(
-                "pedidoId", pedidoId,
-                "exportUrl", "/api/inventario/pedidos/" + pedidoId + "/exportar");
+                "pedidoId", generado.pedidoId(),
+                "exportUrl", generado.exportUrl(),
+                "pedidos", generado.pedidos());
 
-        return new VozResultado(true, "Pedido registrado. Ya puedes descargar el archivo.", datos, null);
+        StringBuilder texto = new StringBuilder(creados.size() == 1
+                ? "Pedido registrado. Ya puedes descargar el archivo."
+                : "Se registraron " + creados.size() + " pedidos, uno por proveedor. Ya puedes descargar los archivos.");
+        creados.stream()
+                .map(PedidoProveedorService.PedidoCreado::advertenciaMontoMinimo)
+                .filter(Objects::nonNull)
+                .forEach(a -> texto.append(" Ojo: ").append(a));
+        return new VozResultado(true, texto.toString(), datos, null);
     }
 
     /** Ambiguo si el segundo candidato queda a menos de 0.10 del primero. */

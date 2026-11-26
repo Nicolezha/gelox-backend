@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Representa un pedido generado al proveedor (Nutresa).
+ * Representa un pedido a un proveedor; uno por proveedor (RF63).
  * RF21 — estado inicial PENDIENTE; pasa a RECIBIDO en RF23.
  */
 @Data
@@ -37,6 +37,11 @@ public class PedidoProveedor implements TenantAware {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
+
+    /** RF63 — proveedor al que va el pedido (NOT NULL en la base desde V10). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "proveedor_id")
+    private Proveedor proveedor;
 
     @Column(name = "fecha", nullable = false)
     private LocalDate fecha;

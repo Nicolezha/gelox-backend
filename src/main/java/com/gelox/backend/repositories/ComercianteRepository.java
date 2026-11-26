@@ -20,6 +20,9 @@ public interface ComercianteRepository extends JpaRepository<Comerciante, UUID> 
     /** Búsqueda por nombre (insensible a mayúsculas, coincidencia parcial). */
     List<Comerciante> findByNombreContainingIgnoreCaseOrderByNombreAsc(String nombre);
 
+    /** RF70 — comerciantes activos de la distribuidora, para la cuota del plan. */
+    long countByTenantIdAndActivoTrue(UUID tenantId);
+
     /**
      * Resumen de todas las planillas (abiertas y cerradas) de un comerciante en un rango de fechas (RF35).
      * Retorna: [planillaId, fecha, totalDespachado, totalDevuelto, unidadesVendidas, ganancia, cerrada]

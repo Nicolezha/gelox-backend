@@ -63,6 +63,9 @@ class UsuariosPorDistribuidoraTest {
     @Mock
     EmailService emailService;
 
+    @Mock
+    com.gelox.backend.gobierno.CuotaService cuotaService;
+
     @InjectMocks
     UsuarioService usuarioService;
 

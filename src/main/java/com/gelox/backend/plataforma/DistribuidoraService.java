@@ -1,14 +1,30 @@
 package com.gelox.backend.plataforma;
 
 import com.gelox.backend.entities.Distribuidora;
+import com.gelox.backend.entities.EsquemaLiquidacion;
 import com.gelox.backend.entities.EstadoDistribuidora;
+import com.gelox.backend.entities.PoliticaCredito;
+import com.gelox.backend.entities.PoliticaVencimiento;
 import com.gelox.backend.entities.RolUsuario;
+import com.gelox.backend.entities.TipoEsquemaLiquidacion;
 import com.gelox.backend.entities.TipoEvento;
 import com.gelox.backend.entities.Usuario;
+import com.gelox.backend.exceptions.CampoInvalidoException;
+import com.gelox.backend.gobierno.Auditable;
+import com.gelox.backend.gobierno.Auditoria;
+import com.gelox.backend.gobierno.AuditoriaDetalle;
+import com.gelox.backend.gobierno.AuditoriaRepository;
+import com.gelox.backend.gobierno.CuotaService;
+import com.gelox.backend.gobierno.PlanService;
+import com.gelox.backend.gobierno.PlanSuscripcion;
+import com.gelox.backend.gobierno.PlanSuscripcionRepository;
+import com.gelox.backend.plataforma.dto.AsignarPlanRequest;
 import com.gelox.backend.plataforma.dto.CambiarEstadoRequest;
 import com.gelox.backend.plataforma.dto.CrearDistribuidoraRequest;
 import com.gelox.backend.plataforma.dto.DistribuidoraDTO;
 import com.gelox.backend.repositories.DistribuidoraRepository;
+import com.gelox.backend.repositories.EsquemaLiquidacionRepository;
+import com.gelox.backend.repositories.PoliticaCreditoRepository;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.EmailService;
@@ -26,12 +42,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * RF58/RF59 — Aprovisionamiento y ciclo de vida de distribuidoras (panel del
@@ -51,6 +71,9 @@ public class DistribuidoraService {
     private static final String COLOR_PRIMARIO_DEFECTO = "#1F3864";
     private static final String COLOR_SECUNDARIO_DEFECTO = "#2E75B6";
 
+    /** Cupo inicial de la política de crédito (plazo 0 y SOLO_ALERTA), igual que el sembrado de V10. */
+    private static final BigDecimal CUPO_CREDITO_DEFECTO = BigDecimal.valueOf(50_000);
+
     private static final String ALFABETO_PASSWORD =
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     private static final int LARGO_PASSWORD = 12;
@@ -61,11 +84,17 @@ public class DistribuidoraService {
     private final EventoSistemaService eventoSistemaService;
     private final EmailService emailService;
     private final DistribuidoraEstadoCache distribuidoraEstadoCache;
+    private final PlanSuscripcionRepository planRepository;   // RF70 — distribuidora.plan_id
+    private final CuotaService cuotaService;                   // RF70 — uso de cuotas en el detalle
+    private final AuditoriaRepository auditoriaRepository;     // RF70 — fechaPlan (último PLAN_ASIGNAR)
+    private final PoliticaCreditoRepository politicaCreditoRepository;         // RF65 — política inicial
+    private final EsquemaLiquidacionRepository esquemaLiquidacionRepository;   // RF66 — esquema inicial
 
     // ─────────────────────────────────────────────────────────────────
     // RF58 — Aprovisionamiento
     // ─────────────────────────────────────────────────────────────────
 
+    @Auditable(accion = "DISTRIBUIDORA_APROVISIONAR", entidad = "Distribuidora")
     @Transactional
     @RequiereRol("SUPERADMINISTRADOR")
     public DistribuidoraDTO aprovisionar(CrearDistribuidoraRequest req) {
@@ -79,6 +108,11 @@ public class DistribuidoraService {
         if (distribuidoraRepository.existsBySubdominio(subdominio)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ese subdominio ya está en uso");
         }
+        // RF70 — plan_suscripcion.id (antes de consultar Firebase); distribuidora.plan se llena con su nombre
+        PlanSuscripcion plan = (req.planId() == null ? Optional.<PlanSuscripcion>empty()
+                : planRepository.findById(req.planId()))
+                .orElseThrow(() -> new CampoInvalidoException(HttpStatus.BAD_REQUEST,
+                        "Selecciona un plan válido", "planId"));
         if (usuarioRepository.existsByCorreo(correo) || existeEnFirebase(correo)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un usuario con ese correo");
         }
@@ -91,11 +125,15 @@ public class DistribuidoraService {
                 .correoGerente(correo)
                 .telefono(req.telefono())
                 .direccion(req.direccion())
-                .plan(req.plan().trim())
+                .plan(plan.getNombre())
+                .planId(plan.getId())
                 .estado(EstadoDistribuidora.PRUEBA)
                 .colorPrimario(COLOR_PRIMARIO_DEFECTO)
                 .colorSecundario(COLOR_SECUNDARIO_DEFECTO)
                 .build());
+
+        // Antes de crear la cuenta en Firebase: si esto falla no queda ningún usuario por revertir
+        crearConfiguracionComercialInicial(distribuidora.getId());
 
         UserRecord firebaseUser;
         try {
@@ -137,13 +175,20 @@ public class DistribuidoraService {
                 "Distribuidora aprovisionada: " + distribuidora.getNombreComercial(), gerente.getId());
 
         boolean correoEnviado = enviarCorreoAcceso(correo, req.nombreGerente().trim());
-        return DistribuidoraDTO.from(distribuidora, correoEnviado);
+
+        Map<String, Object> detalle = new LinkedHashMap<>();
+        detalle.put("plan", plan.getNombre());
+        detalle.put("correoGerente", correo);
+        AuditoriaDetalle.poner(detalle);
+        return DistribuidoraDTO.from(distribuidora, correoEnviado, new DistribuidoraDTO.Extra(
+                gerente.getNombre(), plan.getNombre(), distribuidora.getCreatedAt(), 1L, null, null));
     }
 
     // ─────────────────────────────────────────────────────────────────
     // RF59 — Ciclo de vida
     // ─────────────────────────────────────────────────────────────────
 
+    @Auditable(accion = "DISTRIBUIDORA_CAMBIAR_ESTADO", entidad = "Distribuidora")
     @Transactional
     @RequiereRol("SUPERADMINISTRADOR")
     public DistribuidoraDTO cambiarEstado(UUID id, CambiarEstadoRequest req) {
@@ -171,9 +216,67 @@ public class DistribuidoraService {
             revocarSesionesDeLaDistribuidora(id);
         }
 
-        return DistribuidoraDTO.from(distribuidora, null);
+        Map<String, Object> detalle = new LinkedHashMap<>();
+        detalle.put("estadoAnterior", anterior);
+        detalle.put("estadoNuevo", req.estado());
+        detalle.put("motivo", req.motivo().trim());
+        AuditoriaDetalle.poner(detalle);
+        return aDTO(distribuidora, null, false, null);
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // RF70 — Asignar plan
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Aplica el plan de inmediato; el consumo no se reinicia. Si el uso actual ya supera alguna
+     * cuota del plan nuevo se asigna igual y la respuesta trae {@code advertencias} (FP-15 §2.16.2):
+     * la distribuidora solo deja de poder crear más de ese recurso.
+     */
+    @Auditable(accion = "PLAN_ASIGNAR", entidad = "Distribuidora")
+    @Transactional
+    @RequiereRol("SUPERADMINISTRADOR")
+    public DistribuidoraDTO asignarPlan(UUID id, AsignarPlanRequest req) {
+        Distribuidora distribuidora = buscarPorId(id);
+        if (distribuidora.getEstado() == EstadoDistribuidora.INACTIVO) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La distribuidora está inactiva: no admite cambios de plan");
+        }
+        if (req == null || req.planId() == null) {
+            throw new CampoInvalidoException(HttpStatus.BAD_REQUEST, "El plan es obligatorio", "planId");
+        }
+        if (req.motivo() == null || req.motivo().isBlank()) {
+            throw new CampoInvalidoException(HttpStatus.BAD_REQUEST, "El motivo es obligatorio", "motivo");
+        }
+        PlanSuscripcion nuevo = planRepository.findById(req.planId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plan no encontrado"));
+        if (nuevo.getId().equals(distribuidora.getPlanId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La distribuidora ya tiene ese plan");
+        }
+
+        String planAnterior = Optional.ofNullable(distribuidora.getPlanId())
+                .flatMap(planRepository::findById)
+                .map(PlanSuscripcion::getNombre)
+                .orElse(distribuidora.getPlan());
+        List<CuotaService.CuotaExcedida> excedidas = cuotaService.excedidas(id, nuevo);
+        boolean hayExcedidas = excedidas != null && !excedidas.isEmpty();
+
+        distribuidora.setPlanId(nuevo.getId());
+        distribuidora.setPlan(nuevo.getNombre());
+        distribuidora = distribuidoraRepository.save(distribuidora);
+
+        Map<String, Object> detalle = new LinkedHashMap<>();
+        detalle.put("planAnterior", planAnterior);
+        detalle.put("planNuevo", nuevo.getNombre());
+        detalle.put("motivo", req.motivo().trim());
+        detalle.put("cuotas", PlanService.cuotasDe(nuevo));
+        if (hayExcedidas) detalle.put("cuotasExcedidas", excedidas);
+        AuditoriaDetalle.poner(detalle);
+
+        return aDTO(distribuidora, null, true, hayExcedidas ? excedidas : null, LocalDateTime.now(ZONA_BOGOTA));
+    }
+
+    @Auditable(accion = "DISTRIBUIDORA_REENVIAR_ACCESO", entidad = "Distribuidora")
     @Transactional
     @RequiereRol("SUPERADMINISTRADOR")
     public DistribuidoraDTO reenviarAcceso(UUID id) {
@@ -192,7 +295,8 @@ public class DistribuidoraService {
         }
 
         boolean correoEnviado = enviarCorreoAcceso(gerente.getCorreo(), gerente.getNombre());
-        return DistribuidoraDTO.from(distribuidora, correoEnviado);
+        AuditoriaDetalle.poner(Map.of("correoGerente", gerente.getCorreo()));
+        return aDTO(distribuidora, correoEnviado, false, null);
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -200,8 +304,11 @@ public class DistribuidoraService {
     // ─────────────────────────────────────────────────────────────────
 
     @RequiereRol("SUPERADMINISTRADOR")
+    @Transactional(readOnly = true)
     public List<DistribuidoraDTO> listar(String estado, String q) {
         String filtroTexto = q == null ? "" : q.trim().toLowerCase();
+        Map<UUID, String> nombresPlan = planRepository.findAll().stream()
+                .collect(Collectors.toMap(PlanSuscripcion::getId, PlanSuscripcion::getNombre));
         return distribuidoraRepository.findAll().stream()
                 .filter(d -> estado == null || estado.isBlank() || d.getEstado().name().equalsIgnoreCase(estado))
                 .filter(d -> filtroTexto.isEmpty()
@@ -209,13 +316,50 @@ public class DistribuidoraService {
                         || d.getNit().toLowerCase().contains(filtroTexto)
                         || d.getSubdominio().toLowerCase().contains(filtroTexto))
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                .map(d -> DistribuidoraDTO.from(d, null))
+                .map(d -> DistribuidoraDTO.from(d, null, new DistribuidoraDTO.Extra(
+                        nombreGerente(d), nombresPlan.getOrDefault(d.getPlanId(), d.getPlan()), fechaPlan(d),
+                        usuarioRepository.countByTenantIdAndActivoTrue(d.getId()), null, null)))
                 .toList();
     }
 
+    /** Detalle con el uso de cada cuota ({usado, limite}) contra el plan asignado. */
     @RequiereRol("SUPERADMINISTRADOR")
+    @Transactional(readOnly = true)
     public DistribuidoraDTO obtener(UUID id) {
-        return DistribuidoraDTO.from(buscarPorId(id), null);
+        return aDTO(buscarPorId(id), null, true, null);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // DTO del panel
+    // ─────────────────────────────────────────────────────────────────
+
+    private DistribuidoraDTO aDTO(Distribuidora d, Boolean correoEnviado, boolean conUso,
+                                  List<CuotaService.CuotaExcedida> advertencias) {
+        return aDTO(d, correoEnviado, conUso, advertencias, fechaPlan(d));
+    }
+
+    private DistribuidoraDTO aDTO(Distribuidora d, Boolean correoEnviado, boolean conUso,
+                                  List<CuotaService.CuotaExcedida> advertencias, LocalDateTime fechaPlan) {
+        PlanSuscripcion plan = Optional.ofNullable(d.getPlanId()).flatMap(planRepository::findById).orElse(null);
+        return DistribuidoraDTO.from(d, correoEnviado, new DistribuidoraDTO.Extra(
+                nombreGerente(d),
+                plan != null ? plan.getNombre() : d.getPlan(),
+                fechaPlan,
+                usuarioRepository.countByTenantIdAndActivoTrue(d.getId()),
+                conUso ? cuotaService.uso(d.getId(), plan) : null,
+                advertencias));
+    }
+
+    /** Fecha del último PLAN_ASIGNAR de la distribuidora o, si nunca cambió de plan, la de su alta. */
+    private LocalDateTime fechaPlan(Distribuidora d) {
+        return auditoriaRepository
+                .findFirstByAccionAndEntidadIdOrderByFechaHoraDesc("PLAN_ASIGNAR", d.getId())
+                .map(Auditoria::getFechaHora)
+                .orElse(d.getCreatedAt());
+    }
+
+    private static String nombreGerente(Distribuidora d) {
+        return d.getGerenteTitular() != null ? d.getGerenteTitular().getNombre() : null;
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -259,6 +403,20 @@ public class DistribuidoraService {
             log.warn("No se pudo enviar el correo de acceso a {}: {}", correo, e.getMessage());
             return false;
         }
+    }
+
+    /** Sin estas dos filas la distribuidora no podría despachar ni liquidar planillas (RF65, RF66). */
+    private void crearConfiguracionComercialInicial(UUID tenantId) {
+        politicaCreditoRepository.save(PoliticaCredito.builder()
+                .tenantId(tenantId)
+                .cupo(CUPO_CREDITO_DEFECTO)
+                .plazoDias(0)
+                .politicaVencimiento(PoliticaVencimiento.SOLO_ALERTA)
+                .build());
+        esquemaLiquidacionRepository.save(EsquemaLiquidacion.builder()
+                .tenantId(tenantId)
+                .tipo(TipoEsquemaLiquidacion.MARGEN)
+                .build());
     }
 
     /** El Superadministrador no tiene TenantContext: se fija temporalmente para registrar el evento. */

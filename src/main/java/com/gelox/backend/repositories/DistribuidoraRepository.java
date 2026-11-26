@@ -3,6 +3,7 @@ package com.gelox.backend.repositories;
 import com.gelox.backend.entities.Distribuidora;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,4 +14,9 @@ public interface DistribuidoraRepository extends JpaRepository<Distribuidora, UU
     boolean existsByNit(String nit);
 
     boolean existsBySubdominio(String subdominio);
+
+    /** RF70 — distribuidoras con el plan asignado (detalle del plan, renombrarlo, no borrarlo). */
+    List<Distribuidora> findByPlanId(UUID planId);
+
+    boolean existsByPlanId(UUID planId);
 }

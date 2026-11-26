@@ -57,6 +57,9 @@ class VozControllerTest {
     DistribuidoraEstadoCache distribuidoraEstadoCache;
 
     @MockBean
+    com.gelox.backend.gobierno.AuditoriaService auditoriaService;   // RF71 — la usa FirebaseAuthFilter
+
+    @MockBean
     UsuarioRepository usuarioRepository;
 
     private Usuario usuarioActivo;

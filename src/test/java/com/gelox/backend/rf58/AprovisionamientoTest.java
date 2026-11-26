@@ -1,13 +1,19 @@
 package com.gelox.backend.rf58;
 
 import com.gelox.backend.entities.Distribuidora;
+import com.gelox.backend.entities.EsquemaLiquidacion;
 import com.gelox.backend.entities.EstadoDistribuidora;
+import com.gelox.backend.entities.PoliticaCredito;
+import com.gelox.backend.entities.PoliticaVencimiento;
 import com.gelox.backend.entities.RolUsuario;
+import com.gelox.backend.entities.TipoEsquemaLiquidacion;
 import com.gelox.backend.entities.Usuario;
 import com.gelox.backend.plataforma.DistribuidoraService;
 import com.gelox.backend.plataforma.dto.CrearDistribuidoraRequest;
 import com.gelox.backend.plataforma.dto.DistribuidoraDTO;
 import com.gelox.backend.repositories.DistribuidoraRepository;
+import com.gelox.backend.repositories.EsquemaLiquidacionRepository;
+import com.gelox.backend.repositories.PoliticaCreditoRepository;
 import com.gelox.backend.repositories.UsuarioRepository;
 import com.gelox.backend.services.EmailService;
 import com.gelox.backend.services.EventoSistemaService;
@@ -19,6 +25,7 @@ import com.google.firebase.auth.UserRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
@@ -63,13 +70,38 @@ class AprovisionamientoTest {
     @Mock
     DistribuidoraEstadoCache distribuidoraEstadoCache;
 
+    @Mock
+    com.gelox.backend.gobierno.PlanSuscripcionRepository planRepository;
+
+    @Mock
+    com.gelox.backend.gobierno.CuotaService cuotaService;
+
+    @Mock
+    com.gelox.backend.gobierno.AuditoriaRepository auditoriaRepository;
+
+    @Mock
+    PoliticaCreditoRepository politicaCreditoRepository;
+
+    @Mock
+    EsquemaLiquidacionRepository esquemaLiquidacionRepository;
+
     @InjectMocks
     DistribuidoraService distribuidoraService;
+
+    private static final UUID PLAN_BASICO = UUID.randomUUID();
+
+    /** RF70 — el plan BASICO del formulario existe en plan_suscripcion (V9). */
+    @org.junit.jupiter.api.BeforeEach
+    void planBasicoExiste() {
+        org.mockito.Mockito.lenient().when(planRepository.findById(PLAN_BASICO))
+                .thenReturn(java.util.Optional.of(com.gelox.backend.gobierno.PlanSuscripcion.builder()
+                        .id(PLAN_BASICO).nombre("BASICO").build()));
+    }
 
     private CrearDistribuidoraRequest requestValido() {
         return new CrearDistribuidoraRequest(
                 "Helados Prueba S.A.S.", "900123456-7", "Helados Prueba", "helados-prueba",
-                "Ayde Prueba", "gerente@heladosprueba.com", "3001234567", "Calle 1 #2-3", "BASICO");
+                "Ayde Prueba", "gerente@heladosprueba.com", "3001234567", "Calle 1 #2-3", PLAN_BASICO);
     }
 
     private Distribuidora distribuidoraGuardada(UUID id) {
@@ -127,6 +159,22 @@ class AprovisionamientoTest {
             assertThat(resultado.estado()).isEqualTo(EstadoDistribuidora.PRUEBA);
             assertThat(resultado.correoEnviado()).isTrue();
             verify(usuarioRepository).save(argThatTenantId(distribuidoraId));
+
+            // RF65 / RF66 — nace con política de crédito por defecto y esquema MARGEN
+            ArgumentCaptor<PoliticaCredito> politica = ArgumentCaptor.forClass(PoliticaCredito.class);
+            verify(politicaCreditoRepository).save(politica.capture());
+            assertThat(politica.getValue().getTenantId()).isEqualTo(distribuidoraId);
+            assertThat(politica.getValue().getComerciante()).isNull();
+            assertThat(politica.getValue().getCupo()).isEqualByComparingTo("50000");
+            assertThat(politica.getValue().getPlazoDias()).isZero();
+            assertThat(politica.getValue().getPoliticaVencimiento()).isEqualTo(PoliticaVencimiento.SOLO_ALERTA);
+            assertThat(politica.getValue().getActivo()).isTrue();
+
+            ArgumentCaptor<EsquemaLiquidacion> esquema = ArgumentCaptor.forClass(EsquemaLiquidacion.class);
+            verify(esquemaLiquidacionRepository).save(esquema.capture());
+            assertThat(esquema.getValue().getTenantId()).isEqualTo(distribuidoraId);
+            assertThat(esquema.getValue().getTipo()).isEqualTo(TipoEsquemaLiquidacion.MARGEN);
+            assertThat(esquema.getValue().getValor()).isNull();
             verify(emailService).enviarCorreoCuentaCreada(
                     "gerente@heladosprueba.com", "Ayde Prueba", "ADMINISTRADOR", "https://gelox/reset?oob=abc");
         }

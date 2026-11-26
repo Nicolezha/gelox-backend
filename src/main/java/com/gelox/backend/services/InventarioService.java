@@ -225,7 +225,7 @@ public class InventarioService {
                 p.getId().toString(),
                 p.getCodigoTecnico(),
                 p.getNombre(),
-                p.getCategoria() != null ? p.getCategoria().name() : null,
+                p.getCategoria() != null ? p.getCategoria().getNombre() : null,
                 p.getStockActual(),
                 p.getStockMinimo(),
                 p.getStockMedio()

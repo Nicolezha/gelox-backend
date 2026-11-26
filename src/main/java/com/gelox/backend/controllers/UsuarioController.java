@@ -3,6 +3,7 @@ package com.gelox.backend.controllers;
 import com.gelox.backend.dto.CrearUsuarioDTO;
 import com.gelox.backend.dto.EditarUsuarioDTO;
 import com.gelox.backend.dto.UsuarioResponseDTO;
+import com.gelox.backend.gobierno.CuotaAlcanzadaException;
 import com.gelox.backend.services.SupabaseStorageService;
 import com.gelox.backend.services.UsuarioService;
 import jakarta.validation.Valid;
@@ -36,6 +37,8 @@ public class UsuarioController {
             return ResponseEntity.ok(usuarioService.obtenerUsuario(id));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (CuotaAlcanzadaException e) {
+            throw e;   // RF70 — el 409 de cuota sale con su cuerpo JSON (GlobalExceptionHandler)
         } catch (ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
         }
@@ -49,6 +52,8 @@ public class UsuarioController {
                     .body(usuarioService.crearUsuario(dto));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (CuotaAlcanzadaException e) {
+            throw e;   // RF70 — el 409 de cuota sale con su cuerpo JSON (GlobalExceptionHandler)
         } catch (ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
         } catch (Exception e) {
@@ -80,6 +85,8 @@ public class UsuarioController {
                     .body(usuarioService.crearUsuario(dto));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (CuotaAlcanzadaException e) {
+            throw e;   // RF70 — el 409 de cuota sale con su cuerpo JSON (GlobalExceptionHandler)
         } catch (ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
         } catch (Exception e) {
@@ -96,6 +103,8 @@ public class UsuarioController {
             return ResponseEntity.ok(usuarioService.editarUsuario(id, dto));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (CuotaAlcanzadaException e) {
+            throw e;   // RF70 — el 409 de cuota sale con su cuerpo JSON (GlobalExceptionHandler)
         } catch (ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
         } catch (Exception e) {
@@ -125,6 +134,8 @@ public class UsuarioController {
             return ResponseEntity.ok(usuarioService.editarUsuario(id, dto));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (CuotaAlcanzadaException e) {
+            throw e;   // RF70 — el 409 de cuota sale con su cuerpo JSON (GlobalExceptionHandler)
         } catch (ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
         } catch (Exception e) {
@@ -140,6 +151,8 @@ public class UsuarioController {
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (CuotaAlcanzadaException e) {
+            throw e;   // RF70 — el 409 de cuota sale con su cuerpo JSON (GlobalExceptionHandler)
         } catch (ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
         } catch (Exception e) {
@@ -155,6 +168,8 @@ public class UsuarioController {
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (CuotaAlcanzadaException e) {
+            throw e;   // RF70 — el 409 de cuota sale con su cuerpo JSON (GlobalExceptionHandler)
         } catch (ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
         } catch (Exception e) {

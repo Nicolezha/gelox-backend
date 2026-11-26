@@ -18,7 +18,9 @@ public record ItemImpresionPlanillaDTO(
         int        unidadesDevueltas,
         int        unidadesVendidas,
         BigDecimal precioVenta,
-        BigDecimal subtotal
+        BigDecimal subtotal,
+        BigDecimal precioPublico,
+        BigDecimal gananciaComerciante
 ) {
     public static ItemImpresionPlanillaDTO from(ItemPlanilla item) {
         var prod     = item.getProducto();
@@ -29,12 +31,14 @@ public record ItemImpresionPlanillaDTO(
                 prod.getId(),
                 prod.getNombre(),
                 prod.getCodigoTecnico(),
-                prod.getCategoria() != null ? prod.getCategoria().name() : null,
+                prod.getCategoria() != null ? prod.getCategoria().getNombre() : null,
                 item.getUnidadesDespachadas(),
                 item.getUnidadesDevueltas(),
                 vendidas,
                 item.getPrecioVenta(),
-                subtotal
+                subtotal,
+                item.getPrecioPublico(),
+                item.getGananciaComerciante()
         );
     }
 }

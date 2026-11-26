@@ -59,6 +59,9 @@ class FirebaseAuthFilterTenantTest {
     FirebaseToken decoded;
 
     @Mock
+    com.gelox.backend.gobierno.AuditoriaService auditoriaService;
+
+    @Mock
     FilterChain cadena;
 
     FirebaseAuthFilter filtro;
@@ -67,7 +70,7 @@ class FirebaseAuthFilterTenantTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        filtro = new FirebaseAuthFilter(firebaseAuth, usuarioRepository, distribuidoraEstadoCache);
+        filtro = new FirebaseAuthFilter(firebaseAuth, usuarioRepository, distribuidoraEstadoCache, auditoriaService);
         ReflectionTestUtils.setField(filtro, "correoSoporte", "soporte@gelox.test");
         ReflectionTestUtils.setField(filtro, "whatsappSoporte", "573000000000");
 

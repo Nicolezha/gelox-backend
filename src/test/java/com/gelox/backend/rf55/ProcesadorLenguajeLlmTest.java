@@ -44,12 +44,18 @@ class ProcesadorLenguajeLlmTest {
     @Mock
     ClasificadorIntencion clasificador;
 
+    @Mock
+    com.gelox.backend.gobierno.CuotaService cuotaService;
+
     @InjectMocks
     ProcesadorLenguajeLlm procesador;
 
     @BeforeEach
     void setUp() {
         when(cliente.configurado()).thenReturn(true);
+        // RF70 — con cupo de IA en el mes (la cuota agotada se prueba en rf71)
+        org.mockito.Mockito.lenient().when(cuotaService.disponible(com.gelox.backend.gobierno.TipoCuota.LLAMADAS_IA_MES))
+                .thenReturn(true);
     }
 
     private void llmResponde(String json) throws Exception {

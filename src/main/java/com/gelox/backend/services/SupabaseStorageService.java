@@ -1,5 +1,11 @@
 package com.gelox.backend.services;
 
+import com.gelox.backend.gobierno.ArchivoAlmacenado;
+import com.gelox.backend.gobierno.ArchivoAlmacenadoRepository;
+import com.gelox.backend.gobierno.CuotaService;
+import com.gelox.backend.gobierno.TipoCuota;
+import com.gelox.backend.tenant.TenantContext;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -22,6 +28,7 @@ import java.util.UUID;
  *   supabase.service-key — service_role key de Supabase
  *   supabase.bucket    — nombre del bucket (ej. "fotos")
  */
+@Slf4j
 @Service
 public class SupabaseStorageService {
 
@@ -33,15 +40,21 @@ public class SupabaseStorageService {
     private final String serviceKey;
     private final String bucket;
     private final HttpClient httpClient;
+    private final CuotaService cuotaService;                     // RF70 — cuota ALMACENAMIENTO_MB
+    private final ArchivoAlmacenadoRepository archivoRepository; // RF70 — uso por distribuidora
 
     public SupabaseStorageService(
             @Value("${supabase.url}")         String supabaseUrl,
             @Value("${supabase.service-key}") String serviceKey,
-            @Value("${supabase.bucket:fotos}") String bucket) {
+            @Value("${supabase.bucket:fotos}") String bucket,
+            CuotaService cuotaService,
+            ArchivoAlmacenadoRepository archivoRepository) {
         this.supabaseUrl = supabaseUrl;
         this.serviceKey  = serviceKey;
         this.bucket      = bucket;
         this.httpClient  = HttpClient.newHttpClient();
+        this.cuotaService = cuotaService;
+        this.archivoRepository = archivoRepository;
     }
 
     /**
@@ -72,6 +85,12 @@ public class SupabaseStorageService {
                               String nombreArchivo) {
         validarArchivo(archivo, mimePermitidos);
 
+        // RF70 — bytes usados + este archivo contra max_almacenamiento_mb, antes de subir
+        UUID tenantId = TenantContext.get();
+        if (tenantId != null) {
+            cuotaService.validar(TipoCuota.ALMACENAMIENTO_MB, archivo.getSize());
+        }
+
         String nombreObjeto = carpeta + "/" + nombreArchivo;
         String uploadUrl    = supabaseUrl + "/storage/v1/object/" + bucket + "/" + nombreObjeto;
 
@@ -98,7 +117,24 @@ public class SupabaseStorageService {
                     "No se pudo conectar con Supabase Storage: " + e.getMessage());
         }
 
-        return supabaseUrl + "/storage/v1/object/public/" + bucket + "/" + nombreObjeto;
+        String url = supabaseUrl + "/storage/v1/object/public/" + bucket + "/" + nombreObjeto;
+        registrarArchivo(tenantId, carpeta, url, archivo.getSize());
+        return url;
+    }
+
+    /** RF70 — fila en archivo_almacenado; si falla, el archivo ya subido se conserva. */
+    private void registrarArchivo(UUID tenantId, String carpeta, String url, long bytes) {
+        if (tenantId == null) return;
+        try {
+            archivoRepository.save(ArchivoAlmacenado.builder()
+                    .tenantId(tenantId)
+                    .carpeta(carpeta)
+                    .url(url)
+                    .bytes(bytes)
+                    .build());
+        } catch (Exception e) {
+            log.error("No se pudo registrar el archivo {} de la distribuidora {}: {}", url, tenantId, e.getMessage());
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────

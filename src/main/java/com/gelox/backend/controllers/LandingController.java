@@ -3,7 +3,6 @@ package com.gelox.backend.controllers;
 import com.gelox.backend.dto.CatalogoProductoPublicoDTO;
 import com.gelox.backend.dto.IdentidadDTO;
 import com.gelox.backend.dto.InfoNegocioDTO;
-import com.gelox.backend.entities.CategoriaProducto;
 import com.gelox.backend.services.LandingService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,17 +36,17 @@ public class LandingController {
 
     @GetMapping("/productos/paletas")
     public ResponseEntity<List<CatalogoProductoPublicoDTO>> paletas() {
-        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO, CategoriaProducto.PALETAS));
+        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO, "PALETAS"));
     }
 
     @GetMapping("/productos/conos")
     public ResponseEntity<List<CatalogoProductoPublicoDTO>> conos() {
-        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO, CategoriaProducto.CONOS));
+        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO, "CONOS"));
     }
 
     @GetMapping("/productos/familiares")
     public ResponseEntity<List<CatalogoProductoPublicoDTO>> familiares() {
-        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO, CategoriaProducto.FAMILIARES));
+        return ResponseEntity.ok(landingService.productos(SUBDOMINIO_PILOTO, "FAMILIARES"));
     }
 
     @GetMapping("/whatsapp")

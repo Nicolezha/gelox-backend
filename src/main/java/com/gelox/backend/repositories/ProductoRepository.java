@@ -1,6 +1,5 @@
 package com.gelox.backend.repositories;
 
-import com.gelox.backend.entities.CategoriaProducto;
 import com.gelox.backend.entities.Producto;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,11 +15,18 @@ public interface ProductoRepository extends JpaRepository<Producto, UUID> {
 
     List<Producto> findByActivoTrue();
 
+    /** RF67 — productos activos de un proveedor, para su tabla de homologación. */
+    List<Producto> findByProveedorIdAndActivoTrueOrderByNombreAsc(UUID proveedorId);
+
     List<Producto> findByActivoTrueOrderByNombreAsc();
 
-    List<Producto> findByActivoTrueAndCategoria(CategoriaProducto categoria);
+    /** RF64 — productos activos de la categoría de tabla con ese nombre (sin distinguir mayúsculas). */
+    List<Producto> findByActivoTrueAndCategoriaNombreIgnoreCase(String nombreCategoria);
 
     boolean existsByCodigoTecnico(String codigoTecnico);
+
+    /** RF70 — productos activos de la distribuidora, para la cuota del plan. */
+    long countByTenantIdAndActivoTrue(UUID tenantId);
 
     /** RF24 — solo productos con stock mínimo configurado (> 0); sin mínimo no hay alerta. */
     @Query("SELECT p FROM Producto p WHERE p.activo = true AND p.stockMinimo > 0 AND p.stockActual <= p.stockMinimo ORDER BY p.nombre ASC")

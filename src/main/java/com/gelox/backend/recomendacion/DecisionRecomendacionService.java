@@ -25,6 +25,7 @@ import com.gelox.backend.repositories.RecomendacionCompraRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.services.EventoSistemaService;
 import com.gelox.backend.services.PedidoProveedorService;
+import com.gelox.backend.services.PedidoProveedorService.PedidoCreado;
 import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -154,11 +155,15 @@ public class DecisionRecomendacionService {
             throw new IllegalArgumentException("Aprueba al menos un producto");
         }
 
+        // RF63 — crearPedido parte los ítems en un pedido por proveedor
         String prefijo = id.toString().substring(0, 8);
-        Map<String, Object> resultado = pedidoService.crearPedido(
-                new CrearPedidoRequest(items, "Generado desde recomendación #" + prefijo), usuario);
-        UUID pedidoId = (UUID) resultado.get("pedidoId");
+        List<PedidoCreado> creados = pedidoService.crearPedido(new CrearPedidoRequest(items, nota(id)), usuario);
+        if (creados.isEmpty()) {
+            throw new IllegalStateException("No se generó ningún pedido");
+        }
 
+        // La recomendación guarda el primero; los demás se encuentran por la nota (pedidosDe)
+        UUID pedidoId = creados.get(0).pedidoId();
         PedidoProveedor pedido = pedidoRepo.findById(pedidoId)
                 .filter(TenantContext::pertenece)
                 .orElseThrow(() -> new NoSuchElementException("Pedido no encontrado: " + pedidoId));
@@ -166,13 +171,33 @@ public class DecisionRecomendacionService {
         recomendacion.setEstado(EstadoRecomendacion.PEDIDO_GENERADO);
         recomendacionRepo.save(recomendacion);
 
+        String numeros = creados.stream()
+                .map(c -> "#" + c.pedidoId().toString().substring(0, 8).toUpperCase() + " a " + c.proveedorNombre())
+                .collect(Collectors.joining(", "));
         eventoService.registrarEvento(
                 TipoEvento.PEDIDO_DESDE_RECOMENDACION,
-                String.format("Pedido #%s generado desde la recomendación #%s: %d referencias.",
-                        pedidoId.toString().substring(0, 8).toUpperCase(), prefijo.toUpperCase(), items.size()),
+                String.format("%s %s generado%s desde la recomendación #%s: %d referencias.",
+                        creados.size() == 1 ? "Pedido" : creados.size() + " pedidos", numeros,
+                        creados.size() == 1 ? "" : "s", prefijo.toUpperCase(), items.size()),
                 usuario.getId());
 
-        return new PedidoGeneradoDTO(pedidoId, "/api/inventario/pedidos/" + pedidoId + "/exportar");
+        return PedidoGeneradoDTO.de(creados);
+    }
+
+    /** Nota de los pedidos de una recomendación; la comparten todos sus pedidos (uno por proveedor). */
+    private static String nota(UUID recomendacionId) {
+        return "Generado desde recomendación #" + recomendacionId.toString().substring(0, 8);
+    }
+
+    /** Pedidos de la recomendación: el guardado en ella y los demás proveedores con la misma nota. */
+    private List<PedidoProveedor> pedidosDe(RecomendacionCompra recomendacion) {
+        PedidoProveedor principal = recomendacion.getPedidoProveedor();
+        if (principal == null) return List.of();
+        List<PedidoProveedor> pedidos = new ArrayList<>(pedidoRepo.findByNotas(nota(recomendacion.getId())));
+        if (pedidos.stream().noneMatch(p -> p.getId().equals(principal.getId()))) {
+            pedidos.add(0, principal);
+        }
+        return pedidos;
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -233,13 +258,14 @@ public class DecisionRecomendacionService {
     private Double precisionCantidad(List<RecomendacionCompra> recomendaciones) {
         List<Double> precisiones = new ArrayList<>();
         for (RecomendacionCompra recomendacion : recomendaciones) {
-            PedidoProveedor pedido = recomendacion.getPedidoProveedor();
-            if (pedido == null) continue;
+            List<PedidoProveedor> pedidos = pedidosDe(recomendacion);
+            if (pedidos.isEmpty()) continue;
 
-            Map<UUID, ItemPedidoProveedor> itemsPedido = pedido.getEstado() == EstadoPedido.RECIBIDO
-                    ? itemPedidoRepo.findByPedidoIdWithProducto(pedido.getId()).stream()
-                            .collect(Collectors.toMap(i -> i.getProducto().getId(), Function.identity(), (a, b) -> a))
-                    : Map.of();
+            // Un pedido por proveedor: se juntan los ítems de los que ya se recibieron
+            Map<UUID, ItemPedidoProveedor> itemsPedido = pedidos.stream()
+                    .filter(p -> p.getEstado() == EstadoPedido.RECIBIDO)
+                    .flatMap(p -> itemPedidoRepo.findByPedidoIdWithProducto(p.getId()).stream())
+                    .collect(Collectors.toMap(i -> i.getProducto().getId(), Function.identity(), (a, b) -> a));
 
             for (ItemRecomendacion item : recomendacion.getItems()) {
                 boolean decidido = item.getDecision() == DecisionItem.APROBADO

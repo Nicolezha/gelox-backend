@@ -61,6 +61,8 @@ public class SecurityConfig {
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
+        // El frontend lee el nombre del archivo exportado (RF67/RF68) de este encabezado.
+        config.setExposedHeaders(List.of("Content-Disposition", "X-Productos-Sin-Codigo", "X-Productos-No-Ubicados"));
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

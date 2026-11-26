@@ -29,4 +29,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
      * sesiones al suspenderla o inactivarla.
      */
     List<Usuario> findByTenantId(UUID tenantId);
+
+    /** RF70 — usuarios activos de la distribuidora, para la cuota del plan. */
+    long countByTenantIdAndActivoTrue(UUID tenantId);
 }

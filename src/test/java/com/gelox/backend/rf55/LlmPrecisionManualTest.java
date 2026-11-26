@@ -63,8 +63,11 @@ class LlmPrecisionManualTest {
                 System.getenv("LLM_MODELO"), 2500);
         ModeloIntencion modelo = new ModeloIntencion();
         modelo.cargar();
+        // Sin cuota de IA: el mock de CuotaService siempre deja usar el LLM
+        com.gelox.backend.gobierno.CuotaService cuota = org.mockito.Mockito.mock(com.gelox.backend.gobierno.CuotaService.class);
+        org.mockito.Mockito.when(cuota.disponible(com.gelox.backend.gobierno.TipoCuota.LLAMADAS_IA_MES)).thenReturn(true);
         ProcesadorLenguajeLlm procesador = new ProcesadorLenguajeLlm(
-                new LlmCliente(propiedades, new ObjectMapper()), new ClasificadorIntencion(modelo));
+                new LlmCliente(propiedades, new ObjectMapper()), new ClasificadorIntencion(modelo), cuota);
 
         int aciertos = 0;
         int porLlm = 0;

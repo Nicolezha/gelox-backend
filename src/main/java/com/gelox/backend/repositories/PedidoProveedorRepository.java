@@ -16,9 +16,13 @@ public interface PedidoProveedorRepository extends JpaRepository<PedidoProveedor
 
     List<PedidoProveedor> findAllByOrderByFechaDesc();
 
+    /** RF56 — pedidos generados desde una misma recomendación (comparten la nota, uno por proveedor). */
+    List<PedidoProveedor> findByNotas(String notas);
+
     /**
      * Resumen para el historial de pedidos (RF21 — GET /pedidos).
-     * Devuelve: [id::text, fecha, estado::text, notas, totalSolicitado::int]
+     * Devuelve: [id::text, fecha, estado::text, notas, totalCajas::int, totalUnidades::int,
+     * proveedorId::text, proveedorNombre]
      * Filtros opcionales: estado (null = todos), fechaInicio/fechaFin (null = sin límite).
      */
     @Query(value = """
@@ -28,14 +32,17 @@ public interface PedidoProveedorRepository extends JpaRepository<PedidoProveedor
                 p.estado::text                                       AS estado,
                 p.notas                                              AS notas,
                 COALESCE(SUM(COALESCE(i.cantidad_cajas, 0)), 0)::int     AS total_cajas,
-                COALESCE(SUM(COALESCE(i.cantidad_unidades, 0)), 0)::int  AS total_unidades
+                COALESCE(SUM(COALESCE(i.cantidad_unidades, 0)), 0)::int  AS total_unidades,
+                pv.id::text                                          AS proveedor_id,
+                pv.nombre                                            AS proveedor_nombre
             FROM pedido_proveedor p
             LEFT JOIN item_pedido_proveedor i ON i.pedido_id = p.id
+            LEFT JOIN proveedor pv ON pv.id = p.proveedor_id
             WHERE p.tenant_id = :tenantId
               AND (:estado IS NULL OR p.estado::text = :estado)
               AND p.fecha >= CAST(:fechaInicio AS date)
               AND p.fecha <= CAST(:fechaFin    AS date)
-            GROUP BY p.id, p.fecha, p.estado, p.notas
+            GROUP BY p.id, p.fecha, p.estado, p.notas, pv.id, pv.nombre
             ORDER BY p.fecha DESC
             """, nativeQuery = true)
     List<Object[]> findResumenWithFilters(
@@ -50,6 +57,7 @@ public interface PedidoProveedorRepository extends JpaRepository<PedidoProveedor
      */
     @Query("""
             SELECT p FROM PedidoProveedor p
+            LEFT JOIN FETCH p.proveedor
             LEFT JOIN FETCH p.items i
             LEFT JOIN FETCH i.producto
             WHERE p.id = :id

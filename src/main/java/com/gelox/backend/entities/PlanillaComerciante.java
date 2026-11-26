@@ -51,6 +51,22 @@ public class PlanillaComerciante implements TenantAware {
     @Column(name = "efectivo_recibido", precision = 15, scale = 2)
     private BigDecimal efectivoRecibido;
 
+    /** RF66 — lo que se queda el comerciante, calculado al liquidar según el esquema vigente. */
+    @Column(name = "ganancia_comerciante", precision = 15, scale = 2)
+    private BigDecimal gananciaComerciante;
+
+    /** Copia del esquema con el que se liquidó (no cambia si el esquema vigente cambia después). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "esquema_aplicado", length = 12)
+    private TipoEsquemaLiquidacion esquemaAplicado;
+
+    @Column(name = "valor_esquema", precision = 12, scale = 2)
+    private BigDecimal valorEsquema;
+
+    /** RF65 — fecha de la planilla + plazo de la política de crédito efectiva; el Gerente puede extenderla. */
+    @Column(name = "fecha_limite_pago")
+    private LocalDate fechaLimitePago;
+
     @Column(name = "timestamp_cierre")
     private LocalDateTime timestampCierre;
 

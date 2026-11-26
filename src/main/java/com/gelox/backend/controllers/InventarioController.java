@@ -15,9 +15,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -79,10 +77,12 @@ public class InventarioController {
     // ──────────────────────────────────────────────────────────────────────
 
     /**
-     * Registra el pedido con estado PENDIENTE y devuelve el archivo Excel
-     * con formato Nutresa listo para subir al portal del proveedor.
+     * Registra un pedido PENDIENTE por proveedor (RF63) y devuelve su archivo con la plantilla de
+     * cada proveedor (RF67): con un solo proveedor, el .xlsx; con varios, un .zip con un .xlsx por pedido.
      *
-     * El UUID del pedido creado se incluye en el header {@code X-Pedido-Id}.
+     * <p>Encabezados: {@code X-Pedido-Id} (el primero), {@code X-Pedidos-Ids} (todos, separados por
+     * coma), {@code X-Advertencias-Monto-Minimo} (pedidos bajo el monto mínimo de su proveedor: se crean
+     * igual) y los avisos de exportación; los textos van separados por «|» y codificados para URL.</p>
      *
      * Roles: ENCARGADO_INVENTARIO, ADMINISTRADOR.
      */
@@ -91,25 +91,59 @@ public class InventarioController {
             @RequestBody @Valid CrearPedidoRequest req,
             @AuthenticationPrincipal Usuario usuario) {
 
-        Map<String, Object> resultado = pedidoService.crearPedido(req, usuario);
-
-        byte[] excel    = (byte[]) resultado.get("excel");
-        String pedidoId = resultado.get("pedidoId").toString();
-        String nombreArchivo = "pedido-nutresa-" +
-                LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".xlsx";
+        List<PedidoProveedorService.PedidoCreado> pedidos = pedidoService.crearPedido(req, usuario);
 
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentDisposition(
-                ContentDisposition.attachment().filename(nombreArchivo).build());
-        headers.add("X-Pedido-Id", pedidoId);
-        // Permitir que el frontend lea el header personalizado
-        headers.add("Access-Control-Expose-Headers", "X-Pedido-Id, Content-Disposition");
+        headers.add("X-Pedido-Id", pedidos.get(0).pedidoId().toString());
+        headers.add("X-Pedidos-Ids", pedidos.stream()
+                .map(p -> p.pedidoId().toString()).collect(java.util.stream.Collectors.joining(",")));
+        avisar(headers, "X-Advertencias-Monto-Minimo", pedidos.stream()
+                .map(PedidoProveedorService.PedidoCreado::advertenciaMontoMinimo)
+                .filter(java.util.Objects::nonNull).toList());
+        avisar(headers, "X-Productos-Sin-Codigo", pedidos.stream()
+                .flatMap(p -> p.productosSinCodigo().stream()).toList());
+        avisar(headers, "X-Productos-No-Ubicados", pedidos.stream()
+                .flatMap(p -> p.productosNoUbicados().stream()).toList());
+        // Permitir que el frontend lea los encabezados propios
+        headers.add("Access-Control-Expose-Headers", "X-Pedido-Id, X-Pedidos-Ids, X-Advertencias-Monto-Minimo, "
+                + "X-Productos-Sin-Codigo, X-Productos-No-Ubicados, Content-Disposition");
 
+        if (pedidos.size() == 1) {
+            headers.setContentDisposition(
+                    ContentDisposition.attachment().filename(pedidos.get(0).nombreArchivo()).build());
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentType(MediaType.parseMediaType(
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(pedidos.get(0).excel());
+        }
+
+        headers.setContentDisposition(ContentDisposition.attachment()
+                .filename("Pedidos_" + LocalDate.now(java.time.ZoneId.of("America/Bogota")) + ".zip").build());
         return ResponseEntity.ok()
                 .headers(headers)
-                .contentType(MediaType.parseMediaType(
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .body(excel);
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(comprimir(pedidos));
+    }
+
+    /** Un .zip con el archivo de cada pedido; nombres repetidos (mismo proveedor y día) llevan sufijo. */
+    public static byte[] comprimir(List<PedidoProveedorService.PedidoCreado> pedidos) {
+        java.io.ByteArrayOutputStream salida = new java.io.ByteArrayOutputStream();
+        java.util.Set<String> usados = new java.util.HashSet<>();
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(salida)) {
+            for (PedidoProveedorService.PedidoCreado p : pedidos) {
+                String nombre = p.nombreArchivo();
+                for (int n = 2; !usados.add(nombre); n++) {
+                    nombre = p.nombreArchivo().replaceFirst("\\.xlsx$", "") + "_" + n + ".xlsx";
+                }
+                zip.putNextEntry(new java.util.zip.ZipEntry(nombre));
+                zip.write(p.excel());
+                zip.closeEntry();
+            }
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("No se pudo comprimir los pedidos", e);
+        }
+        return salida.toByteArray();
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -172,19 +206,28 @@ public class InventarioController {
      */
     @GetMapping("/pedidos/{id}/exportar")
     public ResponseEntity<byte[]> exportarPedido(@PathVariable UUID id) {
-        byte[] excel = pedidoService.exportarExcelPedido(id);
-        String nombreArchivo = "pedido-nutresa-" +
-                LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".xlsx";
+        PedidoProveedorService.ArchivoPedido archivo = pedidoService.exportarPedido(id);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentDisposition(
-                ContentDisposition.attachment().filename(nombreArchivo).build());
+                ContentDisposition.attachment().filename(archivo.nombreArchivo()).build());
+        // RF67: un producto sin código del proveedor no se omite; el archivo sale igual y se avisa aquí
+        // (nombres separados por «|», codificados para URL).
+        avisar(headers, "X-Productos-Sin-Codigo", archivo.productosSinCodigo());
+        avisar(headers, "X-Productos-No-Ubicados", archivo.productosNoUbicados());
 
         return ResponseEntity.ok()
                 .headers(headers)
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .body(excel);
+                .body(archivo.contenido());
+    }
+
+    private static void avisar(HttpHeaders headers, String nombre, java.util.List<String> productos) {
+        if (productos == null || productos.isEmpty()) return;
+        headers.add(nombre, productos.stream()
+                .map(p -> java.net.URLEncoder.encode(p, java.nio.charset.StandardCharsets.UTF_8))
+                .collect(java.util.stream.Collectors.joining("|")));
     }
 
     // ──────────────────────────────────────────────────────────────────────
