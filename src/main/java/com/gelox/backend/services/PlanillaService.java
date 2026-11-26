@@ -20,6 +20,7 @@ import com.gelox.backend.repositories.ItemPlanillaRepository;
 import com.gelox.backend.repositories.PlanillaComercianteRepository;
 import com.gelox.backend.repositories.ProductoRepository;
 import com.gelox.backend.gobierno.Auditable;
+import com.gelox.backend.gobierno.AuditoriaDetalle;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -260,6 +261,14 @@ public class PlanillaService {
         }
         planilla.setFechaLimitePago(req.fechaLimitePago());
         planillaRepository.save(planilla);
+
+        // FP-15 §2.16.3 — fecha anterior y nueva, con el motivo. Las fechas van como texto:
+        // el serializador de la auditoría no admite LocalDate
+        Map<String, Object> detalle = new LinkedHashMap<>();
+        detalle.put("fechaAnterior", Objects.toString(actual, null));
+        detalle.put("fechaNueva", req.fechaLimitePago().toString());
+        detalle.put("motivo", req.motivo().trim());
+        AuditoriaDetalle.poner(detalle);
     }
 
     // RF39 — Datos para impresión de planilla

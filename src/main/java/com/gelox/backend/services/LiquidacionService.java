@@ -22,8 +22,10 @@ import com.gelox.backend.repositories.PlanillaComercianteRepository;
 import com.gelox.backend.security.RequiereRol;
 import com.gelox.backend.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -118,6 +120,12 @@ public class LiquidacionService {
         CalculoLiquidacion.Resultado resultado = calculo.calcular(totalPublico, totalComerciante, unidadesTotal, esquema.getValor());
         BigDecimal montoCobrado = resultado.montoCobrado();
         BigDecimal gananciaComerciante = resultado.gananciaComerciante();
+
+        // FP-15 §2.17.1 — el efectivo recibido va de 0 al total cobrado (el negativo lo rechaza el DTO)
+        if (request.efectivoRecibido() != null && request.efectivoRecibido().compareTo(montoCobrado) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El efectivo recibido no puede superar el total cobrado ($" + montoCobrado.toPlainString() + ")");
+        }
 
         // MARGEN es aditivo por ítem: guardar la ganancia de cada uno (útil para el comprobante impreso)
         if (esquema.getTipo() == TipoEsquemaLiquidacion.MARGEN) {
