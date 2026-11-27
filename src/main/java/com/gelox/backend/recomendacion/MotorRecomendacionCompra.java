@@ -229,15 +229,15 @@ public class MotorRecomendacionCompra {
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * L del producto: {@code proveedor.tiempo_entrega_dias}; sin proveedor, o con 0 (el valor por
-     * defecto de la columna, es decir, sin configurar), el L global. Con {@code dias_habiles} se
+     * L del producto: {@code proveedor.tiempo_entrega_dias}, donde 0 es entrega el mismo día
+     * (FP-15 RF63); sin proveedor, el L global. Con {@code dias_habiles} se
      * cuentan días de lunes a viernes desde {@code hoy} y L son los días calendario hasta esa fecha:
      * 1 día hábil un viernes son 3 días (llega el lunes). No descuenta festivos.
      */
     Entrega entrega(Producto p, LocalDate hoy) {
         Proveedor proveedor = p.getProveedor();
         Integer dias = proveedor == null ? null : proveedor.getTiempoEntregaDias();
-        if (dias == null || dias <= 0) {
+        if (dias == null || dias < 0) {
             return new Entrega(null, tiempoEntrega, tiempoEntrega, false);
         }
         boolean habiles = !Boolean.FALSE.equals(proveedor.getDiasHabiles());
@@ -260,7 +260,12 @@ public class MotorRecomendacionCompra {
     /** «el proveedor tarda 2 días» · «Nutresa tarda 1 día hábil (3 días calendario)». */
     private static String textoEntrega(Entrega e) {
         String quien = e.proveedor() == null ? "el proveedor" : e.proveedor().getNombre();
+        if (entregaElMismoDia(e)) return quien + " entrega el mismo día";
         return quien + " tarda " + duracion(e);
+    }
+
+    private static boolean entregaElMismoDia(Entrega e) {
+        return e.proveedor() != null && e.diasProveedor() == 0;
     }
 
     private static String duracion(Entrega e) {
@@ -331,7 +336,8 @@ public class MotorRecomendacionCompra {
 
         // Con proveedor configurado se dice siempre cuánto tarda (el L global no se repite)
         if (!entregaMencionada && c.entrega().proveedor() != null) {
-            texto.append(" ").append(capitalizar(textoEntrega(c.entrega()))).append(" en entregar.");
+            texto.append(" ").append(capitalizar(textoEntrega(c.entrega())))
+                    .append(entregaElMismoDia(c.entrega()) ? "." : " en entregar.");
         }
 
         if (c.f() != 1) {

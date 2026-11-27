@@ -5,6 +5,7 @@ import com.gelox.backend.entities.TipoEsquemaLiquidacion;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /** RF66 — comprobante de liquidación. Nombres de campo del contrato de creditoService.js del frontend. */
@@ -18,5 +19,6 @@ public record LiquidacionResponseDTO(
         BigDecimal montoCobrado,          // lo que factura la distribuidora
         BigDecimal efectivoRecibido,
         BigDecimal saldo,                 // montoCobrado − efectivoRecibido
-        LocalDate fechaLimitePago         // null si saldo = 0
+        LocalDate fechaLimitePago,        // null si saldo = 0
+        List<AdvertenciaLiquidacionDTO> advertencias   // vacía si no hay nada que avisar
 ) {}

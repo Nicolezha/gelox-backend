@@ -2,11 +2,13 @@ package com.gelox.backend.exceptions;
 
 import com.gelox.backend.credito.CreditoBloqueadoException;
 import com.gelox.backend.gobierno.CuotaAlcanzadaException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
@@ -15,6 +17,23 @@ import java.util.NoSuchElementException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /** Límite por archivo de spring.servlet.multipart.max-file-size, para el mensaje del 400. */
+    @Value("${spring.servlet.multipart.max-file-size:5MB}")
+    private String maxArchivo = "5MB";
+
+    /**
+     * Un archivo que pasa el límite por archivo se rechaza antes de llegar al controlador (y antes de
+     * revisar la cuota ALMACENAMIENTO_MB). Sin este manejador caía en el genérico y respondía 500.
+     * 400 como las demás validaciones de tamaño (logo y favicon, FP-15 §2.13).
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, String>> handleArchivoMuyGrande(MaxUploadSizeExceededException ex) {
+        String limite = maxArchivo.toUpperCase().replace("MB", " MB").replace("KB", " KB").trim();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "El archivo supera el tamaño máximo de " + limite + " por archivo.",
+                        "codigo", "ARCHIVO_MUY_GRANDE"));
+    }
 
     /** RF70 — 409 {error, codigo: CUOTA_PLAN_ALCANZADA, cuota, limite, usado} (FP-15 §2.16.2). */
     @ExceptionHandler(CuotaAlcanzadaException.class)

@@ -18,5 +18,16 @@ public record VozInterpretarResponse(
         boolean requiereConfirmacion,
         Integer expiraEnSegundos,
         String textoRespuesta,
-        Map<String, Object> datos
-) {}
+        Map<String, Object> datos,
+        String aviso                // RF70 — p. ej. cuota de IA agotada; null si no hay nada que avisar
+) {
+    public VozInterpretarResponse(UUID comandoId, boolean ok, String intencion, boolean requiereConfirmacion,
+                                  Integer expiraEnSegundos, String textoRespuesta, Map<String, Object> datos) {
+        this(comandoId, ok, intencion, requiereConfirmacion, expiraEnSegundos, textoRespuesta, datos, null);
+    }
+
+    public VozInterpretarResponse conAviso(String texto) {
+        return new VozInterpretarResponse(comandoId, ok, intencion, requiereConfirmacion, expiraEnSegundos,
+                textoRespuesta, datos, texto);
+    }
+}

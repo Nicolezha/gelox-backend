@@ -85,6 +85,9 @@ class AprovisionamientoTest {
     @Mock
     EsquemaLiquidacionRepository esquemaLiquidacionRepository;
 
+    @Mock
+    com.gelox.backend.repositories.UnidadMedidaRepository unidadMedidaRepository;
+
     @InjectMocks
     DistribuidoraService distribuidoraService;
 
@@ -160,6 +163,15 @@ class AprovisionamientoTest {
             assertThat(resultado.correoEnviado()).isTrue();
             verify(usuarioRepository).save(argThatTenantId(distribuidoraId));
 
+            // RF64 — nace con las unidades UN, CJ y BOL
+            ArgumentCaptor<com.gelox.backend.entities.UnidadMedida> unidades =
+                    ArgumentCaptor.forClass(com.gelox.backend.entities.UnidadMedida.class);
+            verify(unidadMedidaRepository, times(3)).save(unidades.capture());
+            assertThat(unidades.getAllValues())
+                    .allSatisfy(u -> assertThat(u.getTenantId()).isEqualTo(distribuidoraId))
+                    .extracting(u -> u.getCodigo() + "=" + u.getNombre())
+                    .containsExactlyInAnyOrder("UN=Unidad", "CJ=Caja", "BOL=Bolsa");
+
             // RF65 / RF66 — nace con política de crédito por defecto y esquema MARGEN
             ArgumentCaptor<PoliticaCredito> politica = ArgumentCaptor.forClass(PoliticaCredito.class);
             verify(politicaCreditoRepository).save(politica.capture());
@@ -187,7 +199,8 @@ class AprovisionamientoTest {
 
         assertThatThrownBy(() -> distribuidoraService.aprovisionar(requestValido()))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("NIT");
+                .hasMessageContaining("NIT")
+                .hasFieldOrPropertyWithValue("campo", "nit");
         verify(distribuidoraRepository, never()).save(any());
     }
 
@@ -199,7 +212,8 @@ class AprovisionamientoTest {
 
         assertThatThrownBy(() -> distribuidoraService.aprovisionar(requestValido()))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("subdominio");
+                .hasMessageContaining("subdominio")
+                .hasFieldOrPropertyWithValue("campo", "subdominio");
         verify(distribuidoraRepository, never()).save(any());
     }
 

@@ -177,7 +177,10 @@ public class Producto implements TenantAware {
     public void setUnidadMedida(String unidadMedida) { this.unidadMedida = unidadMedida; }
 
     public Integer getUnidadesPorCaja() { return unidadesPorCaja; }
-    public void setUnidadesPorCaja(Integer unidadesPorCaja) { this.unidadesPorCaja = unidadesPorCaja; }
+    /** 0 significa "sin cajas" y se guarda vacío: las consultas de costos dividen por este valor. */
+    public void setUnidadesPorCaja(Integer unidadesPorCaja) {
+        this.unidadesPorCaja = unidadesPorCaja != null && unidadesPorCaja == 0 ? null : unidadesPorCaja;
+    }
 
     public BigDecimal getPrecioComerciente() { return precioComerciente; }
     public void setPrecioComerciente(BigDecimal precioComerciente) { this.precioComerciente = precioComerciente; }

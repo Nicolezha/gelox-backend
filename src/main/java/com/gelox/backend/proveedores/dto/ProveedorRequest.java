@@ -4,13 +4,15 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 
 /**
  * RF63 — cuerpo de POST /api/proveedores y PUT /api/proveedores/{id}.
- * En la edición, tiempo de entrega, días hábiles y monto mínimo que lleguen null conservan su valor.
+ * Tiempo de entrega y monto mínimo son obligatorios y ≥ 0. En la edición, días hábiles null
+ * conserva su valor.
  */
 public record ProveedorRequest(
         @NotBlank(message = "El nombre es obligatorio")
@@ -30,11 +32,13 @@ public record ProveedorRequest(
         @Size(max = 150, message = "El correo no puede superar 150 caracteres")
         String correo,
 
+        @NotNull(message = "El tiempo de entrega es obligatorio")
         @Min(value = 0, message = "El tiempo de entrega no puede ser negativo")
         Integer tiempoEntregaDias,
 
         Boolean diasHabiles,
 
+        @NotNull(message = "El monto mínimo de pedido es obligatorio")
         @DecimalMin(value = "0", message = "El monto mínimo de pedido no puede ser negativo")
         BigDecimal montoMinimoPedido
 ) {}

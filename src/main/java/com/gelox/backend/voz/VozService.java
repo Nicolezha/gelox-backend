@@ -110,14 +110,15 @@ public class VozService {
 
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_VENTAS", "ENCARGADO_INVENTARIO"})
     public VozInterpretarResponse interpretar(VozInterpretarRequest request, Usuario usuario) {
-        VozInterpretarResponse respuesta = interpretarComando(request, usuario);
+        ClasificadorIntencion.ResultadoClasificacion resultado = procesador.procesar(request.texto());
+        VozInterpretarResponse respuesta = interpretarComando(request, usuario, resultado)
+                .conAviso(resultado.aviso());
         recordarRecomendacion(usuario, respuesta.datos());
         return respuesta;
     }
 
-    private VozInterpretarResponse interpretarComando(VozInterpretarRequest request, Usuario usuario) {
-        ClasificadorIntencion.ResultadoClasificacion resultado = procesador.procesar(request.texto());
-
+    private VozInterpretarResponse interpretarComando(VozInterpretarRequest request, Usuario usuario,
+                                                      ClasificadorIntencion.ResultadoClasificacion resultado) {
         // El asistente hizo una pregunta ("¿cuál de las 3?", "¿qué producto?"): esta frase es la
         // respuesta, salvo que el usuario haya abierto el micrófono para un comando nuevo
         // (continuacion=false) o que la frase sea claramente otro comando.

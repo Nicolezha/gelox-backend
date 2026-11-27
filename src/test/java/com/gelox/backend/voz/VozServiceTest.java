@@ -317,6 +317,22 @@ class VozServiceTest {
     }
 
     @Test
+    @DisplayName("RF70 — el aviso del procesador (cuota de IA agotada) llega en la respuesta")
+    void avisoDelProcesadorLlegaEnLaRespuesta() {
+        VozService conAviso = new VozService(List.of(handlerVenta), texto -> clasificador.procesar(texto)
+                .conAviso("Cuota agotada"), clasificador, comandoVozRepository, pendienteStore, recomendacionService);
+        conAviso.indexarHandlers();
+
+        VozInterpretarResponse respuesta = conAviso.interpretar(
+                new VozInterpretarRequest("vende dos festival", 0.95), usuario);
+
+        assertThat(respuesta.aviso()).isEqualTo("Cuota agotada");
+        assertThat(respuesta.requiereConfirmacion()).isTrue();
+        assertThat(vozService.interpretar(new VozInterpretarRequest("vende dos festival", 0.95), usuario).aviso())
+                .isNull();
+    }
+
+    @Test
     @DisplayName("PLN — frase fuera de dominio: ERROR con la probabilidad del modelo y método null")
     void fueraDeDominio_guardaErrorConProbabilidad() {
         stubGuardarComando();

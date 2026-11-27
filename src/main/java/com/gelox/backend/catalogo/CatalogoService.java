@@ -35,6 +35,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -49,6 +50,10 @@ public class CatalogoService {
     private static final String UNIDAD_BASE_POR_DEFECTO = "UN";
     /** CJ → unidad base sale de unidades_por_caja, no de factor_conversion. */
     private static final String UNIDAD_CAJA = "CJ";
+    private static final int TAMANO_MAXIMO_PAGINA = 500;
+    /** Marcador para los filtros por id apagados (la consulta no recibe parámetros nulos). */
+    private static final UUID SIN_FILTRO = new UUID(0, 0);
+    private static final Set<String> FILTROS_STOCK = Set.of("", "BAJO", "MEDIO", "SIN");
 
     private final CatalogoRepository catalogoRepository;
     private final CuotaService cuotaService;   // RF70 — cuotas del plan
@@ -62,21 +67,27 @@ public class CatalogoService {
     @RequiereRol({"ADMINISTRADOR", "ENCARGADO_INVENTARIO", "ENCARGADO_VENTAS"})
     @Transactional(readOnly = true)
     public PagedResponse<CatalogoProductoDTO> listarProductos(
-            String categoria, UUID categoriaId, int page, int size, Usuario usuario) {
+            String categoria, UUID categoriaId, String q, UUID proveedorId, String stock,
+            int page, int size, Usuario usuario) {
 
         // Limitar tamaño máximo
-        int safeSize = Math.min(size, 300);
+        int safeSize = Math.min(size, TAMANO_MAXIMO_PAGINA);
         Pageable pageable = PageRequest.of(page, safeSize);
 
-        Page<Producto> resultPage;
-
-        if (categoriaId != null || (categoria != null && !categoria.isBlank())) {
-            Categoria cat = resolverCategoria(categoriaId, categoria, true);  // filtrar por una inactiva es válido
-            resultPage = catalogoRepository
-                    .findByActivoTrueAndCategoriaIdOrderByNombreAsc(cat.getId(), pageable);
-        } else {
-            resultPage = catalogoRepository.findByActivoTrueOrderByNombreAsc(pageable);
+        boolean porCategoria = categoriaId != null || (categoria != null && !categoria.isBlank());
+        UUID idCategoria = porCategoria
+                ? resolverCategoria(categoriaId, categoria, true).getId()   // filtrar por una inactiva es válido
+                : SIN_FILTRO;
+        if (proveedorId != null) {
+            validarProveedorDelTenant(proveedorId);                         // filtrar por uno inactivo es válido
         }
+
+        Page<Producto> resultPage = catalogoRepository.buscar(
+                !porCategoria, idCategoria,
+                proveedorId == null, proveedorId != null ? proveedorId : SIN_FILTRO,
+                q == null ? "" : q.trim(),
+                filtroStock(stock),
+                pageable);
 
         boolean esAdmin = usuario.getRol() == RolUsuario.ADMINISTRADOR;
 
@@ -113,6 +124,8 @@ public class CatalogoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "El precio de costo es obligatorio y debe ser mayor a 0");
         }
+
+        validarUnidadesPorCaja(req.getUnidadesPorCaja());
 
         // Verificar código duplicado entre productos activos
         if (catalogoRepository.existsByCodigoTecnicoAndActivoTrue(req.getCodigoTecnico())) {
@@ -174,6 +187,8 @@ public class CatalogoService {
         Producto producto = catalogoRepository.findByIdAndActivoTrue(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Producto no encontrado"));
+
+        validarUnidadesPorCaja(req.getUnidadesPorCaja());
 
         // Verificar colisión de código con otro producto activo
         if (req.getCodigoTecnico() != null && !req.getCodigoTecnico().isBlank()) {
@@ -276,6 +291,14 @@ public class CatalogoService {
         }
     }
 
+    /** RF64 — 0 quita las unidades por caja (ver Producto); un negativo no es válido. */
+    private void validarUnidadesPorCaja(Integer unidadesPorCaja) {
+        if (unidadesPorCaja != null && unidadesPorCaja < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Las unidades por caja no pueden ser negativas");
+        }
+    }
+
     /**
      * RF64 — categoría por id (404 si no es de esta distribuidora) o por nombre (400 si no existe).
      * Para crear o editar un producto debe estar activa.
@@ -299,12 +322,26 @@ public class CatalogoService {
         return categoria;
     }
 
+    /** Valor del parámetro stock del listado: vacío (todos), BAJO, MEDIO o SIN. */
+    private static String filtroStock(String stock) {
+        String valor = stock == null ? "" : stock.trim().toUpperCase(Locale.ROOT);
+        if (!FILTROS_STOCK.contains(valor)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Filtro de stock inválido: usa bajo, medio o sin");
+        }
+        return valor;
+    }
+
+    private Proveedor validarProveedorDelTenant(UUID id) {
+        return proveedorRepository.findById(id)
+                .filter(TenantContext::pertenece)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proveedor no encontrado"));
+    }
+
     /** RF63 — el proveedor debe ser de esta distribuidora (404 si no) y estar activo (400 si no). */
     private Proveedor resolverProveedor(UUID id) {
         if (id == null) return null;
-        Proveedor proveedor = proveedorRepository.findById(id)
-                .filter(TenantContext::pertenece)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proveedor no encontrado"));
+        Proveedor proveedor = validarProveedorDelTenant(id);
         if (!Boolean.TRUE.equals(proveedor.getActivo())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El proveedor está inactivo");
         }

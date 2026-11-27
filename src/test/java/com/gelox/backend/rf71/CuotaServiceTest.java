@@ -93,7 +93,7 @@ class CuotaServiceTest {
         assertThat(t).isInstanceOf(CuotaAlcanzadaException.class);
         CuotaAlcanzadaException e = (CuotaAlcanzadaException) t;
         assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(e.getReason()).isEqualTo("Cuota del plan alcanzada");
+        assertThat(e.getReason()).startsWith("Cuota del plan alcanzada: ");
         return e;
     }
 
@@ -117,7 +117,7 @@ class CuotaServiceTest {
         CuotaAlcanzadaException e = bloqueo(() -> cuotaService.validar(TipoCuota.USUARIOS));
 
         Map<String, Object> cuerpo = e.cuerpo();
-        assertThat(cuerpo).containsEntry("error", "Cuota del plan alcanzada")
+        assertThat(cuerpo).containsEntry("error", "Cuota del plan alcanzada: usuarios (3 de 3).")
                 .containsEntry("codigo", "CUOTA_PLAN_ALCANZADA")
                 .containsEntry("cuota", "USUARIOS")
                 .containsEntry("limite", 3L)

@@ -318,6 +318,18 @@ Registro de defectos (`DEFECTOS_VOZ_Iteracion1.md`, T65): DEF-NN, RF, caso, desc
 
 ---
 
+## Cambios posteriores que afectan la regresión
+
+Los casos de arriba son los ejecutados el 10/10/2026 y no se reescriben. Al repetirlos como regresión (CP-LLM-01 de `QA_Plan_IT2.md` y tareas 214 y 222 de `QA_Plan_Iteracion3.md`), tener en cuenta:
+
+| Caso | Qué cambió | Resultado esperado hoy |
+|------|------------|------------------------|
+| Todos | Iteración 2: LLM en el PLN | `comando_voz.metodo_clasificacion = LLM`; si el LLM falla o la cuota LLAMADAS_IA_MES del plan se agota, responde el clasificador de respaldo |
+| CP-22 … CP-27 | Iteración 3 (RF63, RF67, tarea 194) | El pedido por voz infiere el proveedor de cada producto, genera un pedido por proveedor y lo dice en el resumen antes de confirmar; se exporta con la plantilla de su proveedor (Nutresa: el mismo Excel de `templates/catalogo.xlsx`) y puede traer `advertenciaMontoMinimo` |
+| CP-05 … CP-12 | Iteración 3 (RF64) | La venta descuenta según la unidad y el factor de conversión del producto; con los productos de Mágico Sabor (cajas y unidades) el resultado no cambia |
+
+---
+
 ## Criterios de Aceptación Globales
 - Ninguna operación que escribe datos (venta, pedido, modificación) se aplica sin «Confirmar»; al cancelar o vencer el plazo de 45 s no cambia nada.
 - Si la confianza de la transcripción es menor al 70 %, se pide confirmación aunque la operación sea una consulta.
