@@ -12,10 +12,10 @@
       "item": [
         {
           "name": "Cuotas del plan (RF70)",
-          "description": "Distribuidora B (subdominio {{subdominioB}}) con el plan de cuotas pequeñas del plan de QA (máx. 3 usuarios, 5 productos, 4 comerciantes, 10 MB, 20 llamadas IA/mes) y ya al límite de cada cuota. {{tokenGerenteB}} es el ID Token del Gerente de B. El gerente titular cuenta en la cuota de usuarios.\n\nPreparar el plan en Supabase:\n\nINSERT INTO plan_suscripcion (nombre, descripcion, max_usuarios, max_productos, max_comerciantes,\n                              max_almacenamiento_mb, max_llamadas_ia_mes)\nVALUES ('QA_PEQUENO', 'Plan de QA con cuotas pequeñas', 3, 5, 4, 10, 20)\nON CONFLICT (nombre) DO NOTHING;\nUPDATE distribuidora SET plan_id = (SELECT id FROM plan_suscripcion WHERE nombre = 'QA_PEQUENO')\n WHERE subdominio = 'prueba';",
+          "description": "Distribuidora B (subdominio {{subdominioB}}) con el plan «Plan Mini» de QA_Plan_Iteracion3.md §3.2 y CP-56/CP-57 (máx. 3 usuarios, 3 productos, 2 comerciantes, 5 MB, 2 llamadas IA/mes) y ya al límite de cada cuota. {{tokenGerenteB}} es el ID Token del Gerente de B. El gerente titular cuenta en la cuota de usuarios.\n\nPreparar el plan en Supabase:\n\nINSERT INTO plan_suscripcion (nombre, descripcion, max_usuarios, max_productos, max_comerciantes,\n                              max_almacenamiento_mb, max_llamadas_ia_mes)\nVALUES ('Plan Mini', 'Plan de pruebas con cuotas pequeñas', 3, 3, 2, 5, 2)\nON CONFLICT (nombre) DO NOTHING;\nUPDATE distribuidora SET plan_id = (SELECT id FROM plan_suscripcion WHERE nombre = 'Plan Mini')\n WHERE subdominio = 'prueba';",
           "item": [
             {
-              "name": "01 - POST usuario n.º 4 con plan de máx. 3 → 409 (CP-70-04)",
+              "name": "01 - POST usuario n.º 4 con plan de máx. 3 → 409 (CP-70-04 / CP-57)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -66,7 +66,7 @@
               ]
             },
             {
-              "name": "02 - POST producto n.º 6 con plan de máx. 5 → 409 (CP-64-09 / CP-70-05)",
+              "name": "02 - POST producto n.º 4 con plan de máx. 3 → 409 (CP-64-09 / CP-70-05 / CP-57)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -117,7 +117,7 @@
               ]
             },
             {
-              "name": "03 - POST comerciante n.º 5 con plan de máx. 4 → 409",
+              "name": "03 - POST comerciante n.º 3 con plan de máx. 2 → 409 (CP-70-10 / CP-57)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -220,7 +220,7 @@
               ]
             },
             {
-              "name": "05 - POST archivo que supera max_almacenamiento_mb → 409 (CP-70-06)",
+              "name": "05 - POST archivo que supera max_almacenamiento_mb → 409 (CP-70-06b / CP-57)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -254,7 +254,7 @@
                     }
                   ]
                 },
-                "description": "En 'archivo' elegir una imagen (máx. 5 MB) que, sumada a lo que B ya subió (archivo_almacenado), pase de 10 MB. limite y usado vienen en MB. No se sube ni se registra en archivo_almacenado:\nSELECT SUM(bytes) / 1048576.0 AS mb FROM archivo_almacenado WHERE tenant_id = '<id de B>';"
+                "description": "En 'archivo' elegir una imagen de 5 MB o menos (límite por archivo: spring.servlet.multipart.max-file-size=5MB) que, sumada a lo que B ya subió (archivo_almacenado), pase de los 5 MB de Plan Mini; un archivo de más de 5 MB se rechaza por tamaño antes de revisar la cuota. limite y usado vienen en MB. No se sube ni se registra en archivo_almacenado:\nSELECT SUM(bytes) / 1048576.0 AS mb FROM archivo_almacenado WHERE tenant_id = '<id de B>';"
               },
               "event": [
                 {
@@ -315,7 +315,8 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                      "pm.test('no responde 409', () => pm.expect(pm.response.code).to.not.eql(409));"
+                      "pm.test('no responde 409', () => pm.expect(pm.response.code).to.not.eql(409));",
+                      "pm.test('trae el aviso de cuota de IA agotada', () => pm.expect(pm.response.json().aviso).to.include('cuota mensual de consultas de voz'));"
                     ]
                   }
                 }
@@ -801,7 +802,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"nombre\": \"QA Planes {{$timestamp}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                  "raw": "{\n  \"nombre\": \"Plan Mini {{$timestamp}}\",\n  \"descripcion\": \"Plan de pruebas con cuotas pequeñas\",\n  \"precioMensual\": 50000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 3,\n  \"maxComerciantes\": 2,\n  \"maxAlmacenamientoMb\": 5,\n  \"maxLlamadasIaMes\": 2\n}"
                 },
                 "description": "Deja fila PLAN_CREAR {plan, precioMensual, cuotas}."
               },
@@ -894,7 +895,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"nombre\": \"{{planNuevoNombre}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                  "raw": "{\n  \"nombre\": \"{{planNuevoNombre}}\",\n  \"descripcion\": \"Plan de pruebas con cuotas pequeñas\",\n  \"precioMensual\": 50000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 3,\n  \"maxComerciantes\": 2,\n  \"maxAlmacenamientoMb\": 5,\n  \"maxLlamadasIaMes\": 2\n}"
                 },
                 "description": "No distingue mayúsculas ni tildes."
               },
@@ -938,7 +939,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"nombre\": \"QA negativo\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": -1,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                  "raw": "{\n  \"nombre\": \"QA negativo\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": -1,\n  \"maxComerciantes\": 2,\n  \"maxAlmacenamientoMb\": 5,\n  \"maxLlamadasIaMes\": 2\n}"
                 }
               },
               "event": [
@@ -981,7 +982,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"nombre\": \"QA precio\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": -5,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                  "raw": "{\n  \"nombre\": \"QA precio\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": -5,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 3,\n  \"maxComerciantes\": 2,\n  \"maxAlmacenamientoMb\": 5,\n  \"maxLlamadasIaMes\": 2\n}"
                 }
               },
               "event": [
@@ -1025,7 +1026,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"nombre\": \"{{planNuevoNombre}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 6,\n  \"maxComerciantes\": null,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                  "raw": "{\n  \"nombre\": \"{{planNuevoNombre}}\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 60000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 3,\n  \"maxComerciantes\": null,\n  \"maxAlmacenamientoMb\": 5,\n  \"maxLlamadasIaMes\": 2\n}"
                 },
                 "description": "Deja fila PLAN_EDITAR {plan, cambios: [{campo, antes, despues}]}."
               },
@@ -1042,7 +1043,7 @@
                       "   'maxAlmacenamientoMb','maxLlamadasIaMes','totalDistribuidoras','distribuidoras']",
                       "    .forEach(c => pm.expect(p).to.have.property(c));",
                       "});",
-                      "pm.test('valores nuevos', () => { pm.expect(p.maxProductos).to.eql(6); pm.expect(p.maxComerciantes).to.eql(null); });"
+                      "pm.test('valores nuevos', () => { pm.expect(Number(p.precioMensual)).to.eql(60000); pm.expect(p.maxComerciantes).to.eql(null); });"
                     ]
                   }
                 }
@@ -1076,7 +1077,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"nombre\": \"QA 404\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                  "raw": "{\n  \"nombre\": \"QA 404\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 3,\n  \"maxComerciantes\": 2,\n  \"maxAlmacenamientoMb\": 5,\n  \"maxLlamadasIaMes\": 2\n}"
                 }
               },
               "event": [
@@ -1188,7 +1189,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"nombre\": \"QA gerente\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 5,\n  \"maxComerciantes\": 4,\n  \"maxAlmacenamientoMb\": 10,\n  \"maxLlamadasIaMes\": 20\n}"
+                  "raw": "{\n  \"nombre\": \"QA gerente\",\n  \"descripcion\": \"Plan de QA (T191)\",\n  \"precioMensual\": 99000,\n  \"maxUsuarios\": 3,\n  \"maxProductos\": 3,\n  \"maxComerciantes\": 2,\n  \"maxAlmacenamientoMb\": 5,\n  \"maxLlamadasIaMes\": 2\n}"
                 }
               },
               "event": [
@@ -1286,7 +1287,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"planId\": \"{{planNuevoId}}\",\n  \"motivo\": \"QA: plan de cuotas pequeñas\"\n}"
+                  "raw": "{\n  \"planId\": \"{{planNuevoId}}\",\n  \"motivo\": \"Pruebas de cuotas\"\n}"
                 },
                 "description": "Si el uso de B ya supera alguna cuota del plan nuevo se asigna igual y la respuesta trae advertencias: [{cuota, usado, limite}]. Deja fila PLAN_ASIGNAR {planAnterior, planNuevo, motivo, cuotas}."
               },
@@ -5865,7 +5866,7 @@
       "key": "tokenGerenteB",
       "value": "",
       "type": "string",
-      "description": "ID Token del Gerente de la distribuidora B (plan QA_PEQUENO, al límite)"
+      "description": "ID Token del Gerente de la distribuidora B (plan Plan Mini, al límite)"
     },
     {
       "key": "tokenSuper",
