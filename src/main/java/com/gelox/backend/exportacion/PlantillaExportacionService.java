@@ -6,6 +6,7 @@ import com.gelox.backend.entities.PlantillaColumna;
 import com.gelox.backend.entities.PlantillaExportacion;
 import com.gelox.backend.entities.Producto;
 import com.gelox.backend.entities.Proveedor;
+import com.gelox.backend.exceptions.CampoInvalidoException;
 import com.gelox.backend.exportacion.dto.ColumnaDTO;
 import com.gelox.backend.exportacion.dto.HomologacionDTO;
 import com.gelox.backend.exportacion.dto.HomologacionRequest;
@@ -28,6 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -84,7 +86,7 @@ public class PlantillaExportacionService {
         }
         if (req.modo() == ModoPlantilla.GENERAR_FILAS) {
             int orden = 1;
-            for (ColumnaDTO c : req.columnas()) {
+            for (ColumnaDTO c : enOrden(req.columnas())) {
                 PlantillaColumna columna = new PlantillaColumna();
                 columna.setPlantilla(plantilla);
                 columna.setOrden(orden++);
@@ -147,7 +149,7 @@ public class PlantillaExportacionService {
         aplicar(borrador, req);
         if (req.modo() == ModoPlantilla.GENERAR_FILAS) {
             int orden = 1;
-            for (ColumnaDTO c : req.columnas()) {
+            for (ColumnaDTO c : enOrden(req.columnas())) {
                 PlantillaColumna columna = new PlantillaColumna();
                 columna.setOrden(orden++);
                 columna.setCampo(c.campo());
@@ -208,6 +210,19 @@ public class PlantillaExportacionService {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Una columna de texto fijo necesita su valor");
                 }
             }
+            // FP-15 §1.4 RF67 (4.1): el orden de una columna no se puede repetir → 409 con el dato repetido
+            Set<Integer> ordenes = new HashSet<>();
+            for (ColumnaDTO c : req.columnas()) {
+                if (c.orden() == null) continue;
+                if (c.orden() < 1) {
+                    throw new CampoInvalidoException(HttpStatus.BAD_REQUEST,
+                            "El orden de cada columna debe ser 1 o mayor", "orden");
+                }
+                if (!ordenes.add(c.orden())) {
+                    throw new CampoInvalidoException(HttpStatus.CONFLICT,
+                            "El orden " + c.orden() + " está repetido en dos columnas", "orden");
+                }
+            }
         } else {
             if (req.filaEncabezado() == null || req.filaEncabezado() < 1) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La fila de encabezados debe ser 1 o mayor");
@@ -217,6 +232,15 @@ public class PlantillaExportacionService {
                         "Indica los encabezados de código y de cantidad del archivo base");
             }
         }
+    }
+
+    /**
+     * Columnas en el orden en que se guardan: por {@code orden} si todas lo traen (ya validado sin repetidos);
+     * si alguna no lo trae, en el orden de la lista. Al guardar se numeran 1, 2, 3… (UNIQUE plantilla_id, orden).
+     */
+    private static List<ColumnaDTO> enOrden(List<ColumnaDTO> columnas) {
+        if (columnas.stream().anyMatch(c -> c.orden() == null)) return columnas;
+        return columnas.stream().sorted(Comparator.comparing(ColumnaDTO::orden)).toList();
     }
 
     private static void aplicar(PlantillaExportacion p, PlantillaRequest req) {

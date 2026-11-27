@@ -6,6 +6,7 @@ import com.gelox.backend.entities.ModoPlantilla;
 import com.gelox.backend.entities.PlantillaExportacion;
 import com.gelox.backend.entities.Producto;
 import com.gelox.backend.entities.Proveedor;
+import com.gelox.backend.exceptions.CampoInvalidoException;
 import com.gelox.backend.exportacion.ExportadorPedido;
 import com.gelox.backend.exportacion.PlantillaExportacionService;
 import com.gelox.backend.exportacion.dto.ColumnaDTO;
@@ -170,6 +171,44 @@ class PlantillaExportacionServiceTest {
         assertThat(dto.columnas()).extracting("campo")
                 .containsExactly(CampoPlantilla.CODIGO_PROVEEDOR, CampoPlantilla.TEXTO_FIJO);
         assertThat(dto.columnas().get(1).valorFijo()).isEqualTo("CLI-778");
+    }
+
+    @Test
+    @DisplayName("CP-48: dos columnas con el mismo orden responden 409 indicando el campo orden y no guardan")
+    void ordenRepetidoEs409() {
+        PlantillaRequest req = filas(List.of(
+                new ColumnaDTO(1, CampoPlantilla.CODIGO_PROVEEDOR, "Código", null),
+                new ColumnaDTO(2, CampoPlantilla.NOMBRE_PRODUCTO, "Producto", null),
+                new ColumnaDTO(2, CampoPlantilla.CANTIDAD_CAJAS, "Cajas", null)), null);
+
+        assertThatThrownBy(() -> service.guardar(proveedor.getId(), req))
+                .isInstanceOfSatisfying(CampoInvalidoException.class, e -> {
+                    assertThat(e.getStatusCode().value()).isEqualTo(HttpStatus.CONFLICT.value());
+                    assertThat(e.getCampo()).isEqualTo("orden");
+                    assertThat(e.getReason()).contains("2");
+                });
+        assertEstado(() -> service.vistaPrevia(proveedor.getId(), req), HttpStatus.CONFLICT);
+        verify(plantillaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("CP-48: un orden menor que 1 responde 400")
+    void ordenMenorQueUnoEs400() {
+        assertEstado(() -> service.guardar(proveedor.getId(), filas(List.of(
+                new ColumnaDTO(0, CampoPlantilla.CODIGO_PROVEEDOR, "Código", null)), null)), HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @DisplayName("CP-48: con orden en todas las columnas se guardan en ese orden, numeradas 1, 2, 3")
+    void respetaElOrdenRecibido() {
+        PlantillaDTO dto = service.guardar(proveedor.getId(), filas(List.of(
+                new ColumnaDTO(3, CampoPlantilla.CANTIDAD_CAJAS, "Cajas", null),
+                new ColumnaDTO(1, CampoPlantilla.CODIGO_PROVEEDOR, "Código", null),
+                new ColumnaDTO(2, CampoPlantilla.NOMBRE_PRODUCTO, "Producto", null)), null));
+
+        assertThat(dto.columnas()).extracting("orden").containsExactly(1, 2, 3);
+        assertThat(dto.columnas()).extracting("campo").containsExactly(
+                CampoPlantilla.CODIGO_PROVEEDOR, CampoPlantilla.NOMBRE_PRODUCTO, CampoPlantilla.CANTIDAD_CAJAS);
     }
 
     @Test
